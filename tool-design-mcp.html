@@ -15,7 +15,7 @@
     --lh: 30px;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #8a6f55 radial-gradient(circle at 30% 20%, #a3876b, #6d5540); min-height: 100vh;
+  body { margin: 0; background: #e9edf2 radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; min-height: 100vh;
          font: 19px/var(--lh) var(--hand); color: #222; }
   .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
           background-color: var(--paper);
@@ -24,7 +24,7 @@
           box-shadow: 0 12px 40px rgba(0,0,0,.45), 0 0 0 1px #e6e0cc; border-radius: 3px 8px 8px 3px; }
   .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
   .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
-                 background: radial-gradient(circle, #6d5540 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+                 background: radial-gradient(circle, #d3dae3 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
   @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
 
   h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
@@ -42,7 +42,7 @@
   .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
   .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
   .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
-  .nav { font-size: 16px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
   .toc { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
   .toc a { text-decoration: none; background: var(--blue); padding: 0 12px; border-radius: 4px 12px 4px 12px;
            box-shadow: 1px 2px 0 rgba(0,0,0,.15); transform: rotate(-1deg); color: #123; }
@@ -125,6 +125,15 @@
   .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
   .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.25); font-family: var(--title); }
   .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  .roles { display: flex; gap: 14px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+  .role { border: 2px solid #333; border-radius: 10px; padding: 6px 16px; background: #fff; font-family: var(--title); font-size: 19px; transition: all .15s; }
+  .role.on { background: var(--hl); border-color: var(--red); transform: rotate(-1.5deg) scale(1.06); }
+  .roles .arrow { font-size: 22px; color: var(--pencil); }
 </style>
 </head>
 <body>
@@ -352,6 +361,42 @@
     <text x="536" y="214" style="font-size:14px">📚 docs tree, schemas …</text>
   </svg>
 
+
+  <h3 id="mcp-core">Core components: host, client, server</h3>
+  <table class="hand">
+    <tr><th>component</th><th>what it is</th><th>its job</th><th>examples</th></tr>
+    <tr><td><b>MCP host</b></td><td>The app the user talks to. It owns the model.</td>
+      <td>Creates one client per server, asks the user for consent, decides which tools the model sees, and merges results into context.</td>
+      <td>Claude Desktop, Claude Code, an IDE, your own agent app</td></tr>
+    <tr><td><b>MCP client</b></td><td>A connector inside the host, <span class="hl">one per server (1 : 1)</span>.</td>
+      <td>Opens the connection, negotiates the protocol version and capabilities, and passes JSON-RPC messages both ways.</td>
+      <td>Built into the host, or the client class in an MCP SDK</td></tr>
+    <tr><td><b>MCP server</b></td><td>A program that exposes capabilities.</td>
+      <td>Offers <b>tools</b>, <b>resources</b> and <b>prompts</b>. It knows nothing about the model or the other servers.</td>
+      <td>GitHub, filesystem, Postgres, your internal API</td></tr>
+  </table>
+  <div class="cols">
+    <table class="hand">
+      <tr><th>server primitive</th><th>who controls it</th><th>methods</th></tr>
+      <tr><td>🔧 <b>tools</b>: actions</td><td>the <b>model</b> decides to call them</td><td><code>tools/list</code>, <code>tools/call</code></td></tr>
+      <tr><td>📚 <b>resources</b>: read-only data by URI</td><td>the <b>app</b> decides what to attach</td><td><code>resources/list</code>, <code>resources/read</code></td></tr>
+      <tr><td>💬 <b>prompts</b>: reusable templates</td><td>the <b>user</b> picks one (for example as a slash command)</td><td><code>prompts/list</code>, <code>prompts/get</code></td></tr>
+    </table>
+    <table class="hand">
+      <tr><th>client feature</th><th>lets the server…</th></tr>
+      <tr><td><b>sampling</b></td><td>ask the host's model for a completion. The server needs no API key of its own, and the user stays in control.</td></tr>
+      <tr><td><b>roots</b></td><td>learn which folders or URIs it is allowed to work in.</td></tr>
+      <tr><td><b>elicitation</b></td><td>ask the user for missing input mid-call ("which repo?").</td></tr>
+    </table>
+  </div>
+
+  <div class="box">
+    <b class="ink">✎ Step through one MCP session</b>
+    <div class="roles" aria-hidden="true"><span class="role" id="r-host">Host</span><span class="arrow">⇄</span>
+      <span class="role" id="r-client">Client</span><span class="arrow">⇄ JSON-RPC 2.0 ⇄</span><span class="role" id="r-server">Server</span></div>
+    <div class="row"><button id="ms-back">◀ back</button><button id="ms-next">next ▶</button><button id="ms-reset">reset</button><span class="muted" id="ms-step"></span></div>
+    <div class="out" id="ms-out" aria-live="polite"></div>
+  </div>
   <div class="cols">
     <div>
       <p style="margin:0"><b class="ink">Two places a server can live</b></p>
@@ -392,6 +437,91 @@
   <div class="cards" id="sort-where"></div>
   <h3>✎ Try it: build or use? <span class="tally" id="t-build"></span></h3>
   <div class="cards" id="sort-build"></div>
+
+  <h3 id="mcp-build">Creating MCP servers</h3>
+  <p>An MCP server is a small program. The SDK handles the protocol, and you write plain functions.
+    <span class="hl">The function's name, type hints and docstring become the tool definition the model reads</span>, so the
+    description rules from 2.1 apply here too.</p>
+<pre><span class="c"># weather_server.py · Python SDK (FastMCP)</span>
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("weather")
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def get_forecast(city: str, days: int = 1) -> dict:
+    """Hourly forecast for a city, up to 7 days ahead. Returns rain probability per hour.
+    Use it for 'will it rain' questions. For past weather, use get_history instead."""
+    return await fetch_forecast(city, days)          <span class="c"># returning a dict gives structured output</span>
+
+@mcp.resource("weather://cities")
+def cities() -> str:
+    """Supported city names, one per line."""
+    return "\n".join(CITIES)
+
+@mcp.prompt()
+def packing_list(city: str) -> str:
+    return f"Check the forecast for {city} and write a packing list."
+
+if __name__ == "__main__":
+    mcp.run()      <span class="c"># stdio by default; transport="streamable-http" to serve over HTTP</span></pre>
+<pre><span class="c">// the same tool in TypeScript</span>
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+const server = new McpServer({ name: "weather", version: "1.0.0" });
+server.registerTool("get_forecast", {
+  description: "Hourly forecast for a city, up to 7 days ahead. ...",
+  inputSchema: { city: z.string(), days: z.number().int().max(7).default(1) },
+  annotations: { readOnlyHint: true },
+}, async ({ city, days }) => ({
+  content: [{ type: "text", text: JSON.stringify(await fetchForecast(city, days)) }],
+}));
+
+await server.connect(new StdioServerTransport());</pre>
+  <div class="cols">
+    <div class="sticky">
+      <b>Build → test → install</b>
+      <ol>
+        <li>Write the server, then describe each tool with 3–5 sentences.</li>
+        <li>Try it in the <b>MCP Inspector</b>: <code>npx @modelcontextprotocol/inspector uv run weather_server.py</code>. List the tools, call them, and check the errors.</li>
+        <li>Add it to a host: <code>claude mcp add weather -- uv run weather_server.py</code>, or commit it to <code>.mcp.json</code> for the team.</li>
+        <li>Ask the agent a real question and read the trace: did it pick <i>your</i> tool?</li>
+      </ol>
+    </div>
+    <div class="sticky pink">
+      <b>Server-building gotchas</b>
+      <ul>
+        <li><b>stdio: never print to stdout.</b> stdout carries the protocol, so one stray <code>print()</code> corrupts it. Log to <b>stderr</b>.</li>
+        <li>Report tool failures as a result with <code>isError: true</code> and a helpful message (see 2.2). Don't crash the server.</li>
+        <li>Add <b>annotations</b> (<code>readOnlyHint</code>, <code>destructiveHint</code>, <code>idempotentHint</code>) so hosts know what to ask approval for. They are hints, not security.</li>
+        <li>Keep tools few and focused. 40 thin API wrappers crowd the model's context.</li>
+      </ul>
+    </div>
+  </div>
+  <h3>✎ Try it: tool, resource, prompt or sampling? <span class="tally" id="t-prim"></span></h3>
+  <div class="cards" id="sort-prim"></div>
+
+  <h3 id="mcp-deploy">Deployment modes</h3>
+  <table class="hand">
+    <tr><th></th><th>🖥 local desktop (stdio)</th><th>☁️ remote (Streamable HTTP)</th></tr>
+    <tr><td><b>how it runs</b></td><td>The host starts the server as a child process on the user's machine and talks through stdin/stdout.</td>
+      <td>The server runs as a web service. Hosts connect to one URL, such as <code>https://…/mcp</code>.</td></tr>
+    <tr><td><b>who uses it</b></td><td>One user, one process per host</td><td>Many users and hosts share one deployment</td></tr>
+    <tr><td><b>auth</b></td><td>Runs with the user's own OS permissions. Secrets come from env vars.</td><td><b>OAuth 2.1</b>: each user signs in and the server checks tokens</td></tr>
+    <tr><td><b>can reach</b></td><td>local files, local apps, localhost, VPN</td><td>only what the server's network can reach</td></tr>
+    <tr><td><b>updates</b></td><td>Each user upgrades their own copy</td><td>Deploy once and everyone gets it</td></tr>
+    <tr><td><b>config</b></td><td><code>command</code> + <code>args</code> in <code>.mcp.json</code> / <code>claude_desktop_config.json</code>, or a one-click desktop extension (<code>.mcpb</code>)</td>
+      <td><code>"type": "http"</code> + <code>url</code>, or <code>claude mcp add --transport http name URL</code>, or a "connector" in claude.ai</td></tr>
+    <tr><td><b>watch out for</b></td><td>version drift across laptops, and the stdout rule</td><td>auth, rate limits, multi-tenant data isolation, and DNS rebinding (check <code>Origin</code>)</td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">Streamable HTTP replaced the older HTTP+SSE transport in the 2025 spec. Older servers and docs may still say "SSE".</p>
+
+  <div class="box">
+    <b class="ink">✎ Try it: where should this server run?</b>
+    <div class="row" id="dp-needs" style="flex-direction:column; align-items:flex-start"></div>
+    <div class="out" id="dp-out" aria-live="polite"></div>
+  </div>
 
   <!-- ============ 2.5 ============ -->
   <h2 id="s5">2.5 Built-in tools</h2>
@@ -599,6 +729,68 @@ sorter('sort-build', 't-build', [['use', 'use community server'], ['build', 'bui
   { t: 'A team-specific release workflow that the community GitHub server can\'t express.', a: 'build', why: 'Build only when team workflows exceed what community servers can do.' },
 ]);
 
+// ---------- 2.4 MCP session stepper ----------
+const MS = [
+  ['host', 'The host reads its config and starts the server: it spawns `uv run weather_server.py` for stdio, or opens the URL for HTTP. It creates **one client** for this server.', ''],
+  ['client', 'The client says hello with the protocol version and what *it* supports.', '→ {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18",\n   "capabilities":{"sampling":{},"elicitation":{},"roots":{}},"clientInfo":{"name":"claude-code"}}}'],
+  ['server', 'The server answers with its own capabilities. Only features both sides declare can be used.', '← {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18",\n   "capabilities":{"tools":{"listChanged":true},"resources":{},"prompts":{}},"serverInfo":{"name":"weather"}}}'],
+  ['client', 'The handshake is done. Notifications have no `id` and get no reply.', '→ {"jsonrpc":"2.0","method":"notifications/initialized"}'],
+  ['client', 'Discovery: the client asks which tools exist.', '→ {"jsonrpc":"2.0","id":2,"method":"tools/list"}\n← {"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"get_forecast",\n   "description":"Hourly forecast for a city...","inputSchema":{...}}]}}'],
+  ['host', 'The host puts `get_forecast` into the model\'s tool list. The model replies with a `tool_use` block. **The model never speaks MCP**: the host translates.', 'model → tool_use { name: "get_forecast", input: { city: "Paris" } }'],
+  ['client', 'The client makes the call on the model\'s behalf, after the host has checked permissions.', '→ {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_forecast","arguments":{"city":"Paris"}}}'],
+  ['server', 'The server runs the function and returns content. A failure would come back as `isError: true` in the result, not as a protocol error.', '← {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"{\\"rain_pm\\":0.8}"}],"isError":false}}'],
+  ['host', 'The host wraps the result as a `tool_result` for the model, and the agentic loop continues. If the server\'s tools change later, it sends `notifications/tools/list_changed`.', 'tool_result → model: {"rain_pm": 0.8} … "Yes, take an umbrella."'],
+];
+let msI = 0;
+function renderMS() {
+  const [who, t, code] = MS[msI];
+  ['host', 'client', 'server'].forEach(r => $('r-' + r).classList.toggle('on', r === who));
+  $('ms-out').innerHTML = md(t).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*]+)\*/g, '<i>$1</i>') + (code ? `<pre>${esc(code)}</pre>` : '');
+  $('ms-step').textContent = `step ${msI + 1} / ${MS.length} · ${who}`;
+  $('ms-back').disabled = msI === 0; $('ms-next').disabled = msI === MS.length - 1;
+}
+$('ms-next').onclick = () => { msI = Math.min(MS.length - 1, msI + 1); renderMS(); };
+$('ms-back').onclick = () => { msI = Math.max(0, msI - 1); renderMS(); };
+$('ms-reset').onclick = () => { msI = 0; renderMS(); };
+renderMS();
+
+// ---------- 2.4 primitive sorter ----------
+sorter('sort-prim', 't-prim', [['tool', '🔧 tool'], ['resource', '📚 resource'], ['prompt', '💬 prompt'], ['sampling', '🧠 sampling']], [
+  { t: 'Create a Jira ticket.', a: 'tool', why: 'It is an action with side effects, and the model decides when to call it.' },
+  { t: 'The database schema, attached so the agent knows which tables exist.', a: 'resource', why: 'Read-only context identified by a URI. The app attaches it up front.' },
+  { t: 'A "/review-pr" template with a `strictness` argument that the user picks from a menu.', a: 'prompt', why: 'The user triggers it, and it expands into messages.' },
+  { t: 'Run a read-only SQL query that the model writes.', a: 'tool', why: 'The model chooses the arguments and the timing, so it\'s a tool. Mark it `readOnlyHint`.' },
+  { t: '`file:///repo/README.md` contents.', a: 'resource', why: 'Data addressed by a URI, read with `resources/read`.' },
+  { t: 'Your server needs an LLM to summarise a 5 MB log before returning, but has no API key.', a: 'sampling', why: 'Sampling lets the server borrow the host\'s model, with the user\'s approval.' },
+]);
+
+// ---------- 2.4 deployment picker ----------
+const DP = [
+  ['files', 'needs the user\'s local files, apps or localhost', 'local', 2],
+  ['offline', 'must work offline or on the user\'s VPN', 'local', 2],
+  ['many', 'shared by many users, or offered to customers', 'remote', 2],
+  ['central', 'central updates, logging and audit are required', 'remote', 2],
+  ['oauth', 'each user signs in to a SaaS account', 'remote', 1],
+];
+$('dp-needs').innerHTML = DP.map(([k, l]) => `<label class="chk"><input type="checkbox" value="${k}"> ${esc(l)}</label>`).join('');
+function pickDeploy(on) {
+  let local = 0, remote = 0;
+  DP.forEach(([k, , side, w]) => { if (on.has(k)) side === 'local' ? local += w : remote += w; });
+  return !local && !remote ? 'none' : local && remote ? 'split' : local ? 'local' : 'remote';
+}
+function renderDP() {
+  const r = pickDeploy(new Set([...document.querySelectorAll('#dp-needs input:checked')].map(x => x.value)));
+  $('dp-out').className = 'out ' + (r === 'split' ? 'bad' : 'good');
+  $('dp-out').innerHTML = {
+    none: 'Tick what the server needs. For development and personal tools, <b>local stdio</b> is the easy default.',
+    local: '<b>🖥 Local desktop (stdio).</b> The server needs what only the user\'s machine has. Ship it as a package or a <code>.mcpb</code> desktop extension.',
+    remote: '<b>☁️ Remote (Streamable HTTP + OAuth 2.1).</b> Deploy once and let every host connect to the URL.',
+    split: '<b>Split it.</b> The needs pull both ways: run a <b>remote</b> server for the shared, audited part and a small <b>local</b> server for the machine-only part. A host can connect to both.',
+  }[r];
+  return r;
+}
+$('dp-needs').onchange = renderDP; renderDP();
+
 // ---------- 2.5 tool picker ----------
 sorter('sort-tools', 't-tools', [['grep', 'Grep'], ['glob', 'Glob'], ['edit', 'Edit'], ['rw', 'Read + Write']], [
   { t: 'Find every file that calls `processLegacyOrder()`.', a: 'grep', why: 'Callers are text inside files, so Grep. Glob can\'t see contents.' },
@@ -671,6 +863,18 @@ const Q = [
   { t: 'Edit fails because `old_string` appears in several places. What\'s the exam\'s documented fallback?',
     o: ['Read + Write', 'Glob then Edit', 'Give up', 'Grep then Edit'], a: 0,
     w: 'Read + Write. In real Claude Code you\'d first widen old_string or use replace_all, but that\'s not the exam\'s answer.' },
+  { t: 'A host is connected to three MCP servers: GitHub, filesystem and Postgres. How many MCP clients does it run?',
+    o: ['One shared client', 'Three: one client per server', 'None, the model connects directly', 'Six, one per direction'], a: 1,
+    w: 'Client to server is 1 : 1. The host creates one client for each server, and the model never speaks MCP itself.' },
+  { t: 'You added `print("debug")` to your stdio server, and the host now reports JSON parse errors. Why?',
+    o: ['The Inspector is out of date', 'Stdout is the protocol channel. Log to stderr instead', 'Python needs flush=True', 'The tool description is too long'], a: 1,
+    w: 'In stdio mode every byte on stdout must be a JSON-RPC message.' },
+  { t: 'Your MCP server will be used by 500 customer companies, each signing in with its own account. Which deployment?',
+    o: ['A local stdio server that each customer runs', 'A remote Streamable HTTP server with OAuth 2.1', 'Copy the tools into each customer\'s prompt', 'An SSE server with a shared API key'], a: 1,
+    w: 'Many users, central updates and per-user sign-in point to remote. (SSE is the older transport, and a shared key is not per-user auth.)' },
+  { t: 'Which MCP primitive does the model decide to invoke?',
+    o: ['Prompts', 'Resources', 'Tools', 'Roots'], a: 2,
+    w: 'Tools are model-controlled, resources are app-controlled, and prompts are user-controlled. Roots is a client feature.' }
 ];
 let qr = 0, qd = 0;
 $('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
