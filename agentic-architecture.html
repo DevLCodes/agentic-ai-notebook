@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Architecture: notebook</title>
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 14px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre-wrap; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
+  .toc a { text-decoration: none; background: var(--blue); padding: 0 12px; border-radius: 4px 12px 4px 12px;
+           box-shadow: 1px 2px 0 rgba(0,0,0,.15); transform: rotate(-1deg); color: #123; }
+  .toc a:nth-child(even) { background: var(--pink); transform: rotate(1.2deg); }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* 1.4 dots */
+  .dots { display: grid; grid-template-columns: repeat(20, 1fr); gap: 5px; max-width: 520px; margin: 10px 0; }
+  .dots span { aspect-ratio: 1; border-radius: 50%; border: 1.5px solid #555; background: #b9f2c6; }
+  .dots span.x { background: var(--red); border-color: var(--red); }
+  .dots span.b { background: var(--hl); }
+  /* 1.3 timeline + 1.6 bars */
+  .tl { position: relative; height: 112px; border-bottom: 2px solid #444; margin: 10px 0 4px; }
+  .tl div { position: absolute; height: 26px; border: 2px solid var(--ink); border-radius: 8px 3px 8px 3px; font-size: 14px;
+            line-height: 22px; padding-left: 6px; background: var(--blue); transition: left .4s, width .4s; }
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 170px; border-bottom: 2px solid #444; margin: 10px 0 2px; }
+  .bars div { flex: 1; background: var(--blue); border: 2px solid var(--ink); border-bottom: 0; border-radius: 6px 6px 0 0;
+              transition: height .45s; position: relative; }
+  .bars div.int { background: var(--mint); border-color: var(--green); flex: 2; }
+  .bars div.c::after { content: "≠"; position: absolute; top: -26px; left: 50%; transform: translateX(-50%); color: var(--red); font-size: 22px; }
+  .barlbl { display: flex; gap: 6px; font-size: 13px; color: var(--pencil); }
+  .barlbl span { flex: 1; text-align: center; } .barlbl span.int { flex: 2; }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.6"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#c0392b" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-loop.html">↗ deep dive: the agentic loop</a><a href="tool-design-mcp.html">Domain 2 · Tool Design &amp; MCP →</a></p>
+  <h1>Domain 1 · Agentic Architecture</h1>
+  <p class="muted">27% of the exam, the biggest domain. Seven topics, and one habit that answers most questions:
+    <span class="hl">when an answer is incomplete or unreliable, find the <b>component</b> that caused it (loop, coordinator,
+    handoff, gate) before blaming the model.</span></p>
+  <nav class="toc">
+    <a href="#s1">1.1 Agentic loops</a><a href="#s2">1.2 Orchestration</a><a href="#s3">1.3 Subagent context</a>
+    <a href="#s4">1.4 Enforcement &amp; handoff</a><a href="#s5">1.5 SDK hooks</a><a href="#s6">1.6 Decomposition</a>
+    <a href="#s7">1.7 Sessions</a><a href="#quiz">✎ Quiz</a>
+  </nav>
+
+  <!-- ============ 1.1 ============ -->
+  <h2 id="s1">1.1 Agentic loops</h2>
+  <div class="cols">
+    <div>
+      <p>Your code runs the loop: send → check <code>stop_reason</code> → run the tools → append the results → send again.
+        <span class="hl"><code>stop_reason</code> is the only reliable signal</span> that the model has finished.</p>
+      <svg class="doodle" viewBox="0 0 420 200" role="img" aria-label="Sketch: loop of call, check stop_reason, run tools, append results; end_turn exits">
+        <g filter="url(#rough)">
+          <rect class="s" x="20" y="20" width="130" height="44" rx="8"/><rect class="s" x="250" y="20" width="150" height="44" rx="8"/>
+          <rect class="s" x="250" y="130" width="150" height="44" rx="8"/><rect class="s" x="20" y="130" width="130" height="44" rx="8"/>
+          <path class="s" d="M152,42 L244,42" marker-end="url(#arr)"/><path class="s" d="M325,66 L325,124" marker-end="url(#arr)"/>
+          <path class="s" d="M248,152 L156,152" marker-end="url(#arr)"/><path class="s" d="M85,128 L85,70" marker-end="url(#arr)"/>
+          <path class="sg" d="M402,42 C430,42 430,10 404,6" marker-end="url(#arrG)"/>
+        </g>
+        <text x="30" y="47">call the model</text><text x="258" y="47">stop_reason?</text>
+        <text x="266" y="157">run tool_use</text><text x="28" y="157">append results</text>
+        <text x="338" y="100" style="font-size:13px">tool_use</text><text class="g" x="262" y="12" style="font-size:13px">end_turn → done</text>
+        <text class="p" x="160" y="114" style="font-size:13px">role: "user"</text>
+      </svg>
+    </div>
+    <div class="sticky pink">
+      <b>Four ways to get "done" wrong</b>
+      <ul>
+        <li><span class="strike">parsing text</span> <span class="red">("I've finished the first file…" doesn't mean it's done)</span></li>
+        <li><span class="strike">content[0] is text</span> <span class="red">(text often comes before a tool_use)</span></li>
+        <li><span class="strike">for _ in range(5)</span> <span class="red">(acceptable as a safety net, not as the main stop)</span></li>
+        <li><span class="strike">tool_choice: "any"</span> <span class="red">(never reaches end_turn, so it loops forever)</span></li>
+      </ul>
+      <span class="muted" style="font-size:15px">A full simulator is on the <a href="agentic-loop.html">agentic loop page</a>.</span>
+    </div>
+  </div>
+  <h3>✎ Try it: what does the loop do? <span class="tally" id="t-sr"></span></h3>
+  <div class="cards" id="sort-sr"></div>
+
+  <!-- ============ 1.2 ============ -->
+  <h2 id="s2">1.2 Multi-agent orchestration</h2>
+  <p>The exam tests one shape: <b>hub-and-spoke</b>. <span class="hl">All communication goes through the coordinator.</span>
+    Subagents never talk to each other. That gives you observability, consistent error handling, and control over what
+    context each subagent receives.</p>
+  <div class="cols">
+    <svg class="doodle" viewBox="0 0 420 300" role="img" aria-label="Sketch: coordinator hub with four subagents; a direct link between two subagents is crossed out">
+      <g filter="url(#rough)">
+        <circle class="s" cx="210" cy="150" r="58" style="fill:#fff6c4"/>
+        <rect class="s" x="150" y="8" width="120" height="40" rx="8"/><rect class="s" x="316" y="130" width="100" height="40" rx="8"/>
+        <rect class="s" x="150" y="252" width="120" height="40" rx="8"/><rect class="s" x="4" y="130" width="100" height="40" rx="8"/>
+        <path class="s" d="M210,90 L210,52" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <path class="s" d="M270,150 L312,150" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <path class="s" d="M210,210 L210,248" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <path class="s" d="M150,150 L108,150" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <path class="sr" d="M272,32 C340,40 370,80 366,126" stroke-dasharray="5 5"/>
+        <path class="sr" d="M314,62 l20,20 M334,62 l-20,20"/>
+      </g>
+      <text class="t" x="164" y="146">Coordinator</text><text x="176" y="166" style="font-size:13px">decompose · route</text>
+      <text x="176" y="34">web search</text><text x="330" y="156">analysis</text><text x="176" y="278">synthesis</text><text x="18" y="156">doc reader</text>
+      <text class="r" x="330" y="46" style="font-size:13px">no direct chat!</text>
+    </svg>
+    <div>
+      <div class="sticky">
+        <b>The coordinator's 4 jobs</b>
+        <ol>
+          <li><b>Pick</b> subagents dynamically (not every query needs the full pipeline)</li>
+          <li><b>Partition</b> scope so subagents don't duplicate each other</li>
+          <li><b>Refine</b> in a loop: find gaps → re-delegate → repeat</li>
+          <li><b>Route</b> all communication through itself</li>
+        </ol>
+      </div>
+      <div class="sticky blue">
+        <b>Isolation</b>: a subagent does <u>not</u> inherit the coordinator's system prompt, history, or other subagents'
+        results. It only knows what is written into its prompt.
+      </div>
+    </div>
+  </div>
+
+  <h3>✎ Try it: why is the report missing whole topics?</h3>
+  <p>Topic: <i>"The state of renewable energy."</i> You're the coordinator. Tick the subtopics you'll assign, then try
+    the tempting fixes.</p>
+  <div class="box">
+    <div class="row" id="topics"></div>
+    <div class="row"><button id="more-agents">+ add 3 more search subagents</button><button id="better-search">upgrade the search agent</button></div>
+    <div class="out" id="report" aria-live="polite"></div>
+  </div>
+
+  <!-- ============ 1.3 ============ -->
+  <h2 id="s3">1.3 Subagent invocation &amp; context passing</h2>
+  <p>Subagents are spawned with the <b>Task</b> tool (called <code>Agent</code> in current Claude Code).
+    <span class="hl">The coordinator's <code>allowedTools</code> must include it</span>, or it can't spawn anything.
+    Each subagent is an <code>AgentDefinition</code>: a description (so the coordinator knows when to use it),
+    a system prompt, and a restricted set of tools.</p>
+
+  <h3>✎ Try it: write the synthesis subagent's prompt</h3>
+  <div class="box">
+    <div class="row" id="ctx"></div>
+    <div class="cols" style="gap:16px">
+      <div><p class="muted" style="margin:0">prompt the coordinator sends</p><pre id="ctx-prompt" style="min-height:150px"></pre></div>
+      <div><p class="muted" style="margin:0">what synthesis writes back</p><div class="out" id="ctx-out" aria-live="polite"></div></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h3>Parallel or sequential?</h3>
+      <div class="row"><button id="seq" aria-pressed="true">one per turn</button><button id="par" aria-pressed="false">3 Task calls in one response</button></div>
+      <div class="tl" id="tl"></div>
+      <p id="tl-txt" style="font-size:17px"></p>
+    </div>
+    <div class="sticky">
+      <b>Three rules for context</b>
+      <ol>
+        <li>Pass <b>complete</b> findings; subagents can't go and fetch earlier results.</li>
+        <li><b>Structure</b> it: keep the claim separate from its metadata.
+          <pre style="margin:4px 0; font-size:12px">{ "claim": "…", "source_url": "…",
+  "document_name": "…", "page_number": 42 }</pre></li>
+        <li>Give <b>goals</b>, not procedures, so the subagent can adapt.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============ 1.4 ============ -->
+  <h2 id="s4">1.4 Workflow enforcement &amp; handoff</h2>
+  <p>A prompt is <b>probabilistic</b>: it works roughly 90–95% of the time. A code gate is <b>deterministic</b>: 100%.
+    <span class="hl">Money, security and compliance need gates.</span> Formatting and style can rely on prompts.</p>
+
+  <h3>✎ Try it: 100 refund conversations</h3>
+  <p>Production shows that 8% of refunds go out <b>without verifying who the customer is</b>, even though the system
+    prompt says to verify first. Pick a fix and run it.</p>
+  <div class="box">
+    <div class="row" id="fix"></div>
+    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div class="out" id="fix-out" aria-live="polite"></div>
+  </div>
+  <div class="cols">
+    <svg class="doodle" viewBox="0 0 420 180" role="img" aria-label="Sketch: a gate blocks process_refund until get_customer returns a verified ID">
+      <g filter="url(#rough)">
+        <rect class="s" x="10" y="60" width="120" height="44" rx="8"/><rect class="s" x="290" y="60" width="124" height="44" rx="8"/>
+        <path class="s" d="M200,30 v120 M186,30 h28 M186,150 h28"/>
+        <path class="s" d="M132,82 L184,82" marker-end="url(#arr)"/><path class="sg" d="M216,82 L284,82" marker-end="url(#arrG)"/>
+      </g>
+      <text x="20" y="87">get_customer</text><text x="298" y="87">process_refund</text>
+      <text class="t" x="170" y="22">gate</text>
+      <text class="g" x="212" y="72" style="font-size:13px">verified ID?</text>
+      <text class="r" x="150" y="175" style="font-size:14px">no ID → returns an error</text>
+    </svg>
+    <div class="sticky mint">
+      <b>Handoff to a human</b>: the human can't see the transcript. Tick what your summary includes:
+      <div id="handoff" style="margin-top:6px"></div>
+      <div class="out" id="handoff-out" aria-live="polite" style="background:rgba(255,255,255,.7)"></div>
+    </div>
+  </div>
+  <div class="sticky blue">
+    <b>Multi-concern requests</b> ("return this order + update my address + check my points"): split them into separate
+    items, investigate them <u>in parallel</u> with shared context, then give one combined answer. <span class="red">Don't
+    handle them one at a time or answer only the first.</span>
+  </div>
+
+  <!-- ============ 1.5 ============ -->
+  <h2 id="s5">1.5 Agent SDK hooks</h2>
+  <p><span class="hl">PreToolUse enforces policy <b>before</b> a tool runs. PostToolUse transforms data <b>after</b> it runs.</span>
+    PostToolUse can't undo a side effect, because by then the tool has already run.</p>
+  <svg class="doodle" viewBox="0 0 860 170" role="img" aria-label="Sketch: tool call timeline with PreToolUse before execution and PostToolUse after">
+    <g filter="url(#rough)">
+      <circle class="s" cx="50" cy="80" r="34"/>
+      <rect class="s" x="150" y="54" width="170" height="56" rx="8" style="fill:#ffd1dc"/>
+      <rect class="s" x="380" y="54" width="130" height="56" rx="8" style="fill:#fff6c4"/>
+      <rect class="s" x="570" y="54" width="170" height="56" rx="8" style="fill:#c8f0d8"/>
+      <path class="s" d="M86,80 L144,80" marker-end="url(#arr)"/><path class="s" d="M322,80 L374,80" marker-end="url(#arr)"/>
+      <path class="s" d="M512,80 L564,80" marker-end="url(#arr)"/><path class="s" d="M742,80 C800,80 800,150 60,150 L50,118" marker-end="url(#arr)"/>
+    </g>
+    <text class="t" x="26" y="86">Claude</text>
+    <text class="t" x="164" y="80">PreToolUse</text><text x="160" y="100" style="font-size:12px">allow · deny · ask · defer</text>
+    <text class="t" x="408" y="80">tool runs</text><text class="r" x="394" y="100" style="font-size:12px">💥 side effect happens</text>
+    <text class="t" x="582" y="80">PostToolUse</text><text x="580" y="100" style="font-size:12px">updatedToolOutput</text>
+    <text class="p" x="150" y="40" style="font-size:13px">+ updatedInput can rewrite args</text>
+    <text class="p" x="570" y="40" style="font-size:13px">normalise what the model sees</text>
+  </svg>
+
+  <h3>✎ Try it: where do you put the AML check?</h3>
+  <p>Compliance requires <b>every</b> international <code>transfer_funds</code> call to pass <code>aml_check</code> first. The model is about to send $10,000 without checking.</p>
+  <div class="box">
+    <div class="row" id="aml"></div>
+    <div class="out" id="aml-out" aria-live="polite"></div>
+  </div>
+  <h3>✎ Try it: hook or prompt? <span class="tally" id="t-hook"></span></h3>
+  <div class="cards" id="sort-hook"></div>
+  <div class="sticky">
+    <b>Other hooks worth knowing</b>
+    <ul>
+      <li><b>SubagentStart</b>: can't block the spawn, but can add <code>additionalContext</code> (audit logging, standing instructions).</li>
+      <li><b>SubagentStop</b>: exit code 2 sends the subagent back to work (e.g. to validate its output schema). It can't rewrite the output.</li>
+      <li><b>PreCompact</b>: runs before history is compacted. Exit code 2 or <code>"decision": "block"</code> stops it. PostCompact receives the summary.</li>
+    </ul>
+  </div>
+
+  <!-- ============ 1.6 ============ -->
+  <h2 id="s6">1.6 Task decomposition</h2>
+  <div class="cols">
+    <div class="box">
+      <b class="ink">🛤 Fixed pipeline (prompt chaining)</b><br>
+      <span style="font-size:17px">Steps planned in advance, each feeding the next. Consistent and easy to debug, but it
+        can't adapt to surprises.<br><i>e.g. multi-file code review, document processing, compliance checks</i></span>
+    </div>
+    <div class="box">
+      <b class="ink">🧭 Dynamic decomposition</b><br>
+      <span style="font-size:17px">Subtasks are created from what gets discovered. It adapts, but runtime is less
+        predictable and it's harder to debug.<br><i>e.g. security audits, debugging an unfamiliar legacy system</i></span>
+    </div>
+  </div>
+
+  <h3>✎ Try it: review 14 files</h3>
+  <p><b>Attention dilution</b>: do 14 files in one pass and the early files get deep feedback, the later ones get
+    shallow feedback, and the same pattern gets flagged in one file (≠) but approved in another.</p>
+  <div class="box">
+    <div class="row"><button id="one" aria-pressed="true">one big pass</button><button id="multi" aria-pressed="false">per-file passes + integration pass</button>
+      <button id="bigger">use a bigger model / context</button></div>
+    <div class="bars" id="bars"></div><div class="barlbl" id="barlbl"></div>
+    <div class="out" id="bars-out" aria-live="polite"></div>
+  </div>
+  <h3>✎ Try it: pipeline or dynamic? <span class="tally" id="t-dec"></span></h3>
+  <div class="cards" id="sort-dec"></div>
+
+  <!-- ============ 1.7 ============ -->
+  <h2 id="s7">1.7 Session state &amp; resumption</h2>
+  <p><span class="hl">Resume to continue. Fork to explore alternatives. Start fresh with a summary when the old tool results are stale.</span></p>
+  <svg class="doodle" viewBox="0 0 860 230" role="img" aria-label="Sketch: resume continues a line, fork branches off, fresh start begins a new line with a summary note">
+    <g filter="url(#rough)">
+      <path class="s" d="M30,50 H300" style="stroke-width:3"/><path class="s" d="M300,50 H420" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+      <path class="s" d="M30,130 H250" style="stroke-width:3"/><path class="s" d="M250,130 C290,130 300,100 400,100" marker-end="url(#arr)"/>
+      <path class="s" d="M250,130 C290,130 300,160 400,160" marker-end="url(#arr)"/>
+      <path class="s" d="M520,50 H700" style="stroke-width:3;stroke:#999"/><path class="sr" d="M600,36 l16,28 M616,36 l-16,28"/>
+      <rect class="s" x="560" y="120" width="120" height="70" rx="3" style="fill:#fff59d"/>
+      <path class="sg" d="M684,155 H840" style="stroke-width:3" marker-end="url(#arrG)"/>
+    </g>
+    <text class="t" x="30" y="30">--resume</text><text x="430" y="55" style="font-size:14px">same line continues</text>
+    <text class="t" x="30" y="115">fork_session</text><text x="408" y="104" style="font-size:14px">approach A</text><text x="408" y="164" style="font-size:14px">approach B</text>
+    <text class="t" x="520" y="30">fresh start + summary</text><text class="r" x="530" y="80" style="font-size:13px">old session: stale tool results</text>
+    <text x="568" y="142" style="font-size:12px">"found 3 issues,</text><text x="568" y="160" style="font-size:12px">all fixed. changed:</text><text x="568" y="178" style="font-size:12px">auth.ts, session.ts…"</text>
+    <text class="g" x="700" y="145" style="font-size:14px">new clean session</text>
+  </svg>
+  <div class="cols">
+    <div class="sticky pink">
+      <b>The contradictory-advice bug</b><br>
+      An agent analyses 50 files and finds 3 auth issues. You fix them overnight, then <code>--resume</code> the next day.
+      The agent recommends fixing the issues <u>you already fixed</u>, because the old tool results showing the unfixed
+      code are still in its history. Re-reading the files doesn't fully cure this.
+    </div>
+    <div class="sticky mint">
+      <b>Targeted re-analysis</b><br>
+      Start a fresh session and inject: <i>"Prior findings X, Y, Z. Modified: auth.ts, session.ts, middleware.ts."</i>
+      The agent re-reads <b>only those 3 files</b>, not all 50. <span class="red">Forking won't help, because a fork inherits the stale results.</span>
+    </div>
+  </div>
+  <p class="muted" style="font-size:16px">CLI: name a session with <code>-n/--name</code>, resume with <code>--resume &lt;name&gt;</code>, or use <code>-c/--continue</code> for the most recent one. <code>fork_session</code> is used together with resume.</p>
+  <h3>✎ Try it: resume, fork or fresh? <span class="tally" id="t-sess"></span></h3>
+  <div class="cards" id="sort-sess"></div>
+
+  <!-- ============ Quiz ============ -->
+  <h2 id="quiz">✎ Pop quiz</h2>
+  <p class="muted">These are exam-style scenarios. Choose an answer, then read the margin note.</p>
+  <div class="cards quiz" id="quizcards" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+
+  <p class="sig">— notes from claudecertificationguide.com · Domain 1</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const press = (group, b) => document.querySelectorAll(group).forEach(x => x.setAttribute('aria-pressed', x === b));
+
+// ---------- generic sorter ----------
+function sorter(el, tallyEl, opts, cards) {
+  let right = 0, done = 0;
+  $(el).innerHTML = cards.map((c, i) => `<div class="card" data-i="${i}"><p class="q">${md(c.t)}</p>
+    <div class="opts">${opts.map(([k, l]) => `<button data-k="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="why"></div></div>`).join('');
+  $(el).onclick = e => {
+    const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+    if (!b || card.classList.contains('done')) return;
+    const c = cards[card.dataset.i], ok = b.dataset.k === c.a;
+    card.classList.add('done');
+    card.querySelectorAll('.opts button').forEach(x => { x.disabled = true; if (x.dataset.k === c.a) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(c.why)}`;
+    done++; right += ok;
+    $(tallyEl).textContent = `(${right}/${done} right${done === cards.length ? ', all done' : ''})`;
+  };
+}
+
+// ---------- 1.1 ----------
+sorter('sort-sr', 't-sr', [['exit', 'exit loop'], ['cont', 'continue'], ['handle', 'handle it']], [
+  { t: '`stop_reason: "tool_use"`, with text "Let me look that up" in front of the tool call.', a: 'cont', why: 'Run the tools, append the results as a `role: "user"` turn, and call again. The text isn\'t the answer.' },
+  { t: '`stop_reason: "end_turn"`', a: 'exit', why: 'The only value that means the model is finished.' },
+  { t: '`stop_reason: "pause_turn"`', a: 'cont', why: 'A long-running server-side tool: send the same conversation back. Don\'t restart it.' },
+  { t: '`stop_reason: "max_tokens"`', a: 'handle', why: 'The response was cut off. Treating it as done returns a silently truncated answer.' },
+  { t: 'The model wrote "Task complete!" and `stop_reason` is `"tool_use"`.', a: 'cont', why: 'Never parse the prose. `stop_reason` decides.' },
+  { t: '`stop_reason: "refusal"`', a: 'handle', why: 'Surface it to the user. Retrying the same request won\'t change the answer.' },
+]);
+
+// ---------- 1.2 decomposition ----------
+const TOPICS = ['solar', 'wind', 'geothermal', 'tidal', 'biomass', 'fusion'];
+let extra = '';
+$('topics').innerHTML = '<span class="muted">assign:</span>' + TOPICS.map((t, i) =>
+  `<label class="chk"><input type="checkbox" value="${t}" ${i < 2 ? 'checked' : ''}>${t}</label>`).join('');
+function renderReport() {
+  const on = [...document.querySelectorAll('#topics input:checked')].map(i => i.value), miss = TOPICS.filter(t => !on.includes(t));
+  const ok = !miss.length;
+  $('report').className = 'out ' + (ok ? 'good' : 'bad');
+  $('report').innerHTML = `📄 <b>Report</b>: ${on.length ? on.map(t => `<span class="green">${t} ✓ (thorough)</span>`).join(', ') : '<i>nothing assigned</i>'}` +
+    (miss.length ? `<br><span class="red">missing entirely: ${miss.join(', ')}</span>` : '') +
+    (extra ? `<br>${extra}` : '') +
+    `<br><b>${ok ? '✓ Full coverage. Scope was fixed at the source: the coordinator\'s decomposition.'
+      : 'Root cause: the coordinator never assigned the missing topics. The gap is in scope, not depth, so the subagents did their jobs.'}</b>`;
+  extra = '';
+}
+$('topics').onchange = renderReport;
+$('more-agents').onclick = () => { extra = '<span class="red">✗ 3 more subagents received the same narrow assignments. Coverage is unchanged.</span>'; renderReport(); };
+$('better-search').onclick = () => { extra = '<span class="red">✗ Searching was never the problem. The covered topics were already thorough.</span>'; renderReport(); };
+renderReport();
+
+// ---------- 1.3 context builder ----------
+const CTX = [['task', 'allowedTools includes "Task"', true], ['findings', 'include the findings', true], ['meta', 'keep source metadata', false], ['goal', 'goal, not procedure', false]];
+$('ctx').innerHTML = CTX.map(([k, l, on]) => `<label class="chk"><input type="checkbox" value="${k}" ${on ? 'checked' : ''}>${l}</label>`).join('');
+function renderCtx() {
+  const on = new Set([...document.querySelectorAll('#ctx input:checked')].map(i => i.value));
+  const lines = [on.has('goal') ? 'Goal: a cited 1-page brief on geothermal\'s share of global power, suitable for policy readers.'
+                                : 'Step 1: read the findings. Step 2: write 3 paragraphs. Step 3: stop.'];
+  if (on.has('findings')) lines.push('', 'Findings:', on.has('meta')
+    ? '{ "claim": "Geothermal supplies ~0.5% of global electricity",\n  "source_url": "iea.example/renewables-2025",\n  "document_name": "Renewables 2025", "page_number": 42 }'
+    : '- Geothermal supplies ~0.5% of global electricity');
+  $('ctx-prompt').textContent = on.has('task') ? lines.join('\n') : '(nothing was sent)';
+  const o = $('ctx-out');
+  if (!on.has('task')) { o.className = 'out bad'; o.innerHTML = '✗ <b>Spawn failed.</b> "Task" (now "Agent") isn\'t in the coordinator\'s allowedTools, so it can\'t spawn subagents at all.'; return; }
+  if (!on.has('findings')) { o.className = 'out bad'; o.innerHTML = '"I have no research to work from." <br><span class="red">Subagents don\'t inherit the coordinator\'s history. Anything not in the prompt doesn\'t exist for them.</span>'; return; }
+  o.className = 'out ' + (on.has('meta') && on.has('goal') ? 'good' : 'bad');
+  o.innerHTML = (on.has('meta') ? 'Geothermal supplies about 0.5% of global electricity <span class="green">(Renewables 2025, p. 42)</span>.'
+                                : 'Geothermal supplies about 0.5% of global electricity <span class="red">[source?]</span>.') +
+    (on.has('goal') ? ' <i>Framed for policy readers, with a recommendation at the end.</i>' : ' <i>Three generic paragraphs, then it stops.</i>') +
+    '<br>' + (!on.has('meta') ? '<span class="red">Synthesis can\'t cite a source it was never given. The coordinator stripped the metadata, so the fault is in the handoff, not in synthesis.</span>'
+      : !on.has('goal') ? '<span class="ink">Cited, but rigid. Give it a goal so it can adapt.</span>' : '<span class="green">✓ Complete, structured, goal-oriented context.</span>');
+}
+$('ctx').onchange = renderCtx; renderCtx();
+
+// ---------- 1.3 timeline ----------
+function renderTL(par) {
+  const names = ['search: geothermal', 'search: tidal', 'search: biomass'];
+  $('tl').innerHTML = names.map((n, i) => `<div style="top:${6 + i * 34}px; left:${par ? 0 : i * 32}%; width:31%">${n}</div>`).join('');
+  $('tl-txt').innerHTML = par ? '<span class="green">≈ 1 unit of time. Independent subagents run concurrently.</span>'
+                              : '<span class="red">≈ 3 units. Each waits for the one before it for no reason.</span>';
+  press('#seq, #par', par ? $('par') : $('seq'));
+}
+$('seq').onclick = () => renderTL(false); $('par').onclick = () => renderTL(true); renderTL(false);
+
+// ---------- 1.4 dots ----------
+const FIX = [
+  ['prompt', 'current prompt', .08, 'The instruction is in the prompt, and it still fails about 8% of the time.'],
+  ['strong', 'STRONGER prompt!!', .035, 'Better, maybe 3–4%. It\'s still probabilistic, so refunds still go to unverified people.'],
+  ['fewshot', 'add few-shot examples', .04, 'Still probabilistic, and it costs tokens. This is a classic distractor.'],
+  ['router', 'routing classifier', .08, 'Classifiers route requests. They don\'t enforce the order of steps inside an agent.'],
+  ['gate', 'prerequisite gate', 0, '<b>0 out of 100, every time.</b> process_refund returns an error until get_customer has produced a verified ID. The model can\'t skip code.'],
+];
+$('fix').innerHTML = FIX.map(([k, l], i) => `<button data-i="${i}" aria-pressed="false">${l}</button>`).join('');
+$('fix').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return; press('#fix button', b);
+  const [k, , rate, why] = FIX[b.dataset.i];
+  let bad = 0;
+  $('dots').innerHTML = Array.from({ length: 100 }, () => {
+    const skip = Math.random() < (k === 'gate' ? .08 : rate);             // gate: model still tries to skip, code blocks it
+    if (skip && k !== 'gate') bad++;
+    return `<span class="${skip ? (k === 'gate' ? 'b' : 'x') : ''}"></span>`;
+  }).join('');
+  $('fix-out').className = 'out ' + (k === 'gate' ? 'good' : 'bad');
+  $('fix-out').innerHTML = (k === 'gate' ? '🟡 = the model tried to skip verification and the gate blocked it. ' : `🔴 <b>${bad}/100</b> refunds issued without verification. `) + why +
+    ' <span class="muted">(random each run)</span>';
+};
+$('fix').querySelector('button').click();
+
+// ---------- 1.4 handoff ----------
+const HF = [['Customer ID', 'What\'s the customer\'s ID?'], ['Conversation summary', 'What did they ask for, and what have you already tried?'],
+  ['Root cause', 'So what\'s actually wrong?'], ['Refund amount', 'How much are we refunding?'], ['Recommended action', 'What do you want me to do?']];
+$('handoff').innerHTML = HF.map(([f], i) => `<label class="chk"><input type="checkbox" value="${i}" ${i < 2 ? 'checked' : ''}>${f}</label>`).join('');
+function renderHF() {
+  const on = new Set([...document.querySelectorAll('#handoff input:checked')].map(i => +i.value)), miss = HF.filter((_, i) => !on.has(i));
+  $('handoff-out').innerHTML = miss.length
+    ? `🧑‍💼 The human has to ask the customer again: ${miss.map(([, q]) => `<span class="red">"${q}"</span>`).join(' ')}`
+    : '<span class="green">✓ Self-contained. The human can act without re-asking anything.</span>';
+}
+$('handoff').onchange = renderHF; renderHF();
+
+// ---------- 1.5 AML ----------
+const AML = [
+  ['PreToolUse hook', 'good', '✓ <b>Blocked.</b> The hook returns <code>permissionDecision: "deny"</code> before the tool runs, and the model is told to call <code>aml_check</code> first. No money moved. Deterministic, 100% of the time.'],
+  ['PostToolUse hook', 'bad', '✗ <b>$10,000 has already been sent.</b> PostToolUse runs after execution. It can only rewrite what the model sees, not undo the transfer.'],
+  ['a firmer system prompt', 'bad', '✗ Around 95% compliance. Compliance needs 100%, so a prompt isn\'t enough.'],
+  ['ask the model to double-check', 'bad', '✗ Still the model deciding. Whether it complies stays probabilistic.'],
+];
+$('aml').innerHTML = AML.map(([l], i) => `<button data-i="${i}" aria-pressed="false">${l}</button>`).join('');
+$('aml').onclick = e => { const b = e.target.closest('button'); if (!b) return; press('#aml button', b);
+  const [, c, t] = AML[b.dataset.i]; $('aml-out').className = 'out ' + c; $('aml-out').innerHTML = t; };
+$('aml-out').innerHTML = '<span class="muted">choose where the rule lives</span>';
+
+sorter('sort-hook', 't-hook', [['pre', 'PreToolUse'], ['post', 'PostToolUse'], ['prompt', 'just a prompt']], [
+  { t: 'Block `process_refund` above $500 and escalate to a human.', a: 'pre', why: 'A money rule has to be enforced before execution.' },
+  { t: 'Tools return Unix timestamps; the model should see ISO 8601 dates.', a: 'post', why: 'Normalise the output once, in code, so it\'s consistent on every iteration.' },
+  { t: 'Prefer bullet points in customer replies.', a: 'prompt', why: 'A style preference. Occasional deviation is fine, so a prompt is enough.' },
+  { t: 'Route `approve_discount` above 20% to a manager queue.', a: 'pre', why: 'An approval workflow: intercept before the tool runs.' },
+  { t: 'Map numeric status codes (3) to readable text ("shipped").', a: 'post', why: 'Data transformation after execution.' },
+  { t: 'Block `transfer_funds` until `aml_check` passes.', a: 'pre', why: 'A compliance gate: deterministic, before execution.' },
+]);
+
+// ---------- 1.6 attention bars ----------
+function renderBars(mode) {
+  const multi = mode === 'multi';
+  const h = i => multi ? 86 + (i % 3) * 3 : Math.max(14, 96 - i * 6.5) + (mode === 'bigger' ? 4 : 0);
+  const conflict = i => !multi && (i === 3 || i === 10);
+  $('bars').innerHTML = Array.from({ length: 14 }, (_, i) => `<div class="${conflict(i) ? 'c' : ''}" style="height:${h(i)}%"></div>`).join('') +
+    (multi ? '<div class="int" style="height:80%"></div>' : '');
+  $('barlbl').innerHTML = Array.from({ length: 14 }, (_, i) => `<span>${i + 1}</span>`).join('') + (multi ? '<span class="int">cross-file</span>' : '');
+  $('bars-out').className = 'out ' + (multi ? 'good' : 'bad');
+  $('bars-out').innerHTML = multi ? '✓ Every file gets its own focused pass, and a separate <b>integration pass</b> checks concerns that cut across files. Depth is even and nothing contradicts.'
+    : mode === 'bigger' ? '✗ About the same slope. A bigger model or context window doesn\'t fix an <b>architectural</b> problem. Attention is still spread across 14 items.'
+    : 'Depth drops file by file, and ≠ marks where the same pattern was flagged in file 4 but approved in file 11.';
+  press('#one, #multi, #bigger', $(mode));
+}
+['one', 'multi', 'bigger'].forEach(id => $(id).onclick = () => renderBars(id)); renderBars('one');
+
+sorter('sort-dec', 't-dec', [['fixed', 'fixed pipeline'], ['dyn', 'dynamic']], [
+  { t: 'Review a 20-file PR: local analysis → cross-file integration → report.', a: 'fixed', why: 'The steps are known up front, so consistency matters most.' },
+  { t: 'Security audit of an unfamiliar legacy system.', a: 'dyn', why: 'Issues surface during the investigation, so the plan has to evolve.' },
+  { t: 'Extract fields from 500 invoices with the same layout.', a: 'fixed', why: 'Structured, predictable input.' },
+  { t: 'Add tests to a legacy codebase, reprioritising as you discover dependencies.', a: 'dyn', why: 'Subtasks come from what gets discovered.' },
+  { t: 'Monthly compliance check against a fixed checklist.', a: 'fixed', why: 'Known steps that must be reproducible.' },
+]);
+
+// ---------- 1.7 ----------
+sorter('sort-sess', 't-sess', [['resume', '--resume'], ['fork', 'fork_session'], ['fresh', 'fresh + summary']], [
+  { t: 'You come back after lunch. Nothing in the repo has changed.', a: 'resume', why: 'The context is still valid, and the full history helps.' },
+  { t: 'Compare two refactoring strategies starting from the same analysis.', a: 'fork', why: 'Divergent paths from a shared baseline.' },
+  { t: '3 of 50 files were modified since the last session.', a: 'fresh', why: 'Old tool results would contradict the files. Inject a summary and name the changed files for targeted re-analysis.' },
+  { t: 'A very long, cluttered session that has started to reason poorly.', a: 'fresh', why: 'A clean baseline with a curated summary works better than a degraded history.' },
+  { t: 'The context is stale, so someone suggests forking to get a clean slate.', a: 'fresh', why: 'A fork copies the parent\'s history, stale results included.' },
+]);
+
+// ---------- quiz ----------
+const Q = [
+  { t: 'A renewable-energy report covers only solar and wind, even though the subagents did thorough work. What\'s the root cause?',
+    o: ['The search agent is weak', 'The synthesis agent dropped topics', 'The coordinator only ever assigned solar and wind', 'Too few subagents'], a: 2,
+    w: 'Incomplete in scope, not depth, means the coordinator\'s decomposition is at fault. More subagents would get the same narrow assignments.' },
+  { t: 'The final report has no citations, but the search agent did record its sources. Why?',
+    o: ['Synthesis ignores citations', 'The coordinator passed the claims without their structured metadata', 'The search agent failed', 'The context window is too small'], a: 1,
+    w: 'Synthesis can\'t cite what it never received. The failure is in the coordinator-to-synthesis handoff.' },
+  { t: 'A subagent ignores a rule that is written only in the coordinator\'s system prompt. Why?',
+    o: ['Subagents don\'t inherit the coordinator\'s context', 'Its temperature is too high', 'It needs its own MCP server', 'The rule is too long'], a: 0,
+    w: 'Subagents receive only what their prompt contains. Put the rule in the prompt.' },
+  { t: 'The coordinator can\'t spawn any subagents. What\'s the first thing to check?',
+    o: ['Whether `allowedTools` includes "Task" (now "Agent")', 'The model version', 'The subagents\' system prompts', 'The MCP config'], a: 0,
+    w: 'It\'s a binary gate: without that tool, spawning is impossible.' },
+  { t: 'Three independent research subagents run one after another. What\'s the fix?',
+    o: ['Emit all three Task calls in one response', 'Merge them into one agent', 'Use --resume', 'Add a coordinator'], a: 0,
+    w: 'Independent work should be spawned in parallel in a single turn.' },
+  { t: 'Refunds go out without identity verification 8% of the time, despite clear prompt instructions. What\'s the fix?',
+    o: ['A stronger system prompt', 'Few-shot examples', 'A routing classifier', 'A prerequisite gate that blocks process_refund until get_customer verifies the customer'], a: 3,
+    w: 'Money needs deterministic enforcement. The other three are probabilistic, or solve a different problem.' },
+  { t: 'Every international transfer must pass an AML check first. Which mechanism?',
+    o: ['PostToolUse that checks the transfer', 'PreToolUse that blocks transfer_funds until aml_check passes', 'System prompt reminder', 'Few-shot examples'], a: 1,
+    w: 'PreToolUse runs before the side effect. PostToolUse is too late, because the money has already moved.' },
+  { t: 'Tools return timestamps in mixed formats and the model sometimes misreads them. What\'s the best fix?',
+    o: ['Tell the model to convert them', 'A PostToolUse hook that normalises the output to ISO 8601', 'A PreToolUse hook', 'A bigger model'], a: 1,
+    w: 'PostToolUse transforms the data consistently in code. Asking the model to convert them gives inconsistent results.' },
+  { t: 'You need to reject a subagent\'s output if it doesn\'t match a schema and send it back to fix it. Which hook?',
+    o: ['SubagentStart', 'SubagentStop, exiting with code 2', 'PostToolUse', 'PreCompact'], a: 1,
+    w: 'SubagentStop can block with exit code 2 and send the subagent back to work. It can\'t rewrite the output itself.' },
+  { t: 'A 14-file review: files 1–5 get detailed feedback, files 10–14 shallow feedback, and the verdicts contradict each other. What\'s the fix?',
+    o: ['A bigger context window', 'A better review prompt', 'Per-file passes plus a cross-file integration pass', 'A newer model'], a: 2,
+    w: 'Attention dilution is an architectural problem, so fix it with a multi-pass architecture.' },
+  { t: 'A debugging task on an unfamiliar system where the issues only emerge as you investigate. Which pattern?',
+    o: ['Fixed pipeline', 'Dynamic decomposition', 'Prompt chaining', 'One single pass'], a: 1,
+    w: 'Open-ended work with an unknown scope needs subtasks created from what you discover.' },
+  { t: 'You fixed 3 of 50 files overnight, and the resumed session recommends fixing them again. What should you do?',
+    o: ['Resume and re-read everything', 'fork_session', 'Start fresh with a summary of findings that names the 3 changed files', 'Re-analyse all 50 files'], a: 2,
+    w: 'This removes the stale tool results and keeps what you learned, with targeted re-analysis of only the changed files.' },
+  { t: 'You want to try two different migration plans from the same analysed baseline. Which option?',
+    o: ['--resume', 'fork_session', 'Fresh start', '-c'], a: 1,
+    w: 'A fork branches from a shared baseline. Resume would just continue the one line.' },
+];
+let qr = 0, qd = 0;
+$('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
+  <div class="opts">${q.o.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quizcards').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const q = Q[card.dataset.i], ok = +b.dataset.j === q.a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === q.a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(q.w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+</body>
+</html>

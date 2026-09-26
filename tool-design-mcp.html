@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tool Design &amp; MCP: notebook</title>
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #8a6f55 radial-gradient(circle at 30% 20%, #a3876b, #6d5540); min-height: 100vh;
+         font: 19px/var(--lh) var(--hand); color: #222; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 12px 40px rgba(0,0,0,.45), 0 0 0 1px #e6e0cc; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, #6d5540 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 { z-index: 0; }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 14px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
+  .toc a { text-decoration: none; background: var(--blue); padding: 0 12px; border-radius: 4px 12px 4px 12px;
+           box-shadow: 1px 2px 0 rgba(0,0,0,.15); transform: rotate(-1deg); color: #123; }
+  .toc a:nth-child(even) { background: var(--pink); transform: rotate(1.2deg); }
+
+  /* hand-drawn boxes */
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.2); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.55); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+
+  /* doodles */
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  /* controls */
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+
+  /* 2.1 builder */
+  .tooldesc { font: 14px/1.45 var(--mono); background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 6px 0 12px; min-height: 64px; }
+  .tooldesc b { font-family: var(--mono); color: var(--ink); }
+  .tooldesc .add { background: #fff3a0; }
+  .meter { height: 26px; border: 2px solid #333; border-radius: 14px 4px 14px 4px; overflow: hidden; display: flex; font-size: 14px; line-height: 22px; }
+  .meter div { transition: width .35s; white-space: nowrap; overflow: hidden; padding: 0 8px; color: #fff; }
+  .meter .ok { background: var(--green); } .meter .bad { background: var(--red); text-align: right; }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.18); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .card pre { font-size: 12px; margin: 6px 0 0; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* 2.3 bag */
+  .pool, .bag { display: flex; flex-wrap: wrap; gap: 8px; min-height: 44px; }
+  .bag { border: 2.5px dashed var(--ink); padding: 10px; border-radius: 30px 10px 30px 10px; background: rgba(205,234,254,.35); }
+  .tag { font-family: var(--mono); font-size: 14px; }
+  .fb { margin: 8px 0 0; padding-left: 22px; line-height: 1.5; }
+
+  /* 2.5 tree */
+  .tree { font: 15px/1.7 var(--mono); background: #fff; border: 1.5px solid #bbb; padding: 10px 14px; }
+  .tree div { padding: 0 6px; border-radius: 3px; transition: background .3s; }
+  .tree .hit { background: var(--hl); } .tree .hit::after { content: "  ← found"; color: var(--red); font-family: var(--hand); }
+  .tree .seen { background: #e6f4ea; }
+
+  /* quiz */
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.25); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+</head>
+<body>
+<!-- shared "pencil" filter that makes every doodle wobble a little -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.6"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#c0392b" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-architecture.html">← Domain 1 · Agentic Architecture</a></p>
+  <h1>Domain 2 · Tool Design &amp; MCP</h1>
+  <p class="muted">18% of the exam. Five topics, one idea running through all of them:
+    <span class="hl">the model can only choose well from what you describe well.</span></p>
+  <nav class="toc">
+    <a href="#s1">2.1 Tool interface design</a><a href="#s2">2.2 Structured errors</a>
+    <a href="#s3">2.3 Distribution &amp; tool_choice</a><a href="#s4">2.4 MCP servers</a>
+    <a href="#s5">2.5 Built-in tools</a><a href="#quiz">✎ Quiz</a>
+  </nav>
+
+  <!-- ============ 2.1 ============ -->
+  <h2 id="s1">2.1 Tool interface design</h2>
+  <p>The tool <b>description</b> is the <span class="hl">primary mechanism</span> Claude uses to choose a tool.
+    When it picks the wrong tool, fix the description first: it's the lowest-effort, highest-leverage change.</p>
+
+  <div class="cols">
+    <div>
+      <svg class="doodle" viewBox="0 0 420 250" role="img" aria-label="Sketch: a tool index card with five numbered parts">
+        <g filter="url(#rough)">
+          <rect class="s" x="12" y="14" width="396" height="222" rx="4" style="fill:#fff"/>
+          <line x1="12" y1="54" x2="408" y2="54" style="stroke:#e8a0a0;stroke-width:2"/>
+          <line x1="12" y1="92" x2="408" y2="92" style="stroke:#c9dcef"/><line x1="12" y1="126" x2="408" y2="126" style="stroke:#c9dcef"/>
+          <line x1="12" y1="160" x2="408" y2="160" style="stroke:#c9dcef"/><line x1="12" y1="194" x2="408" y2="194" style="stroke:#c9dcef"/>
+        </g>
+        <text class="t" x="26" y="44">get_customer</text><text class="p" x="250" y="44">(a good description)</text>
+        <text x="26" y="84">① purpose: look up a customer account</text>
+        <text x="26" y="118">② inputs: email | phone | customer ID</text>
+        <text x="26" y="152">③ example: "is jane@x.com a member?"</text>
+        <text x="26" y="186">④ limits: no order data returned</text>
+        <text class="r" x="26" y="222">⑤ boundary: orders? → use lookup_order</text>
+        <path class="sr" d="M330,222 q30,-2 58,-30" marker-end="url(#arrR)"/>
+        <text class="r" x="300" y="176" style="font-size:13px">the part people forget</text>
+      </svg>
+      <p class="caption">the five parts of a production-grade description</p>
+    </div>
+    <div class="sticky">
+      <b>Wrong tool picked? Try the fixes in this order</b>
+      <ul>
+        <li class="green">✓ Expand the descriptions (root cause, low effort)</li>
+        <li><span class="strike">Few-shot examples</span> <span class="red">treats the symptom and costs tokens</span></li>
+        <li><span class="strike">Routing classifier</span> <span class="red">over-engineered for a first step</span></li>
+        <li><span class="strike">Consolidate tools</span> <span class="red">valid later, but more effort</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>✎ Try it: fix the misrouting</h3>
+  <p>Two tools with one-line descriptions look almost the same to the model. Add the five elements and watch the
+    (illustrative) routing get more confident.</p>
+  <div class="box">
+    <div class="row" id="elems"></div>
+    <div class="cols" style="gap:16px">
+      <div><div class="tooldesc" id="d-cust"></div></div>
+      <div><div class="tooldesc" id="d-ord"></div></div>
+    </div>
+    <div class="row">User asks: <span id="queries" class="row"></span></div>
+    <div class="meter" id="meter"><div class="ok"></div><div class="bad"></div></div>
+    <p id="verdict" style="margin:6px 0 0"></p>
+    <p class="muted" style="font-size:14px; margin:0">percentages are a teaching illustration, not a measurement</p>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h3>Split generic tools</h3>
+      <svg class="doodle" viewBox="0 0 420 170" role="img" aria-label="Sketch: analyze_document split into three specific tools">
+        <g filter="url(#rough)">
+          <rect class="s" x="10" y="62" width="150" height="44" rx="8"/>
+          <path class="s" d="M162,84 C200,84 200,28 236,28" marker-end="url(#arr)"/>
+          <path class="s" d="M162,84 L236,84" marker-end="url(#arr)"/>
+          <path class="s" d="M162,84 C200,84 200,140 236,140" marker-end="url(#arr)"/>
+        </g>
+        <text x="20" y="90" class="r">analyze_document</text>
+        <text class="p" x="12" y="130" style="font-size:13px">"analyses a document</text><text class="p" x="12" y="146" style="font-size:13px">and returns results" 🤷</text>
+        <text x="242" y="33">extract_data_points</text><text x="242" y="89">summarize_content</text><text x="242" y="145">verify_claim_against_source</text>
+      </svg>
+    </div>
+    <div class="sticky pink">
+      <b>⚠ Red pen</b><br>
+      The system prompt can <u>override</u> a good description. A line like <i>"always check customer details first"</i>
+      makes the model call <code>get_customer</code> no matter what the description says.
+      After editing descriptions, <b>re-read the system prompt too.</b>
+    </div>
+  </div>
+
+  <!-- ============ 2.2 ============ -->
+  <h2 id="s2">2.2 Structured error responses</h2>
+  <p>A failure is only useful if the agent can tell <span class="hl">what kind</span> of failure it was, because that
+    decides whether to retry, fix the input, or escalate.</p>
+
+  <svg class="doodle" viewBox="0 0 860 210" role="img" aria-label="Sketch: protocol errors stop before the tool runs; execution errors come back with isError true">
+    <g filter="url(#rough)">
+      <circle class="s" cx="60" cy="100" r="36"/>
+      <rect class="s" x="330" y="30" width="170" height="60" rx="6"/>
+      <rect class="s" x="600" y="120" width="190" height="64" rx="6"/>
+      <path class="s" d="M98,88 L322,58" marker-end="url(#arr)"/>
+      <path class="sr" d="M260,50 l24,24 M284,50 l-24,24"/>
+      <path class="s" d="M98,112 C300,150 420,160 592,150" marker-end="url(#arr)"/>
+      <path class="sg" d="M600,176 C420,210 200,200 92,128" marker-end="url(#arrG)"/>
+    </g>
+    <text class="t" x="36" y="106">Claude</text>
+    <text x="342" y="56" class="r">① Protocol error</text><text x="342" y="78" style="font-size:13px">JSON-RPC level</text>
+    <text x="120" y="14" class="r" style="font-size:14px">unknown tool / bad schema → tool never runs</text>
+    <text x="612" y="146">② Tool ran and failed</text><text x="612" y="170" style="font-size:13px">result has isError: true</text>
+    <text x="250" y="206" class="g" style="font-size:14px">the model reads the category and plans its recovery</text>
+  </svg>
+
+  <div class="cols">
+    <div class="box">
+      <b class="ink">Four categories, four recoveries</b>
+      <table style="width:100%; border-collapse:collapse; font-size:17px; line-height:1.45">
+        <tr><td>⏱ <b>Transient</b><br><span class="muted">timeout, rate limit, service down</span></td><td class="green">retryable → wait, retry</td></tr>
+        <tr><td>✏️ <b>Validation</b><br><span class="muted">bad format, missing field, out of range</span></td><td class="red">fix the input, resubmit</td></tr>
+        <tr><td>📜 <b>Business</b><br><span class="muted">policy or limit exceeded</span></td><td class="red">escalate / other workflow</td></tr>
+        <tr><td>🔒 <b>Permission</b><br><span class="muted">access denied</span></td><td class="red">escalate / other credentials</td></tr>
+      </table>
+    </div>
+    <div class="sticky">
+      <b>Empty ≠ broken</b><br>
+      <i>Access failure</i>: the tool couldn't reach the data.<br>
+      <i>Valid empty result</i>: it did reach the data and found nothing.
+<pre>// found nothing: accept the answer
+{ "isError": false, "resultCount": 0 }
+
+// couldn't look: retry
+{ "isError": true,
+  "errorCategory": "transient",
+  "isRetryable": true }</pre>
+      <span class="muted">errorCategory / isRetryable / description are app conventions, carried in <code>structuredContent</code></span>
+    </div>
+  </div>
+
+  <h3>✎ Try it: sort the failure <span class="tally" id="t-err"></span></h3>
+  <div class="cards" id="sort-err"></div>
+  <div class="sticky blue">
+    <b>Multi-agent rule</b>: a subagent retries transient errors <u>itself</u>. Only unresolved errors go up to the
+    coordinator, together with <b>partial results</b> and <b>what was attempted</b>, so the coordinator isn't deciding blind.
+  </div>
+
+  <!-- ============ 2.3 ============ -->
+  <h2 id="s3">2.3 Tool distribution &amp; tool_choice</h2>
+  <p><span class="hl">4–5 tools per agent</span>, scoped to its role. Every extra tool adds a decision, and selection
+    errors rise with the size of the toolkit. And remember: <b>server boundaries are invisible to the model.</b>
+    Twenty-two tools split across two servers is still a 22-tool problem.</p>
+
+  <h3>✎ Try it: pack the Synthesis agent's bag</h3>
+  <p>Its job: turn research that's already been gathered into a cited report. Click tools to add or remove them.</p>
+  <div class="box">
+    <p style="margin:0" class="muted">tool shelf</p>
+    <div class="pool" id="pool"></div>
+    <p style="margin:10px 0 0" class="muted">🎒 synthesis agent · <span id="bagcount"></span></p>
+    <div class="bag" id="bag"></div>
+    <ul class="fb" id="bagfb"></ul>
+  </div>
+
+  <div class="cols">
+    <div class="box">
+      <b class="ink">Which fix, when?</b>
+      <table style="width:100%; font-size:16px; line-height:1.45">
+        <tr><td>few tools, two read alike</td><td>→ sharpen descriptions</td></tr>
+        <tr><td>different jobs (query, transform, export)</td><td>→ split by role, 4–5 each</td></tr>
+        <tr><td>variations of one job, same shape</td><td>→ one tool + an <code>enum</code> param</td></tr>
+        <tr><td>tool can do more than it should</td><td>→ constrain it (least privilege)</td></tr>
+      </table>
+      <p style="margin:8px 0 0; font-size:16px">e.g. 19 transform tools → <code>transform(kind: enum)</code>.
+        Generic <code>fetch_url</code> → <code>load_document</code>, which only accepts document URLs.</p>
+    </div>
+    <div>
+      <svg class="doodle" viewBox="0 0 400 170" role="img" aria-label="Sketch: pie chart, 85 percent simple lookups handled locally, 15 percent go to the coordinator">
+        <g filter="url(#rough)">
+          <path d="M80,85 L80,25 A60,60 0 1 1 31.46,49.73 Z" style="fill:#b9f2c6; stroke:#1e8449; stroke-width:2"/>
+          <path d="M80,85 L31.46,49.73 A60,60 0 0 1 80,25 Z" style="fill:#ffd1dc; stroke:#c0392b; stroke-width:2"/>
+          <path class="s" d="M150,62 L178,62" marker-end="url(#arr)"/><path class="s" d="M150,118 L178,118" marker-end="url(#arr)"/>
+        </g>
+        <text x="62" y="112" class="g">85%</text><text x="44" y="46" class="r" style="font-size:13px">15%</text>
+        <text x="186" y="58">simple lookups → a <tspan class="g">scoped</tspan></text><text x="186" y="78"><tspan class="g">verify_fact</tspan> tool, run locally</text>
+        <text x="186" y="114">complex checks → the</text><text x="186" y="134">coordinator (full pipeline)</text>
+        <text class="p" x="20" y="164" style="font-size:13px">sending all of them via the coordinator = 2–3 round trips, 40%+ latency</text>
+      </svg>
+    </div>
+  </div>
+
+  <h3>✎ Try it: flip the tool_choice switch</h3>
+  <div class="box">
+    <div class="row" id="tc"></div>
+    <div id="tcpanel" aria-live="polite"></div>
+  </div>
+
+  <!-- ============ 2.4 ============ -->
+  <h2 id="s4">2.4 MCP server integration</h2>
+  <p>MCP (Model Context Protocol) gives any host one standard way to plug in outside tools and data.</p>
+
+  <svg class="doodle" viewBox="0 0 860 250" role="img" aria-label="Sketch: a host containing MCP clients connected to a remote http server and a local stdio server, each exposing tools, resources and prompts">
+    <g filter="url(#rough)">
+      <rect class="s" x="14" y="20" width="300" height="210" rx="14"/>
+      <rect class="s" x="40" y="70" width="110" height="46" rx="6"/><rect class="s" x="40" y="146" width="110" height="46" rx="6"/>
+      <circle class="s" cx="238" cy="130" r="42"/>
+      <rect class="s" x="520" y="22" width="300" height="92" rx="8"/><rect class="s" x="520" y="140" width="300" height="92" rx="8"/>
+      <path class="s" d="M152,93 C320,93 380,68 512,68" marker-end="url(#arr)"/>
+      <path class="s" d="M152,169 C320,169 380,186 512,186" marker-end="url(#arr)"/>
+    </g>
+    <text class="t" x="30" y="50">Host (Claude Code / your app)</text>
+    <text x="54" y="98">MCP client</text><text x="54" y="174">MCP client</text><text class="t" x="208" y="136">Claude</text>
+    <text x="340" y="60" style="font-size:14px">"type": "http" (remote)</text>
+    <text x="340" y="206" style="font-size:14px">command + args (stdio, local)</text>
+    <text class="t" x="536" y="48">GitHub server</text><text class="t" x="536" y="166">filesystem server</text>
+    <text x="536" y="74" style="font-size:14px">🔧 tools: actions the model calls</text>
+    <text x="536" y="96" style="font-size:14px">📚 resources: catalogues shown up front</text>
+    <text x="536" y="192" style="font-size:14px">🔧 read_file, list_dir …</text>
+    <text x="536" y="214" style="font-size:14px">📚 docs tree, schemas …</text>
+  </svg>
+
+  <div class="cols">
+    <div>
+      <p style="margin:0"><b class="ink">Two places a server can live</b></p>
+<pre>// .mcp.json at the repo root: committed, shared with the team
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "${GITHUB_MCP_URL:-https://mcp.example.com/github}",
+      "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" }
+    },
+    "docs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./docs"]
+    }
+  }
+}
+
+// ~/.claude.json: personal, not versioned, not shared</pre>
+      <p style="font-size:16px; line-height:1.5"><code>${VAR}</code> keeps secrets out of git while each developer uses their own token.
+        <code>${VAR:-default}</code> adds a fallback value.</p>
+    </div>
+    <div>
+      <div class="sticky">
+        <b>Resources = a table of contents</b><br>
+        Show the catalogue (issue summaries, doc hierarchy, DB schema) <u>up front</u>, so the agent doesn't burn
+        exploratory tool calls just finding out what exists.
+      </div>
+      <div class="sticky pink">
+        <b>Sparse MCP descriptions lose</b><br>
+        Built-in tools have rich descriptions. If your MCP tool gets one line, the agent will pick the built-in instead.
+        Write <b>3–5 sentences</b>: what it does, what it returns, when to use it, and how it differs from the alternatives.
+      </div>
+    </div>
+  </div>
+
+  <h3>✎ Try it: where does it go? <span class="tally" id="t-where"></span></h3>
+  <div class="cards" id="sort-where"></div>
+  <h3>✎ Try it: build or use? <span class="tally" id="t-build"></span></h3>
+  <div class="cards" id="sort-build"></div>
+
+  <!-- ============ 2.5 ============ -->
+  <h2 id="s5">2.5 Built-in tools</h2>
+  <p><span class="hl">Grep finds what's INSIDE files. Glob finds files by their NAMES.</span></p>
+
+  <svg class="doodle" viewBox="0 0 860 200" role="img" aria-label="Sketch: Grep is a magnifying glass over the text inside a page; Glob is a folder matching file names">
+    <g filter="url(#rough)">
+      <path class="s" d="M40,20 h150 l30,30 v140 h-180 z" style="fill:#fff"/>
+      <path class="s" d="M60,70 h130 M60,95 h110 M60,120 h135 M60,145 h90"/>
+      <circle class="s" cx="165" cy="115" r="38" style="fill:rgba(255,224,102,.35)"/><path class="s" d="M192,142 l40,40" style="stroke-width:6"/>
+      <path class="s" d="M480,55 h80 l18,18 h160 v122 h-258 z" style="fill:#fff6d6"/>
+    </g>
+    <text class="t" x="260" y="70">Grep</text>
+    <text x="260" y="98">searches file <tspan class="r">contents</tspan></text>
+    <text x="260" y="122" style="font-size:14px">"processLegacyOrder" → callers,</text>
+    <text x="260" y="142" style="font-size:14px">error messages, imports</text>
+    <text x="500" y="100" style="font-size:14px">Cart.test.tsx ✓</text><text x="500" y="124" style="font-size:14px">Cart.tsx</text>
+    <text x="500" y="148" style="font-size:14px">Order.test.tsx ✓</text><text x="500" y="172" style="font-size:14px">utils/index.ts</text>
+    <text class="t" x="640" y="110">Glob</text><text x="640" y="136">matches <tspan class="r">paths</tspan></text>
+    <text x="640" y="160" style="font-size:14px">"**/*.test.tsx"</text>
+  </svg>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Editing</b><br>
+      <b>Edit</b> = swap one <u>unique</u> <code>old_string</code> for a <code>new_string</code>. Precise and cheap on context.<br>
+      It <span class="red">fails when the text appears more than once</span> (that's a safety feature).<br>
+      Exam fallback: <span class="hl"><b>Read + Write</b></span> the whole file.
+      <span class="muted" style="font-size:15px">(In real Claude Code, widening old_string or using replace_all is cheaper, but the exam expects Read + Write.)</span>
+    </div>
+    <div class="sticky blue">
+      <b>Don't read the whole repo</b><br>
+      Grep for the entry point → Read only the files that matter → Grep again for wrapper/barrel names → Read what those turn up.
+      Reading everything first fills the context with irrelevant files.
+    </div>
+  </div>
+
+  <h3>✎ Try it: pick the tool <span class="tally" id="t-tools"></span></h3>
+  <div class="cards" id="sort-tools"></div>
+
+  <h3>✎ Walk through it: find a deprecated function's callers and tests</h3>
+  <p>Goal: every caller of <code>processLegacyOrder()</code> <b>and</b> every test that covers it, even the ones that
+    never mention its name.</p>
+  <div class="cols">
+    <div>
+      <div class="row"><button id="g-back">← back</button><button id="g-next">next →</button><button id="g-reset">reset</button>
+        <span class="muted" id="g-step"></span></div>
+      <div class="box" aria-live="polite" style="margin-top:8px"><b class="ink" id="g-title"></b><br><span id="g-text"></span></div>
+    </div>
+    <div class="tree" id="tree"></div>
+  </div>
+
+  <!-- ============ Quiz ============ -->
+  <h2 id="quiz">✎ Pop quiz</h2>
+  <p class="muted">These are exam-style scenarios. Choose an answer, then read the margin note.</p>
+  <div class="cards quiz" id="quizcards" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+
+  <p class="sig">— notes from claudecertificationguide.com · Domain 2</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+// ---------- generic sorter: one card per scenario, pick an option ----------
+function sorter(el, tallyEl, opts, cards) {
+  let right = 0, done = 0;
+  const tally = () => { if (tallyEl) $(tallyEl).textContent = done ? `(${right}/${done} right${done === cards.length ? ', all done' : ''})` : ''; };
+  $(el).innerHTML = cards.map((c, i) => `<div class="card" data-i="${i}"><p class="q">${md(c.t)}</p>
+    <div class="opts">${opts.map(([k, l]) => `<button data-k="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="why"></div></div>`).join('');
+  $(el).onclick = e => {
+    const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+    if (!b || card.classList.contains('done')) return;
+    const c = cards[card.dataset.i], ok = b.dataset.k === c.a;
+    card.classList.add('done');
+    card.querySelectorAll('.opts button').forEach(x => { x.disabled = true; if (x.dataset.k === c.a) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(c.why)}` +
+      (c.json ? `<pre>${esc(c.json)}</pre>` : '');
+    done++; right += ok; tally();
+  };
+}
+
+// ---------- 2.1 description builder ----------
+const EL = [
+  { k: 'purpose', w: .15, l: '① purpose', c: 'Looks up a customer account.', o: 'Retrieves one specific order.' },
+  { k: 'inputs', w: .2, l: '② inputs', c: 'Input: email, phone, or customer ID.', o: 'Input: order number (#NNNNN) or tracking ID.' },
+  { k: 'examples', w: .15, l: '③ examples', c: 'e.g. "Is jane@x.com a loyalty member?"', o: 'e.g. "Where is order #48213?"' },
+  { k: 'edges', w: .1, l: '④ limits', c: 'Returns profile, contact details, status, loyalty tier. No order data.', o: 'Returns status, items, shipping, refund eligibility. No account data.' },
+  { k: 'bounds', w: .3, l: '⑤ boundaries', c: 'Do NOT use for order queries: use lookup_order.', o: 'Do NOT use for identity verification: use get_customer.' },
+];
+const QS = [
+  { q: 'Where is my order #48213?', a: 'lookup_order', b: 'get_customer' },
+  { q: 'Confirm I own jane@x.com', a: 'get_customer', b: 'lookup_order' },
+  { q: 'Is my refund for #50122 approved?', a: 'lookup_order', b: 'get_customer' },
+];
+let qi = 0;
+$('elems').innerHTML = '<span class="muted">add to both descriptions:</span>' +
+  EL.map(e => `<label class="chk"><input type="checkbox" value="${e.k}">${e.l}</label>`).join('');
+$('queries').innerHTML = QS.map((q, i) => `<button data-i="${i}" aria-pressed="${i === 0}">${esc(q.q)}</button>`).join('');
+function renderDesc() {
+  const on = [...document.querySelectorAll('#elems input:checked')].map(i => i.value);
+  const parts = side => on.length ? EL.filter(e => on.includes(e.k)).map(e => `<span class="add">${esc(e[side])}</span>`).join(' ')
+                                  : (side === 'c' ? 'Retrieves customer information' : 'Retrieves order details');
+  $('d-cust').innerHTML = `<b>get_customer</b>: "${parts('c')}"`;
+  $('d-ord').innerHTML = `<b>lookup_order</b>: "${parts('o')}"`;
+  const p = Math.round((.5 + EL.filter(e => on.includes(e.k)).reduce((s, e) => s + e.w, 0) * .5) * 100), q = QS[qi];
+  const [ok, bad] = $('meter').children;
+  ok.style.width = p + '%'; ok.textContent = `${q.a} ${p}%`;
+  bad.style.width = (100 - p) + '%'; bad.textContent = 100 - p >= 12 ? `${q.b} ${100 - p}%` : '';
+  $('verdict').innerHTML = p <= 55 ? '<span class="red">Coin flip. Both descriptions say "retrieves … information".</span>'
+    : !on.includes('bounds') ? `<span class="ink">Better. Now add ⑤ boundaries, the element that tells the model when <i>not</i> to use each tool.</span>`
+    : p < 95 ? '<span class="green">Boundaries are in. Misrouting is mostly gone.</span>'
+    : '<span class="green">Production-grade: every query has one obvious tool. ✓</span>';
+}
+$('elems').onchange = renderDesc;
+$('queries').onclick = e => { const b = e.target.closest('button'); if (!b) return; qi = +b.dataset.i;
+  document.querySelectorAll('#queries button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderDesc(); };
+renderDesc();
+
+// ---------- 2.2 error sorter ----------
+const ERR = (cat, retry, desc) => JSON.stringify({ isError: true, structuredContent: { errorCategory: cat, isRetryable: retry, description: desc } }, null, 2);
+sorter('sort-err', 't-err',
+  [['transient', '⏱ transient'], ['validation', '✏️ validation'], ['business', '📜 business'], ['permission', '🔒 permission'], ['empty', '∅ not an error'], ['protocol', '⚙ protocol']],
+  [
+    { t: 'The CRM API took more than 30s to respond and the request timed out.', a: 'transient', why: 'A temporary outage: retry after a delay.',
+      json: ERR('transient', true, 'CRM timed out after 30s. Retry after a short delay.') },
+    { t: '`lookup_customer(email: "jane.at.example")`', a: 'validation', why: 'The input is malformed. A retry fails the same way, so fix the input first.',
+      json: ERR('validation', false, 'email must look like name@domain.') },
+    { t: 'Refund of $820 requested; the auto-approval limit is $500.', a: 'business', why: 'A policy limit. Retrying won\'t help: escalate to a human or use another workflow.',
+      json: ERR('business', false, 'Exceeds $500 auto-approval. Escalate to a supervisor.') },
+    { t: '403: the service account lacks `orders:read`.', a: 'permission', why: 'Access denied: escalate, or retry with different credentials.',
+      json: ERR('permission', false, 'Service account lacks orders:read.') },
+    { t: 'The order search ran fine and found 0 orders for this email.', a: 'empty', why: 'A successful query with no matches is an answer, not a failure. Don\'t retry.',
+      json: JSON.stringify({ isError: false, structuredContent: { resultCount: 0, orders: [] } }, null, 2) },
+    { t: 'The model called `get_custmer`, which isn\'t a tool on the server.', a: 'protocol', why: 'An unknown tool is a JSON-RPC protocol error: the tool never ran, so there\'s no isError result.' },
+    { t: 'HTTP 429 Too Many Requests from the shipping API.', a: 'transient', why: 'A rate limit is temporary: back off and retry.',
+      json: ERR('transient', true, 'Rate limited. Retry after 10s.') },
+  ]);
+
+// ---------- 2.3 tool bag ----------
+const POOL = [
+  ['compile_report', 1, 'Core to its job.'], ['verify_fact', 1, 'Scoped: handles the 85% of simple fact checks locally.'],
+  ['format_citation', 1, 'Core to its job.'], ['assess_coverage', 1, 'Checks whether the report covers the question.'],
+  ['search_web', 0, 'It would run its own searches instead of using the results it was handed, duplicating work and wasting context.'],
+  ['fetch_url', 0, 'Generic and over-powered. Least privilege says a constrained load_document at most.'],
+  ['extract_data_points', 0, 'Belongs to the Document Analysis agent.'], ['summarize_content', 0, 'Belongs to the Document Analysis agent.'],
+  ['save_snippet', 0, 'Belongs to the Web Search agent.'], ['request_revision', 0, 'A coordinator tool.'],
+];
+const inBag = new Set();
+function renderBag() {
+  const btn = ([n]) => `<button class="tag" data-n="${n}">${n}</button>`;
+  $('pool').innerHTML = POOL.filter(([n]) => !inBag.has(n)).map(btn).join('') || '<span class="muted">empty shelf</span>';
+  $('bag').innerHTML = POOL.filter(([n]) => inBag.has(n)).map(btn).join('') || '<span class="muted">click tools on the shelf to pack them</span>';
+  const n = inBag.size, bad = POOL.filter(([t, ok]) => inBag.has(t) && !ok), good = POOL.filter(([t, ok]) => inBag.has(t) && ok);
+  $('bagcount').innerHTML = `<span class="${n > 5 ? 'red' : 'green'}">${n} tool${n === 1 ? '' : 's'}${n > 5 ? ': over the 4–5 budget!' : ''}</span>`;
+  const fb = bad.map(([t, , w]) => `<li class="red"><code>${t}</code>: ${w}</li>`);
+  if (!bad.length && good.length === 4) fb.push('<li class="green">✓ Perfect kit: 4 role-scoped tools, including a <b>scoped</b> verify_fact.</li>');
+  else if (!bad.length && n) fb.push(`<li class="ink">${good.length}/4 so far. What else does a report-writer need?</li>`);
+  $('bagfb').innerHTML = fb.join('');
+}
+$('pool').parentElement.onclick = e => {
+  const b = e.target.closest('button.tag'); if (!b) return;
+  inBag.has(b.dataset.n) ? inBag.delete(b.dataset.n) : inBag.add(b.dataset.n); renderBag();
+};
+renderBag();
+
+// ---------- 2.3 tool_choice ----------
+const TC = [
+  ['"auto"', '{ "type": "auto" }', 'The model decides whether to call a tool or reply in text. This is the default.',
+   'General operation and normal agent loops, where a plain conversational answer is fine.',
+   'Using auto when you <b>need</b> structured output: the model may just reply in prose.'],
+  ['"any"', '{ "type": "any" }', 'The model <b>must</b> call a tool, but chooses which one.',
+   'Extraction pipelines with several possible schemas, where structured output is guaranteed.',
+   'Forcing it inside an agent loop once the model is done: it can never reach <code>end_turn</code>, so the loop never ends (Domain 1).'],
+  ['forced', '{ "type": "tool", "name": "verify_identity" }', 'The model <b>must</b> call this exact tool.',
+   'Mandatory first steps (e.g. verify identity before anything else). The model can\'t skip or reorder it. Switch back to auto afterwards.',
+   'Leaving it forced on later turns, which repeats the same call.'],
+];
+$('tc').innerHTML = 'tool_choice = ' + TC.map(([k], i) => `<button data-i="${i}" aria-pressed="false">${esc(k)}</button>`).join('');
+$('tc').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#tc button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  const [, j, what, use, trap] = TC[b.dataset.i];
+  $('tcpanel').innerHTML = `<pre>"tool_choice": ${esc(j)}</pre><p style="margin:0">${what}</p>
+    <p style="margin:0"><span class="green">✓ use for:</span> ${use}</p><p style="margin:0"><span class="red">✗ trap:</span> ${trap}</p>`;
+};
+$('tc').querySelector('button').click();
+
+// ---------- 2.4 sorters ----------
+sorter('sort-where', 't-where', [['project', '.mcp.json (team)'], ['user', '~/.claude.json (me)'], ['env', '${ENV_VAR}']], [
+  { t: 'A GitHub MCP server that every developer on the team uses.', a: 'project', why: 'Shared team config is version-controlled at the repo root.' },
+  { t: 'A server you\'re trying out for your personal notes.', a: 'user', why: 'Experimental and personal, so keep it out of the shared file.' },
+  { t: 'Your personal GitHub token.', a: 'env', why: 'Never commit secrets. Reference it as `${GITHUB_TOKEN}` and each developer sets their own.' },
+  { t: 'The team\'s Jira server for ticket workflows.', a: 'project', why: 'The whole team needs it, so it goes in `.mcp.json`. Putting team config in a user file is an exam trap.' },
+  { t: 'A server URL that\'s usually the same, but some devs point it at staging.', a: 'env', why: 'Use `${API_URL:-https://default}` inside `.mcp.json`: a shared default that each developer can override.' },
+]);
+sorter('sort-build', 't-build', [['use', 'use community server'], ['build', 'build custom']], [
+  { t: 'Posting to Slack channels.', a: 'use', why: 'Standard integration: community servers are maintained and tested.' },
+  { t: 'Reading Linear and Notion pages.', a: 'use', why: 'Standard. Building your own is the exam\'s favourite over-engineering trap.' },
+  { t: 'A proprietary internal inventory system with no public server.', a: 'build', why: 'No community alternative exists, so building is justified.' },
+  { t: 'A team-specific release workflow that the community GitHub server can\'t express.', a: 'build', why: 'Build only when team workflows exceed what community servers can do.' },
+]);
+
+// ---------- 2.5 tool picker ----------
+sorter('sort-tools', 't-tools', [['grep', 'Grep'], ['glob', 'Glob'], ['edit', 'Edit'], ['rw', 'Read + Write']], [
+  { t: 'Find every file that calls `processLegacyOrder()`.', a: 'grep', why: 'Callers are text inside files, so Grep. Glob can\'t see contents.' },
+  { t: 'Find all `*.test.tsx` files.', a: 'glob', why: 'A naming pattern is a path match, so Glob.' },
+  { t: 'Add a `validate` parameter to the single line `function processOrder(id: string)`.', a: 'edit', why: 'The anchor is unique, so Edit: precise and cheap on context.' },
+  { t: 'Rename a variable whose text appears 6 times in a file, so Edit can\'t anchor uniquely.', a: 'rw', why: 'The exam\'s documented fallback is Read + Write (in practice, widening `old_string` or `replace_all` is cheaper).' },
+  { t: 'Where is the message "Payment declined: code 51" thrown?', a: 'grep', why: 'Error messages are file contents, so Grep.' },
+  { t: 'List every migration under `src/**/migrations/`.', a: 'glob', why: 'A directory/name pattern, so Glob.' },
+]);
+
+// ---------- 2.5 deprecation walk-through ----------
+const FILES = ['src/orders/orders.ts', 'src/orders/OrderProcessor.ts', 'src/orders/OrderProcessor.test.ts', 'src/utils/index.ts',
+  'src/checkout/checkout.ts', 'src/checkout/checkout.test.ts', 'src/cart/cart.ts', 'src/cart/cart.test.ts', 'README.md'];
+const G = [
+  { t: 'Start', x: 'Nine files, and resist the urge to Read them all. Start with a content search.', hit: [] },
+  { t: 'Grep "processLegacyOrder"', x: 'Finds the definition, the direct callers, a test that imports it by name, and a barrel file.', hit: [0, 1, 3, 4, 5] },
+  { t: 'Read src/utils/index.ts', x: 'It contains <code>export { processLegacyOrder as submitOrder }</code>. There\'s a <b>wrapper name</b>, and the first Grep couldn\'t see anything that uses it.', hit: [3] },
+  { t: 'Glob "**/OrderProcessor.test.*"', x: 'OrderProcessor calls the function, and its sibling test exercises it <b>without ever naming it</b>. Only a name match finds it.', hit: [2] },
+  { t: 'Grep "submitOrder"', x: 'Catches consumers that go through the wrapper: cart.ts and its test.', hit: [6, 7] },
+  { t: 'Done: Grep → Glob → Grep', x: 'Everything is found except README. One Grep alone would have missed 3 of these 8 files. Note the order: <b>content search first</b>, not Glob first.', hit: [] },
+];
+let gi = 0;
+function renderG() {
+  const seen = new Set(G.slice(0, gi + 1).flatMap(s => s.hit)), s = G[gi];
+  $('tree').innerHTML = FILES.map((f, i) => `<div class="${s.hit.includes(i) ? 'hit' : seen.has(i) ? 'seen' : ''}">${f}</div>`).join('');
+  $('g-title').textContent = `${gi}. ${s.t}`; $('g-text').innerHTML = s.x;
+  $('g-step').textContent = `${gi + 1} / ${G.length}`;
+  $('g-back').disabled = gi === 0; $('g-next').disabled = gi === G.length - 1;
+}
+$('g-next').onclick = () => { gi++; renderG(); };
+$('g-back').onclick = () => { gi--; renderG(); };
+$('g-reset').onclick = () => { gi = 0; renderG(); };
+renderG();
+
+// ---------- quiz ----------
+const Q = [
+  { t: 'An agent sends order questions to `get_customer`. Both tools have one-line descriptions. What should you fix first?',
+    o: ['Add few-shot examples to the system prompt', 'Expand both descriptions with inputs, examples, limits and boundaries', 'Add a routing classifier in front', 'Merge both into one tool'], a: 1,
+    w: 'It fixes the root cause with the least effort. The other options treat symptoms or over-engineer.' },
+  { t: 'After rewriting the descriptions, the agent still calls `get_customer` first every time. What\'s the likely culprit?',
+    o: ['The system prompt says "always check customer details first"', 'Temperature is too high', 'Too few tools', 'The MCP transport'], a: 0,
+    w: 'Keywords in the system prompt can override good descriptions, so review both.' },
+  { t: 'A search tool queried the database successfully and found no rows. What should it return?',
+    o: ['isError: true, errorCategory: "transient"', 'isError: false, resultCount: 0', 'A protocol error', 'Retry three times, then fail'], a: 1,
+    w: 'A valid empty result is an answer. Flagging it as an error makes the agent retry pointlessly.' },
+  { t: 'A refund exceeds the auto-approval policy limit. How should the error be classified?',
+    o: ['Transient, retryable', 'Validation: fix the input', 'Business, not retryable: escalate or use another workflow', 'Permission'], a: 2,
+    w: 'A policy or limit violation is a business error. Retrying can\'t change the policy.' },
+  { t: 'An agent with 18 tools keeps picking the wrong one. Someone suggests splitting them across two MCP servers.',
+    o: ['That fixes it', 'It doesn\'t help: server boundaries are invisible to the model', 'It halves the error rate', 'The MCP spec requires it'], a: 1,
+    w: 'The model sees one flat list of tools. Split by agent role (4–5 each) instead.' },
+  { t: 'You have 19 near-identical data-transformation tools. What\'s the best fix?',
+    o: ['Split them across four agents', 'Consolidate into one parameterised tool with an enum', 'Make every description longer', 'Set tool_choice to "any"'], a: 1,
+    w: 'Variations on one job with the same shape belong in one tool, which keeps every capability with far fewer choices.' },
+  { t: 'An extraction pipeline must always return structured output, using one of three schemas. Which tool_choice?',
+    o: ['"auto"', '"any"', 'Forced to one tool', 'Leave tool_choice unset'], a: 1,
+    w: '"any" guarantees a tool call while letting the model choose the right schema. "auto" might return prose.' },
+  { t: 'A synthesis agent sends every fact check to the coordinator: 2–3 round trips and 40% more latency, even though 85% are simple lookups.',
+    o: ['Give it a scoped verify_fact tool for the simple ones', 'Give it full web search', 'Cache the coordinator\'s answers', 'Merge the agents'], a: 0,
+    w: 'This is the scoped cross-role tool pattern: handle the common simple case locally and send only complex checks up.' },
+  { t: 'Where should the team\'s Jira MCP server be configured?',
+    o: ['~/.claude.json on each laptop', '.mcp.json with "${JIRA_TOKEN}"', '.mcp.json with the token pasted in', 'In the system prompt'], a: 1,
+    w: 'Shared config is committed, and secrets are expanded from environment variables.' },
+  { t: 'Your custom MCP tool keeps losing to a built-in tool. What\'s the most likely fix?',
+    o: ['Expand its description to 3–5 sentences, including how it compares to the alternatives', 'Switch to stdio', 'Add more tools to the server', 'Rename it'], a: 0,
+    w: 'Sparse MCP descriptions can\'t compete with richly documented built-ins.' },
+  { t: 'You need to find every file that calls `processLegacyOrder()` and their tests. What\'s the right approach?',
+    o: ['Glob "**/*processLegacyOrder*"', 'Read every file under src/', 'Grep the name, Glob the callers\' sibling tests, then Grep the wrapper names', 'Grep "*.test.*"'], a: 2,
+    w: 'Content search first, then path matching, then wrappers: Grep → Glob → Grep.' },
+  { t: 'Edit fails because `old_string` appears in several places. What\'s the exam\'s documented fallback?',
+    o: ['Read + Write', 'Glob then Edit', 'Give up', 'Grep then Edit'], a: 0,
+    w: 'Read + Write. In real Claude Code you\'d first widen old_string or use replace_all, but that\'s not the exam\'s answer.' },
+];
+let qr = 0, qd = 0;
+$('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
+  <div class="opts">${q.o.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quizcards').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const q = Q[card.dataset.i], ok = +b.dataset.j === q.a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === q.a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(q.w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+</body>
+</html>

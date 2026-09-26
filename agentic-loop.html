@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Agentic Loop: notebook</title>
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  :root { --fg: #222; --muted: var(--pencil); --card: #fffef8; --line: #c8c2ae; --code: #fffef8;
+          --accent: var(--red); --ok: var(--green); --bad: var(--red);
+          --s0: #1f3a93; --s1: #8e44ad; --s2: #c0392b; --s3: #138d75; }
+  .lede { color: var(--pencil); }
+  .grid { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  #diagram { width: 100%; height: auto; display: block; overflow: visible; }
+  #diagram text { font-family: var(--hand); }
+  .node { cursor: pointer; }
+  .node circle { fill: #fffef8; stroke-width: 3; transition: fill .2s; }
+  .node text { fill: #222; font-size: 15px; text-anchor: middle; pointer-events: none; }
+  .node .num { font-family: var(--title); font-size: 16px; fill: var(--sc); }
+  .node:hover circle { fill: var(--hl); }
+  .node.active circle { fill: color-mix(in srgb, var(--sc) 22%, #fff); }
+  .node:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  .arc { fill: none; stroke: var(--pencil); stroke-width: 2; }
+  .exit { stroke: var(--green); stroke-width: 2.4; fill: none; }
+  .lbl { font-size: 14px; fill: var(--pencil); }
+  pre.loop { overflow-x: auto; padding: 10px 0; margin: 12px 0 0; }
+  pre.loop span { display: block; padding: 0 14px; border-left: 3px solid transparent; transition: background .2s; }
+  pre.loop span.hl { background: color-mix(in srgb, var(--sc) 16%, transparent); border-left-color: var(--sc); }
+  .cm { color: #8a8a80; }
+  .stage-title { margin: 0 0 4px; font-family: var(--title); font-weight: normal; font-size: 24px; color: var(--sc); }
+  .panel { line-height: 1.5; font-size: 17px; }
+  .panel h4 { margin: 12px 0 2px; font-family: var(--title); font-weight: normal; font-size: 17px; color: var(--pencil); }
+  .panel p { margin: 0 0 6px; } .panel ul { margin: 0; padding-left: 20px; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .pill { display: inline-block; padding: 0 12px; font-family: var(--title); font-size: 16px; color: var(--sc);
+          background: color-mix(in srgb, var(--sc) 14%, #fff); border: 2px solid var(--sc);
+          border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sr { font-family: var(--mono); font-size: 14px; }
+  #simtitle { font-family: var(--title); font-weight: normal; color: var(--ink); }
+  #simtext { line-height: 1.5; font-size: 17px; }
+  .msgs pre { margin: 0 0 8px; white-space: pre-wrap; word-break: break-word; border-left: 4px solid #d8d2bf; }
+  .msgs pre.new { border-left-color: var(--red); animation: pop .5s; }
+  @keyframes pop { from { background: #ffe9a8; } }
+  .progress { height: 6px; background: #e3ddc8; border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+  .progress div { height: 100%; background: var(--red); transition: width .25s; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+  #srpanel { line-height: 1.5; }
+  .verdict { font-family: var(--title); font-size: 20px; }
+  .verdict.exit { color: var(--green); } .verdict.cont { color: var(--ink); } .verdict.handle { color: var(--red); }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-architecture.html">② Agentic Architecture →</a></p>
+  <h1>The Agentic Loop</h1>
+  <p class="lede">Four stages, repeated until the model stops asking for tools. The model supplies the intelligence.
+    <span class="hl"><b>Your loop</b> supplies the agency.</span></p>
+
+
+  <!-- 1. Diagram -->
+  <h2>1 · Explore the stages</h2>
+  <p class="lede">Click a stage (or Tab to it and press Enter) to see what it means, what actually runs, and how it breaks.</p>
+  <div class="grid" style="grid-template-columns: 1fr">
+    <div class="box">
+      <svg id="diagram" viewBox="0 0 560 420" role="group" aria-label="Agentic loop diagram">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color: var(--ink)"/>
+          </marker>
+          <marker id="ahok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" style="fill: var(--ok)"/>
+          </marker>
+        </defs>
+        <g id="arcs"></g>
+        <text x="210" y="205" text-anchor="middle" class="lbl">while stop_reason</text>
+        <text x="210" y="222" text-anchor="middle" class="lbl">== "tool_use"</text>
+        <path class="exit" d="M398,210 L462,210" marker-end="url(#ahok)"/>
+        <text x="430" y="198" text-anchor="middle" class="lbl" style="fill: var(--ok)">end_turn</text>
+        <rect x="466" y="192" width="72" height="36" rx="18" fill="none" style="stroke: var(--ok)" stroke-width="2"/>
+        <text x="502" y="215" text-anchor="middle" style="fill: var(--ok); font-family: var(--title); font-size: 17px">Done</text>
+        <g id="nodes"></g>
+      </svg>
+      <pre class="loop" id="code"></pre>
+    </div>
+    <div class="box panel" id="panel" aria-live="polite"></div>
+  </div>
+
+  <!-- 2. Simulator -->
+  <h2>2 · Step through a real run</h2>
+  <p class="lede">Task: <i>“What's the weather in Paris this afternoon? Do I need an umbrella?”</i>
+    The model's replies are scripted, not live. Watch the <code>messages</code> array grow.</p>
+  <div class="grid">
+    <div class="box">
+      <div class="progress"><div id="bar"></div></div>
+      <div class="controls">
+        <button id="back">← Back</button>
+        <button id="next">Next →</button>
+        <button id="reset">Reset</button>
+        <span id="stepno" class="lbl" style="margin-left:auto"></span>
+      </div>
+      <div aria-live="polite">
+        <p style="margin:0 0 6px"><span class="pill" id="simstage"></span>
+          &nbsp;<span class="sr" id="simsr"></span></p>
+        <h3 id="simtitle" style="margin:6px 0 4px"></h3>
+        <p id="simtext" style="margin:0"></p>
+      </div>
+      <pre class="loop" id="simcode"></pre>
+    </div>
+    <div class="box">
+      <p style="margin:0 0 8px"><b>messages</b> <span class="lbl" id="msgcount"></span></p>
+      <div class="msgs" id="msgs"></div>
+    </div>
+  </div>
+
+  <!-- 3. Stop reasons -->
+  <h2>3 · What should the loop do?</h2>
+  <p class="lede">After every model call, the loop checks <code>stop_reason</code>. Pick one.</p>
+  <div class="box">
+    <div class="chips" id="chips"></div>
+    <div id="srpanel" aria-live="polite"></div>
+  </div>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Remember</b>
+      <ul>
+        <li>Only <code>end_turn</code> means done. Every other stop_reason is continue or handle.</li>
+        <li>Tool results go back as <code>role: "user"</code>, each echoing its <code>tool_use_id</code>.</li>
+        <li>Send the <b>whole</b> history every call, because the model is stateless.</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>The 4 anti-patterns</b>
+      <ol>
+        <li><span class="strike">parsing text</span> to detect tool calls or completion</li>
+        <li><span class="strike">a fixed iteration cap</span> as the main stop condition</li>
+        <li><span class="strike">silently dropping turns</span> to save tokens</li>
+        <li><span class="strike"><code>tool_choice: "any"</code></span> to force tools, so the loop never ends</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- 4. Quiz -->
+  <h2>4 · Check yourself</h2>
+  <div class="cards quiz" id="quiz" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— next: ② Agentic Architecture, where one loop becomes many agents</p>
+</div>
+
+<script>
+// ---------- data ----------
+const CODE = [
+  ['messages = [{"role": "user", "content": task}]', 'perception'],
+  ['while True:', ''],
+  ['    response = client.messages.create(messages=messages, tools=tools)', 'reason'],
+  ['    messages.append({"role": "assistant", "content": response.content})', 'reason'],
+  ['    if response.stop_reason != "tool_use":', 'stop'],
+  ['        break                      # end_turn → done (others: handle!)', 'stop'],
+  ['    results = [run(b) for b in response.content if b.type == "tool_use"]', 'action'],
+  ['    messages.append({"role": "user", "content": results})', 'observe'],
+];
+// which code lines each stage lights up
+const LINES = { perception: [0, 2], reason: [2, 3, 4, 5], action: [6], observe: [7] };
+
+const STAGES = [
+  { id: 'perception', n: 1, color: '--s0', l1: 'Perception', l2: 'User Input',
+    title: 'Perception / User Input',
+    one: 'Everything the agent can "see" on this turn: system prompt, tool definitions, and the full message history, including every earlier tool result.',
+    real: 'Your code builds <code>messages</code> + <code>tools</code> and sends <b>all of it</b> on every call. The model is stateless: if something isn\'t in this payload, it doesn\'t exist for the model. On iteration 2+, perception includes the tool results you just appended.',
+    fail: ['Dropping earlier turns to save tokens: the model forgets what it already did and repeats work. Manage context deliberately; don\'t silently truncate it.',
+           'Vague tool names/descriptions: the model can\'t tell which tool fits, so it guesses or skips tools.'] },
+  { id: 'reason', n: 2, color: '--s1', l1: 'Reason', l2: '& Plan',
+    title: 'Reason & Plan',
+    one: 'The model reads the context and decides: answer now, or call a tool, and if so which one and with what arguments.',
+    real: 'All of it happens inside <b>one</b> <code>messages.create</code> call, the only non-deterministic step in the loop. Out comes a list of content blocks (<code>text</code> and/or <code>tool_use</code>) plus a <code>stop_reason</code>. This is where patterns like ReAct (thought → action) live. Because the model also judges “am I done?” here, the exit edge leaves from this stage.',
+    fail: ['Checking <code>content[0].type == "text"</code> to mean “done”: the model often writes text <i>and then</i> a <code>tool_use</code> in the same response.',
+           'Forcing <code>tool_choice: "any"</code> to stop plain-text answers: the model can never choose to stop, so the loop never ends.'] },
+  { id: 'action', n: 3, color: '--s2', l1: 'Action', l2: 'Tool Call',
+    title: 'Action / Tool Invocation',
+    one: 'Your code, not the model, runs each tool the model requested, using the arguments it supplied.',
+    real: 'Iterate over the <code>tool_use</code> blocks, dispatch on <code>name</code>, and pass <code>input</code>. One response can hold <b>several</b> tool calls; run every one. The model only asked for the call; this step is where the real effect on the world happens.',
+    fail: ['Parsing the text to guess whether a tool was requested: the structured <code>tool_use</code> block already tells you. String matching breaks when the model merely mentions a tool name.',
+           'Letting a tool exception crash the loop: return the error as a <code>tool_result</code> with <code>is_error: true</code> so the model can adapt.'] },
+  { id: 'observe', n: 4, color: '--s3', l1: 'Observe', l2: '& Reflect',
+    title: 'Observation & Reflection',
+    one: 'Tool outputs go back into the conversation, and the model reflects on them: did it work, what\'s missing, am I done?',
+    real: 'Append one <code>tool_result</code> per <code>tool_use</code>, each echoing its <code>tool_use_id</code>, inside a <code>role: "user"</code> message (to the API, the environment is just another user turn). The reflection itself happens on the <b>next</b> Reason call, when the model reads these results.',
+    fail: ['Not appending results: the model can\'t reason about information it never sees.',
+           'Using a fixed iteration cap (<code>for _ in range(5)</code>) as the main stop condition: task length depends on the data. Use a cap only as a safety net that should never fire.'] },
+];
+const byId = Object.fromEntries(STAGES.map(s => [s.id, s]));
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+function renderCode(el, hl, color) {
+  el.style.setProperty('--sc', `var(${color})`);
+  el.innerHTML = CODE.map(([t], i) => {
+    const [code, cm] = t.split(/(?=#)/);
+    return `<span class="${hl.includes(i) ? 'hl' : ''}">${esc(code)}${cm ? `<i class="cm">${esc(cm)}</i>` : ''}</span>`;
+  }).join('');
+}
+
+// ---------- 1. diagram ----------
+const C = { x: 210, y: 210 }, R = 140, NR = 48;
+const ANG = [-90, 0, 90, 180];                     // top, right, bottom, left, clockwise
+const pt = a => [C.x + R * Math.cos(a * Math.PI / 180), C.y + R * Math.sin(a * Math.PI / 180)];
+$('arcs').innerHTML = ANG.map(a => {
+  const [x1, y1] = pt(a + 23), [x2, y2] = pt(a + 67);
+  return `<path class="arc" filter="url(#rough)" d="M${x1},${y1} A${R},${R} 0 0 1 ${x2},${y2}" marker-end="url(#ah)"/>`;
+}).join('');
+$('nodes').innerHTML = STAGES.map((s, i) => {
+  const [x, y] = pt(ANG[i]);
+  return `<g class="node" data-id="${s.id}" tabindex="0" role="button" aria-label="${s.title}" style="--sc: var(${s.color})">
+    <circle filter="url(#rough)" cx="${x}" cy="${y}" r="${NR}" style="stroke: var(${s.color})"/>
+    <text class="num" x="${x}" y="${y - 16}">${s.n}</text>
+    <text x="${x}" y="${y + 2}">${s.l1}</text>
+    <text x="${x}" y="${y + 18}">${s.l2}</text></g>`;
+}).join('');
+
+function showStage(id) {
+  const s = byId[id];
+  document.querySelectorAll('#nodes .node').forEach(n => n.classList.toggle('active', n.dataset.id === id));
+  const p = $('panel');
+  p.style.setProperty('--sc', `var(${s.color})`);
+  p.innerHTML = `<h3 class="stage-title">${s.n}. ${s.title}</h3>
+    <p>${s.one}</p>
+    <h4>What actually runs</h4><p>${s.real}</p>
+    <h4>How it breaks</h4><ul>${s.fail.map(f => `<li>${f}</li>`).join('')}</ul>`;
+  renderCode($('code'), LINES[id], s.color);
+}
+document.querySelectorAll('#nodes .node').forEach(n => {
+  n.addEventListener('click', () => showStage(n.dataset.id));
+  n.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showStage(n.dataset.id); } });
+});
+showStage('perception');
+
+// ---------- 2. simulator ----------
+const M = [
+  { role: 'user', content: "What's the weather in Paris this afternoon? Do I need an umbrella?" },
+  { role: 'assistant', content: [
+    { type: 'text', text: "I'll check the current weather in Paris." },
+    { type: 'tool_use', id: 'toolu_01', name: 'get_weather', input: { city: 'Paris' } } ] },
+  { role: 'user', content: [
+    { type: 'tool_result', tool_use_id: 'toolu_01', content: '{"temp_c": 14, "condition": "cloudy", "precip_chance": 0.8}' } ] },
+  { role: 'assistant', content: [
+    { type: 'text', text: '80% chance of rain. Let me check when it will rain.' },
+    { type: 'tool_use', id: 'toolu_02', name: 'get_hourly_forecast', input: { city: 'Paris', hours: 8 } } ] },
+  { role: 'user', content: [
+    { type: 'tool_result', tool_use_id: 'toolu_02', content: '{"rain_hours": ["15:00", "16:00", "17:00"]}' } ] },
+  { role: 'assistant', content: [
+    { type: 'text', text: 'Yes, take an umbrella. It\'s 14°C and cloudy, and rain is expected from about 3pm to 6pm.' } ] },
+];
+const STEPS = [
+  { st: 'perception', n: 1, t: 'The user asks a question',
+    x: 'The loop starts with one user message. Together with the tool definitions (<code>get_weather</code>, <code>get_hourly_forecast</code>), that is the entire world the model can perceive.' },
+  { st: 'reason', n: 2, sr: 'tool_use', t: 'Model call #1: plan the first move',
+    x: 'The model decides it needs data and returns <b>text plus a tool_use block</b> in one response. The text is not an answer. <code>stop_reason</code> is <code>tool_use</code>, so the loop continues.' },
+  { st: 'action', n: 2, t: 'Run get_weather(city="Paris")',
+    x: 'Your code finds the <code>tool_use</code> block, calls the real function, and gets <code>{"temp_c": 14, "condition": "cloudy", "precip_chance": 0.8}</code>. Nothing has been appended yet.' },
+  { st: 'observe', n: 3, t: 'Append the observation',
+    x: 'The result goes back as a <code>role: "user"</code> message holding a <code>tool_result</code> whose <code>tool_use_id</code> is <code>toolu_01</code>, so the model knows which call it answers.' },
+  { st: 'perception', n: 3, t: 'Perceive again, with more context',
+    x: 'Back to the top of the loop. The <b>full</b> history (3 messages) is sent again. The model is stateless, so resending everything is what gives it “memory”.' },
+  { st: 'reason', n: 4, sr: 'tool_use', t: 'Model call #2: reflect, then re-plan',
+    x: 'Reflection in action: the model reads the tool result, sees an 80% chance of rain but no timing, and asks for a second tool. The task decided that two calls were needed, not a fixed cap.' },
+  { st: 'action', n: 4, t: 'Run get_hourly_forecast(city="Paris", hours=8)',
+    x: 'Dispatch by <code>name</code> and pass <code>input</code>. The result is <code>{"rain_hours": ["15:00", "16:00", "17:00"]}</code>.' },
+  { st: 'observe', n: 5, t: 'Append the second observation',
+    x: 'Another <code>role: "user"</code> <code>tool_result</code>, this time echoing <code>toolu_02</code>.' },
+  { st: 'perception', n: 5, t: 'Perceive the whole story',
+    x: 'Five messages now: the question, two requests, and two observations. Everything the model needs is in context.' },
+  { st: 'reason', n: 6, sr: 'end_turn', t: 'Model call #3: done',
+    x: 'The model has enough information and answers in plain text. <code>stop_reason</code> is <code>end_turn</code>, <b>the only value that ends the loop</b>, so <code>break</code> runs and the answer goes to the user.' },
+];
+let step = 0, prevN = 0;
+function renderSim() {
+  const s = STEPS[step], st = byId[s.st];
+  const pill = $('simstage');
+  pill.textContent = `${st.n}. ${st.title}`;
+  pill.style.setProperty('--sc', `var(${st.color})`);
+  $('simsr').innerHTML = s.sr ? `stop_reason = <b>"${s.sr}"</b>` : '';
+  $('simtitle').textContent = s.t;
+  $('simtext').innerHTML = s.x;
+  $('stepno').textContent = `step ${step + 1} / ${STEPS.length}`;
+  $('bar').style.width = `${(step + 1) / STEPS.length * 100}%`;
+  renderCode($('simcode'), s.sr === 'end_turn' ? [2, 3, 4, 5] : s.st === 'reason' ? [2, 3, 4] : LINES[s.st], st.color);
+  $('msgcount').textContent = `(${s.n} message${s.n > 1 ? 's' : ''})`;
+  $('msgs').innerHTML = M.slice(0, s.n).map((m, i) =>
+    `<pre class="${i >= prevN && s.n > prevN ? 'new' : ''}">${esc(JSON.stringify(m, null, 2))}</pre>`).join('');
+  prevN = s.n;
+  $('back').disabled = step === 0;
+  $('next').disabled = step === STEPS.length - 1;
+}
+$('next').onclick = () => { step++; renderSim(); };
+$('back').onclick = () => { step--; prevN = 99; renderSim(); };
+$('reset').onclick = () => { step = 0; prevN = 0; renderSim(); };
+renderSim();
+
+// ---------- 3. stop reasons ----------
+const SR = [
+  ['end_turn', 'exit', 'Exit the loop', 'The model has finished. Return its final text. This is the only value that means “done”.'],
+  ['tool_use', 'cont', 'Continue', 'Run every tool_use block, append the tool_result blocks as a user turn, and call again.'],
+  ['pause_turn', 'cont', 'Continue (same conversation)', 'A long-running server-side tool paused the turn. Send the conversation back as-is to let it carry on. Don\'t restart and don\'t treat it as done.'],
+  ['max_tokens', 'handle', 'Handle: truncated', 'The response was cut off mid-thought. Raise max_tokens or ask for less. Treating it as done hands the user a silently truncated answer.'],
+  ['stop_sequence', 'handle', 'Handle: your stop string', 'The model hit one of your own stop_sequences. Your code decides what that means for this app.'],
+  ['refusal', 'handle', 'Handle: declined', 'The model declined the request. Surface it to the user; an identical retry won\'t help.'],
+  ['model_context_window_exceeded', 'handle', 'Handle: context full', 'The conversation no longer fits. Summarise or compact the context deliberately, rather than silently dropping turns.'],
+];
+$('chips').innerHTML = SR.map(([k], i) => `<button data-i="${i}" aria-pressed="false"><code>${k}</code></button>`).join('');
+$('chips').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#chips button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  const [k, cls, v, why] = SR[b.dataset.i];
+  $('srpanel').innerHTML = `<p style="margin:0 0 4px"><code>${k}</code> → <span class="verdict ${cls}">${v}</span></p><p style="margin:0">${why}</p>`;
+};
+$('chips').querySelector('button').click();
+
+// ---------- 4. quiz ----------
+const Q = [
+  ['Which stage is the only non-deterministic step in the loop?',
+   ['Perception', 'Reason & Plan', 'Action', 'Observation'], 1,
+   'Everything non-deterministic happens inside messages.create. The loop around it is ordinary, deterministic code.'],
+  ['A response contains a text block (“Let me look that up”) followed by a tool_use block. What should the loop do?',
+   ['Return the text: the model answered', 'Run the tool, append the result, and call again', 'Ask the user to confirm', 'Ignore the text and stop'], 1,
+   'stop_reason is tool_use. Text often comes before a tool call in the same response, so content[0].type == "text" is not a completion check.'],
+  ['With which role are tool results sent back?',
+   ['assistant', 'tool', 'user', 'system'], 2,
+   'The environment\'s reply takes the user turn. The assistant turn holds the tool_use request.'],
+  ['What must every tool_result include?',
+   ['The tool\'s name', 'The tool_use_id of the call it answers', 'A timestamp', 'The original user question'], 1,
+   'Without the right tool_use_id, the model can\'t match the result to its request, and the API rejects mismatches.'],
+  ['stop_reason is "pause_turn". What now?',
+   ['Treat it as done', 'Restart with a fresh conversation', 'Send the same conversation back so it can continue', 'Retry the last tool'], 2,
+   'A long-running server-side tool is still in progress. Continue the same conversation. Treating it as done silently truncates the task.'],
+  ['Why is `for _ in range(5)` wrong as the main loop control?',
+   ['Python loops are slow', 'Task length depends on the data: it either truncates real work or wastes calls', 'The API limits you to 3 calls', 'It isn\'t wrong'], 1,
+   'Let stop_reason decide. A cap is fine only as a safety net that should never fire.'],
+  ['A developer sets tool_choice: "any" so the agent stops replying in plain text. What happens?',
+   ['Answers get better', 'The agent can never choose to stop, so the loop runs forever', 'The API returns an error', 'Nothing changes'], 1,
+   'Forcing a tool call when the model is already done leaves no way to reach end_turn. It looks like a fix, which is why it\'s the nastiest of these traps.'],
+  ['To save tokens, only the last 2 messages are sent on each iteration. Which stage breaks?',
+   ['Perception: the model loses what it already did and repeats work', 'Action', 'Nothing breaks, it just gets cheaper', 'Only the final answer formatting'], 0,
+   'The model is stateless. What it perceives is exactly what you send. Manage context deliberately; don\'t silently truncate it.'],
+  ['Where does Reflection actually happen?',
+   ['Inside the tool function', 'In your loop\'s if-statement', 'In the next model call, when the model reads the tool_result', 'It doesn\'t happen'], 2,
+   'Your code appends the observation. The model reflects on it in the next Reason step, which is why the exit edge leaves from Reason & Plan.'],
+];
+let qr = 0, qd = 0;
+$('quiz').innerHTML = Q.map(([q, opts], i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q)}</p>
+  <div class="opts">${opts.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quiz').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const [, , a, w] = Q[card.dataset.i], ok = +b.dataset.j === a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+</body>
+</html>

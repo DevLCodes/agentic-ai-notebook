@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic AI: learning roadmap</title>
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+  <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#c0392b" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  .node .bg { transition: transform .15s; transform-box: fill-box; transform-origin: center; }
+  .node > a:hover .bg, .node > a:focus .bg { transform: scale(1.03); stroke: var(--ink); stroke-width: 3; }
+  .node > a:hover .ttl { fill: var(--red); }
+  .leaf:hover text, .leaf:focus text { fill: var(--red); text-decoration: underline; }
+  .donebtn { cursor: pointer; }
+  .donebtn:hover rect { fill: var(--hl); }
+  .web text { font-family: var(--hand); }
+</style>
+<div class="page">
+  <h1>Agentic AI: my learning roadmap</h1>
+  <p class="muted">Five notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
+    Follow the red numbers for the suggested order. Tick "done" as you go (saved in this browser).</p>
+
+  <svg class="doodle web" viewBox="0 0 1100 810" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to five topic pages in learning order">
+    <g id="spokes"></g>
+    <g id="links"></g>
+    <g filter="url(#rough)">
+      <ellipse cx="550" cy="430" rx="130" ry="62" style="fill:#ffe066; stroke:#222; stroke-width:2.6"/>
+    </g>
+    <text class="t" x="550" y="428" text-anchor="middle" style="font-size:32px; fill:#1f3a93">Agentic AI</text>
+    <text x="550" y="458" text-anchor="middle" style="font-size:16px; fill:#555" id="progress"></text>
+    <g id="nodes"></g>
+  </svg>
+
+  <div class="cols">
+    <div class="sticky blue">
+      <b>How the web reads</b>
+      <ul>
+        <li><b>Solid lines</b>: every topic hangs off the core idea</li>
+        <li><b class="red">Red dashed ring, 1 → 5</b>: the suggested order, with why each step leads to the next</li>
+        <li><b>Grey dotted lines</b>: topics that share ideas across the ring</li>
+        <li>Each page ends with a <b>quiz</b>. Get the gold star, then tick done.</li>
+      </ul>
+    </div>
+    <div class="sticky">
+      <b>Coming next (from the roadmap)</b>
+      <ul>
+        <li>Retrieval: chunking, hybrid search, reranking, RAG evals</li>
+        <li>Observability: tracing and spans, online evals, drift</li>
+        <li>Production: latency, caching, cost and model routing</li>
+        <li>Model layer: fine-tuning vs prompting, when to buy vs build</li>
+      </ul>
+    </div>
+  </div>
+  <p class="sig">— start at ① and work round the ring</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const W = 270, H = 215, C = [550, 430];
+const T = [
+  { id: 'loop', n: 1, href: 'agentic-loop.html', t: 'The Agentic Loop', s: 'the engine everything runs on', x: 550, y: 125, c: '#fff59d',
+    leaves: [['4 stages, explained', 'diagram'], ['step-through simulator', 'simtitle'], ['stop_reason explorer', 'srpanel'], ['quiz', 'quiz']] },
+  { id: 'arch', n: 2, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'Domain 1 · many agents', x: 940, y: 350, c: '#ffd1dc',
+    leaves: [['multi-agent orchestration', 's2'], ['subagents & context', 's3'], ['workflow handoffs', 's4'], ['Agent SDK hooks', 's5'], ['sessions & resumption', 's7']] },
+  { id: 'tools', n: 3, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'Domain 2 · how agents act', x: 790, y: 685, c: '#cdeafe',
+    leaves: [['tool interface design', 's1'], ['structured errors', 's2'], ['tool_choice', 's3'], ['MCP servers', 's4'], ['built-in tools', 's5']] },
+  { id: 'evals', n: 4, href: 'testing-and-evals.html', t: 'Testing & Evals', s: 'prove it works', x: 310, y: 685, c: '#c8f0d8',
+    leaves: [['metrics to track', 'metrics'], ['unit & integration tests', 'unit'], ['LLM-as-judge', 'model'], ['RAG & agent metrics', 'emetrics'], ['DeepEval · RAGAS', 'tools']] },
+  { id: 'gov', n: 5, href: 'ai-governance.html', t: 'AI Governance', s: 'ship it safely', x: 160, y: 350, c: '#fbe6a2',
+    leaves: [['prompt injection', 'sec-inj'], ['EU AI Act', 'comp-eu'], ['NIST · ISO 42001', 'comp-fw'], ['guardrail lab', 'gr-lab'], ['defence in depth', 'swiss']] },
+];
+const byId = Object.fromEntries(T.map(t => [t.id, t]));
+// where the segment a→b leaves a's box (half sizes hw, hh), plus a small gap
+function exitPt([ax, ay], [bx, by], hw, hh, gap = 8) {
+  const dx = bx - ax, dy = by - ay, s = Math.min(hw / Math.abs(dx || 1e-9), hh / Math.abs(dy || 1e-9));
+  const L = Math.hypot(dx, dy);
+  return [ax + dx * s + dx / L * gap, ay + dy * s + dy / L * gap];
+}
+const curve = ([x1, y1], [x2, y2], bend) => {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  return `M${x1},${y1} Q${mx - dy / L * bend},${my + dx / L * bend} ${x2},${y2}`;
+};
+
+// spokes: centre → each topic
+$('spokes').innerHTML = T.map(t => {
+  const p = [t.x, t.y], a = exitPt(C, p, 130 * .8, 62 * .8, 4), b = exitPt(p, C, W / 2, H / 2, 4);
+  return `<path class="s" d="${curve(a, b, 14)}" filter="url(#rough)"/>`;
+}).join('');
+
+// ring (learning order) + cross-links
+const RING = [['loop', 'arch', 'one loop → many agents'], ['arch', 'tools', 'agents need tools'],
+  ['tools', 'evals', 'test every tool'], ['evals', 'gov', 'red teaming = evals for attacks']];
+const CROSS = [['arch', 'gov', 'hooks = deterministic guardrails', -12], ['tools', 'gov', 'MCP security', -8, .72]];
+const seg = (p, q) => { const P = [p.x, p.y], Q = [q.x, q.y]; return [exitPt(P, Q, W / 2, H / 2, 10), exitPt(Q, P, W / 2, H / 2, 16)]; };
+$('links').innerHTML =
+  RING.map(([a, b, l]) => {
+    const [s, e] = seg(byId[a], byId[b]), bend = -40, mx = (s[0] + e[0]) / 2, my = (s[1] + e[1]) / 2;
+    const dx = e[0] - s[0], dy = e[1] - s[1], L = Math.hypot(dx, dy), lx = mx - dy / L * (bend - 22), ly = my + dx / L * (bend - 22);
+    return `<path d="${curve(s, e, bend)}" style="fill:none; stroke:#c0392b; stroke-width:2.4; stroke-dasharray:8 6" marker-end="url(#arrR)"/>
+      <text x="${lx}" y="${ly + 5}" text-anchor="middle" style="font-size:16px; fill:#c0392b">${esc(l)}</text>`;
+  }).join('') +
+  CROSS.map(([a, b, l, off, at = .5]) => {
+    const [s, e] = seg(byId[a], byId[b]), mx = s[0] + (e[0] - s[0]) * at, my = s[1] + (e[1] - s[1]) * at;
+    return `<path d="M${s[0]},${s[1]} L${e[0]},${e[1]}" style="fill:none; stroke:#999; stroke-width:1.6; stroke-dasharray:2 5; stroke-linecap:round"/>
+      <text x="${mx}" y="${my + (off || -8)}" text-anchor="middle" style="font-size:15px; fill:#777">${esc(l)}</text>`;
+  }).join('');
+
+// topic nodes
+const KEY = 'agentic-ai-roadmap-done';
+let done; try { done = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { done = new Set(); }
+function renderNodes() {
+  $('nodes').innerHTML = T.map(t => {
+    const x = t.x - W / 2, y = t.y - H / 2, d = done.has(t.id);
+    return `<g class="node" data-id="${t.id}">
+      <rect x="${x + 5}" y="${y + 7}" width="${W}" height="${H}" style="fill:rgba(0,0,0,.12)"/>
+      <a href="${t.href}" aria-label="Open ${esc(t.t)}">
+        <rect class="bg" x="${x}" y="${y}" width="${W}" height="${H}" style="fill:${t.c}; stroke:#444; stroke-width:1.5"/>
+        <rect x="${t.x - 45}" y="${y - 10}" width="90" height="20" transform="rotate(-3 ${t.x} ${y})" style="fill:rgba(255,255,255,.65)"/>
+        <text class="t ttl" x="${x + 44}" y="${y + 38}" style="font-size:22px; fill:#1f3a93">${esc(t.t)}</text>
+        <text x="${x + 44}" y="${y + 60}" style="font-size:15px; fill:#555">${esc(t.s)}</text>
+      </a>
+      <circle cx="${x + 20}" cy="${y + 28}" r="15" style="fill:#fff; stroke:#c0392b; stroke-width:2.2"/>
+      <text x="${x + 20}" y="${y + 34}" text-anchor="middle" style="font-family:var(--title); font-size:18px; fill:#c0392b">${t.n}</text>
+      ${t.leaves.map(([l, h], i) => `<a class="leaf" href="${t.href}#${h}"><text x="${x + 20}" y="${y + 88 + i * 23}" style="font-size:16.5px; fill:#222">• ${esc(l)}</text></a>`).join('')}
+      <g class="donebtn" data-id="${t.id}" role="button" tabindex="0" aria-pressed="${d}" aria-label="Mark ${esc(t.t)} done">
+        <rect x="${x + W - 74}" y="${y + H - 30}" width="64" height="22" rx="6" style="fill:${d ? '#b9f2c6' : '#fffef8'}; stroke:${d ? '#1e8449' : '#888'}; stroke-width:1.5"/>
+        <text x="${x + W - 42}" y="${y + H - 14}" text-anchor="middle" style="font-size:14px; fill:${d ? '#1e8449' : '#555'}">${d ? '✓ done' : '☐ done'}</text>
+      </g>
+      ${d ? `<text x="${x + W - 20}" y="${y + 40}" text-anchor="middle" transform="rotate(12 ${x + W - 20} ${y + 40})" style="font-family:var(--title); font-size:26px; fill:#1e8449">★</text>` : ''}
+    </g>`;
+  }).join('');
+  $('progress').textContent = `${done.size} / ${T.length} done`;
+}
+function toggle(id) {
+  done.has(id) ? done.delete(id) : done.add(id);
+  try { localStorage.setItem(KEY, JSON.stringify([...done])); } catch {}
+  renderNodes();
+}
+$('nodes').addEventListener('click', e => { const b = e.target.closest('.donebtn'); if (b) toggle(b.dataset.id); });
+$('nodes').addEventListener('keydown', e => { const b = e.target.closest('.donebtn');
+  if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(b.dataset.id); } });
+renderNodes();
+</script>
+</body>
+</html>
