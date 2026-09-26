@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Architecture Patterns · notebook</title>
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  .gantt { font: 13px/1 var(--mono); margin: 10px 0; }
+  .gantt .gr { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+  .gantt .gl { width: 150px; flex: none; }
+  .gantt .gt { position: relative; flex: 1; height: 22px; background: repeating-linear-gradient(90deg, transparent 0 calc(100%/20 - 1px), #e6e0d0 calc(100%/20 - 1px) calc(100%/20)); }
+  .gantt .gb { position: absolute; top: 2px; height: 18px; border: 2px solid #333; border-radius: 4px; background: var(--blue); }
+  .gantt .gb.crit { background: var(--pink); border-color: var(--red); }
+  .trace { font: 14px/1.55 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px; min-height: 120px; white-space: pre-wrap; }
+  .trace .th { color: var(--ink); } .trace .ac { color: var(--red); } .trace .ob { color: var(--green); } .trace .an { font-weight: bold; }
+  .trace .new { background: var(--hl); }
+  ol.plan { margin: 8px 0; padding-left: 26px; } ol.plan li { margin: 3px 0; }
+  ol.plan .st { font: 12px var(--mono); padding: 1px 6px; border-radius: 3px; border: 1px solid #999; margin-left: 6px; }
+  .qbar { height: 16px; background: var(--ink); border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 8px; }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-loop.html">← The Agentic Loop</a><a href="agentic-architecture.html">Domain 1 · Agentic Architecture →</a></p>
+  <h1>Agent Architecture Patterns</h1>
+  <p class="muted">Six common shapes for an agent: RAG, ReAct, Planner–Executor, DAG, Multi-agent and Self-critique.
+    <span class="hl">Each one is the same agentic loop, arranged differently.</span> The question is always: who decides the next step, and how much does that cost?</p>
+
+  <svg class="doodle" viewBox="0 0 900 250" role="img" aria-label="Map of this page. Click a box to jump to its section.">
+    <text class="t" x="450" y="28" text-anchor="middle" style="fill:#222">Common architectures</text>
+    <g id="mapboxes"></g>
+    <text class="p" x="10" y="246" style="font-size:13px">↑ click any box to jump to it</text>
+  </svg>
+
+  <!-- ============ why ============ -->
+  <h2 id="why">0 · The autonomy dial</h2>
+  <div class="cols">
+    <svg class="doodle" viewBox="0 0 480 265" role="img" aria-label="A dial from 'code decides' to 'model decides'. DAG and planner-executor sit near code, RAG and self-critique in the middle, ReAct and multi-agent near the model end.">
+      <g filter="url(#rough)">
+        <path class="s" d="M90,215 A150,150 0 0 1 390,215" style="fill:none; stroke-width:3"/>
+        <path class="s" d="M240,215 L309,117" marker-end="url(#arr)" style="stroke:#c0392b; stroke-width:3"/>
+        <circle cx="240" cy="215" r="8" style="fill:#c0392b; stroke:#222"/>
+      </g>
+      <text x="90" y="240" text-anchor="middle">code</text><text x="90" y="257" text-anchor="middle" class="p" style="font-size:13px">decides</text>
+      <text x="390" y="240" text-anchor="middle">model</text><text x="390" y="257" text-anchor="middle" class="p" style="font-size:13px">decides</text>
+      <text x="72" y="176" text-anchor="end" style="font-size:15px">DAG</text>
+      <text x="140" y="78" text-anchor="end" style="font-size:15px">Planner–Executor</text>
+      <text x="240" y="45" text-anchor="middle" style="font-size:15px">RAG · Self-critique</text>
+      <text x="350" y="85" style="font-size:15px">ReAct</text>
+      <text x="400" y="160" style="font-size:15px">Multi-agent</text>
+    </svg>
+    <div>
+      <ul style="margin:0 0 20px; padding-left:22px">
+        <li><b>Workflows</b>: code fixes the path, and the model fills in each step. They are predictable, cheap and easy to test.</li>
+        <li><b>Agents</b>: the model picks the next step at run time. They are flexible, but cost more and are harder to test.</li>
+        <li>Most real systems <span class="hl">mix the two</span>: a fixed outer shape with small autonomous pieces inside.</li>
+      </ul>
+      <div class="sticky pink">
+        <b>Rule of thumb</b><br>
+        Start with the simplest shape that passes your evals. <b>Move one notch towards "model decides" only when an eval shows you need to.</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RAG ============ -->
+  <h2 id="rag">1 · RAG agent</h2>
+  <p>Core idea: <span class="hl">ground the answer in retrieved documents.</span> Classic RAG always retrieves once before answering.
+    A RAG <i>agent</i> treats retrieval as a <b>tool</b>, so the model decides whether to search, what to search for, and when it has enough.</p>
+  <svg class="doodle" viewBox="0 0 900 200" role="img" aria-label="Classic RAG: question, retrieve, generate, in a straight line. Agentic RAG: the model loops through a search tool until it has enough, then answers.">
+    <g filter="url(#rough)">
+      <rect class="sb" x="10" y="30" width="120" height="50" rx="8"/><rect class="sb" x="170" y="30" width="120" height="50" rx="8"/><rect class="sb" x="330" y="30" width="120" height="50" rx="8"/>
+      <path class="s" d="M132,55 H166" marker-end="url(#arr)"/><path class="s" d="M292,55 H326" marker-end="url(#arr)"/>
+      <rect class="sb" x="480" y="110" width="120" height="50" rx="8"/><rect class="tan" x="640" y="110" width="120" height="50" rx="8"/><rect class="sb" x="780" y="30" width="110" height="50" rx="8"/>
+      <path class="s" d="M602,128 H636" marker-end="url(#arr)"/><path class="s" d="M638,145 H604" marker-end="url(#arr)"/>
+      <path class="s" d="M560,108 C600,40 720,40 776,55" marker-end="url(#arr)"/>
+    </g>
+    <text x="70" y="61" text-anchor="middle">question</text><text x="230" y="61" text-anchor="middle">retrieve k</text><text x="390" y="61" text-anchor="middle">generate</text>
+    <text class="t" x="230" y="110" text-anchor="middle" style="font-size:18px">classic: always 1 search</text>
+    <text x="540" y="141" text-anchor="middle">model</text><text x="700" y="141" text-anchor="middle">search_docs</text><text x="835" y="61" text-anchor="middle">answer</text>
+    <text class="t" x="640" y="190" text-anchor="middle" style="font-size:18px">agentic: 0…n searches, rewritten queries</text>
+    <text class="r" x="690" y="42" style="font-size:13px">"I have enough"</text>
+  </svg>
+<pre>tools = [{"name": "search_docs",
+          "description": "Search the policy handbook. Returns the top 5 passages with doc ids. "
+                         "Call it again with a narrower query if the passages don't answer the question.",
+          "input_schema": {"type": "object", "properties": {"query": {"type": "string"},
+                           "year": {"type": "integer"}}, "required": ["query"]}}]
+system = "Answer only from search results and cite doc ids. If nothing relevant comes back, say you don't know."
+<span class="c"># ...then the normal agentic loop: the model calls search_docs as often as it needs</span></pre>
+  <div class="box">
+    <b class="ink">✎ Try it: classic vs agentic RAG on four questions</b>
+    <div class="row"><button class="ragm" data-m="classic" aria-pressed="true">classic RAG</button><button class="ragm" data-m="agentic">RAG agent</button></div>
+    <table class="hand" id="rag-table"></table>
+    <div class="out" id="rag-out" aria-live="polite"></div>
+  </div>
+  <div class="sticky blue">
+    <b>Where RAG agents break</b>
+    <ul>
+      <li><b>Bad chunks</b>: no agent can fix retrieval that never returns the right passage. Measure recall first.</li>
+      <li><b>Search loops</b>: the model keeps rephrasing forever. Cap the searches and return "no results" clearly.</li>
+      <li><b>Ungrounded answers</b>: check faithfulness (is every claim in a cited passage?) as on the Testing &amp; Evals page.</li>
+    </ul>
+  </div>
+
+  <!-- ============ ReAct ============ -->
+  <h2 id="react">2 · ReAct (Reason + Act)</h2>
+  <p>Core idea: <span class="hl">interleave thinking and tool calls</span>. Thought → Action → Observation, repeated until the model can answer.
+    Each observation can change the plan, which makes ReAct good for problems where you can't know step 2 until you've seen step 1.</p>
+  <div class="box">
+    <b class="ink">✎ Try it: step through a ReAct trace</b>
+    <p class="muted" style="margin:4px 0">Question: <i>"Which is older, the Eiffel Tower or the Statue of Liberty, and by how many years?"</i></p>
+    <div class="row"><button id="re-back">◀ back</button><button id="re-next">next ▶</button><button id="re-reset">reset</button><span class="muted" id="re-step"></span></div>
+    <div class="trace" id="re-trace" aria-live="polite"></div>
+  </div>
+  <div class="cols">
+    <table class="hand">
+      <tr><th>2022 ReAct paper</th><th>today, with native tool use</th></tr>
+      <tr><td>Thought: … (free text)</td><td>a <code>text</code> or <code>thinking</code> block</td></tr>
+      <tr><td>Action: search[Eiffel]</td><td>a <code>tool_use</code> block with JSON input</td></tr>
+      <tr><td>Observation: …</td><td>a <code>tool_result</code> in the next user turn</td></tr>
+      <tr><td>Finish[answer]</td><td><code>stop_reason: "end_turn"</code></td></tr>
+    </table>
+    <div class="sticky">
+      <b>ReAct = the agentic loop</b>
+      <ul>
+        <li>The loop on the <a href="agentic-loop.html">Agentic Loop page</a> <i>is</i> ReAct, just with structured tool calls.</li>
+        <li><span class="red">Don't</span> parse "Action:" out of text any more. Use real tools.</li>
+        <li>Weak spot: it is <b>greedy</b>. It thinks one step ahead, so long tasks drift. That's why planners exist.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ Planner–Executor ============ -->
+  <h2 id="plan">3 · Planner–Executor</h2>
+  <p>Core idea: <span class="hl">think once, then act many times.</span> A strong model writes the whole plan up front. A cheaper executor
+    (often a small ReAct agent) runs each step. A <b>replanner</b> revises what's left when a step fails or the facts change.</p>
+<pre>plan = planner(goal)                          <span class="c"># structured output: ["get dates", "get forecast", ...]</span>
+done = []
+while plan:
+    step = plan.pop(0)
+    result = executor(step, context=done)     <span class="c"># small ReAct agent, cheaper model</span>
+    done.append((step, result))
+    if result.failed or result.surprising:
+        plan = replanner(goal, done, plan)    <span class="c"># rewrite only the remaining steps</span>
+return writer(goal, done)</pre>
+  <div class="box">
+    <b class="ink">✎ Try it: break a step</b>
+    <p class="muted" style="margin:4px 0">Goal: <i>"Write a one-page brief for a Paris trip next weekend."</i></p>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="pe-fail"> the forecast API is down</label>
+      <label class="chk"><input type="checkbox" id="pe-replan" checked> replanner on</label>
+    </div>
+    <ol class="plan" id="pe-plan"></ol>
+    <div class="out" id="pe-out" aria-live="polite"></div>
+  </div>
+  <div class="sticky mint">
+    <b>Why bother?</b>
+    <ul>
+      <li><b>Cost</b>: the expensive model runs once or twice, not on every step.</li>
+      <li><b>Focus</b>: the whole plan stays visible, so long tasks drift less than with pure ReAct.</li>
+      <li><b>Review</b>: a human can approve the plan <i>before</i> anything runs.</li>
+      <li>Trap: a stale plan. <span class="hl">No replanner means a failed step silently poisons the rest.</span></li>
+    </ul>
+  </div>
+
+  <!-- ============ DAG ============ -->
+  <h2 id="dag">4 · DAG agents</h2>
+  <p>Core idea: <span class="hl">make the plan a dependency graph, not a list.</span> Steps that don't depend on each other run in parallel.
+    The total time is the <b>critical path</b> (the longest chain of dependencies), not the sum of all steps. The graph can be written by hand (a workflow)
+    or produced by a planner model (the LLMCompiler idea).</p>
+  <div class="box">
+    <b class="ink">✎ Try it: list vs graph</b>
+    <div class="row"><button class="dagm" data-m="seq" aria-pressed="true">run as a list</button><button class="dagm" data-m="dag">run as a DAG</button>
+      <label class="chk"><input type="checkbox" id="dag-slow"> weather API is slow (6s)</label></div>
+    <div class="gantt" id="gantt"></div>
+    <div class="out" id="dag-out" aria-live="polite"></div>
+  </div>
+  <div class="sticky">
+    <b>DAG checklist</b>
+    <ul>
+      <li>Every node declares its <b>inputs</b>. The edges are data, not vibes.</li>
+      <li>Nodes must be safe to run <b>concurrently</b>: no shared mutable state, and watch rate limits.</li>
+      <li>Speed up the <span class="hl">critical path</span>. Making an off-path node faster saves nothing.</li>
+      <li>A failed node blocks everything downstream, so give each node a retry and a timeout.</li>
+    </ul>
+  </div>
+
+  <!-- ============ Multi-agent ============ -->
+  <h2 id="multi">5 · Multi-agent systems</h2>
+  <p>Core idea: <span class="hl">split the work across agents with their own prompts, tools and context windows.</span> The win is <b>context isolation</b>:
+    each agent sees only what it needs. The cost is tokens, which is often several times a single agent. Details of orchestration, subagents and handoffs are on the
+    <a href="agentic-architecture.html">Domain 1 page</a>.</p>
+  <div class="box">
+    <b class="ink">✎ Pick a topology</b>
+    <div class="row" id="ma-chips"></div>
+    <div class="out" id="ma-out" aria-live="polite"></div>
+  </div>
+  <div class="sticky pink">
+    <b>Before you add a second agent</b>
+    <ul>
+      <li>Could one agent with better tools do it? That's usually cheaper and easier to debug.</li>
+      <li>Split by <b>context</b> (each piece of work needs different information), not by job titles.</li>
+      <li>Pass <b>summaries</b> between agents, not whole transcripts.</li>
+      <li>Trace across agents, or you will never find which one went wrong.</li>
+    </ul>
+  </div>
+
+  <!-- ============ Self-critique ============ -->
+  <h2 id="critic">6 · Self-critique agents</h2>
+  <p>Core idea: <span class="hl">generate, critique, revise.</span> The same model (or a second one) reviews the draft against a rubric and the generator fixes it.
+    Reflexion goes further: it stores the lessons as memory for the next attempt.</p>
+<pre>draft = generate(task)
+for round in range(MAX_ROUNDS):                   <span class="c"># always cap it</span>
+    feedback = critique(task, draft, rubric,      <span class="c"># best: grounded in an external signal</span>
+                        signal=run_tests(draft))
+    if feedback.passes:
+        break
+    draft = revise(task, draft, feedback)</pre>
+  <div class="box">
+    <b class="ink">✎ Try it: how many rounds?</b>
+    <div class="row">
+      <label>rounds: <input type="range" id="sc-n" min="0" max="5" value="2"> <b id="sc-nv"></b></label>
+      <label class="chk"><input type="checkbox" id="sc-ext" checked> critic sees an external signal (tests, a rubric, a checker)</label>
+    </div>
+    <table class="hand" id="sc-table"></table>
+    <div class="out" id="sc-out" aria-live="polite"></div>
+    <p class="muted" style="margin:6px 0 0; font-size:14px">The numbers are illustrative. They show the shape of the curve that published results report, not a benchmark.</p>
+  </div>
+  <div class="sticky blue">
+    <b>Self-critique rules</b>
+    <ul>
+      <li>A model grading its own work with no new information <b>mostly agrees with itself</b>, so gains plateau fast.</li>
+      <li>Give the critic something the generator didn't have: <span class="hl">test results, a schema validator, retrieved sources, a different model</span>.</li>
+      <li>Stop on pass, on no improvement, or at the cap. Each round costs two more calls.</li>
+    </ul>
+  </div>
+
+  <!-- ============ PART B ============ -->
+  <p class="part">Part B · Choosing and combining</p>
+
+  <h2 id="compare">7 · Side by side</h2>
+  <table class="hand">
+    <tr><th>pattern</th><th>who picks the next step</th><th>LLM calls</th><th>latency</th><th>predictable?</th><th>best for</th><th>classic failure</th></tr>
+    <tr><td><b>RAG agent</b></td><td>model (when to search)</td><td>1 + searches</td><td>low–med</td><td>fairly</td><td>answers from private docs</td><td>bad chunks, ungrounded claims</td></tr>
+    <tr><td><b>ReAct</b></td><td>model, every step</td><td>1 per step</td><td>med–high</td><td>no</td><td>open-ended tool use</td><td>drift, loops</td></tr>
+    <tr><td><b>Planner–Executor</b></td><td>planner once, then code</td><td>plan + n cheap</td><td>med</td><td>mostly</td><td>long multi-step tasks</td><td>stale plan</td></tr>
+    <tr><td><b>DAG</b></td><td>the graph (code or planner)</td><td>n, in parallel</td><td>lowest</td><td>yes</td><td>independent sub-tasks</td><td>missing dependency</td></tr>
+    <tr><td><b>Multi-agent</b></td><td>orchestrator or handoffs</td><td>many ×</td><td>high</td><td>least</td><td>broad work, separate contexts</td><td>cost, lost context</td></tr>
+    <tr><td><b>Self-critique</b></td><td>code loop + critic verdict</td><td>1 + 2 per round</td><td>med</td><td>fairly</td><td>quality-critical outputs</td><td>self-agreement plateau</td></tr>
+  </table>
+
+  <h3 id="which">✎ Try it: which pattern fits? <span class="tally" id="t-pat"></span></h3>
+  <div class="cards" id="sort-pat"></div>
+
+  <h2 id="combine">8 · Patterns compose</h2>
+  <p>Real systems stack them. Here is one research assistant built from all six:</p>
+  <svg class="doodle" viewBox="0 0 900 300" role="img" aria-label="A planner writes a DAG. Three nodes run in parallel, each a ReAct worker with a RAG search tool. Their results go to a writer, then a critic that loops back to the writer until it passes.">
+    <g filter="url(#rough)">
+      <rect class="tan" x="10" y="120" width="130" height="60" rx="9"/>
+      <rect class="sb" x="220" y="20" width="170" height="60" rx="9"/><rect class="sb" x="220" y="120" width="170" height="60" rx="9"/><rect class="sb" x="220" y="220" width="170" height="60" rx="9"/>
+      <rect class="tan" x="480" y="120" width="130" height="60" rx="9"/><rect class="sb" x="700" y="120" width="130" height="60" rx="9"/>
+      <path class="s" d="M142,140 L216,55" marker-end="url(#arr)"/><path class="s" d="M142,150 H216" marker-end="url(#arr)"/><path class="s" d="M142,160 L216,245" marker-end="url(#arr)"/>
+      <path class="s" d="M392,50 L476,138" marker-end="url(#arr)"/><path class="s" d="M392,150 H476" marker-end="url(#arr)"/><path class="s" d="M392,250 L476,162" marker-end="url(#arr)"/>
+      <path class="s" d="M612,150 H696" marker-end="url(#arr)"/>
+      <path class="s" d="M765,182 C765,240 545,240 545,184" marker-end="url(#arr)" style="stroke:#c0392b"/>
+    </g>
+    <text x="75" y="147" text-anchor="middle">planner</text><text class="p" x="75" y="166" text-anchor="middle" style="font-size:13px">writes a DAG</text>
+    <text x="305" y="47" text-anchor="middle">ReAct worker</text><text class="p" x="305" y="66" text-anchor="middle" style="font-size:13px">+ search_docs (RAG)</text>
+    <text x="305" y="147" text-anchor="middle">ReAct worker</text><text class="p" x="305" y="166" text-anchor="middle" style="font-size:13px">+ search_web</text>
+    <text x="305" y="247" text-anchor="middle">ReAct worker</text><text class="p" x="305" y="266" text-anchor="middle" style="font-size:13px">+ run_sql</text>
+    <text x="545" y="155" text-anchor="middle">writer</text><text x="765" y="155" text-anchor="middle">critic</text>
+    <text class="r" x="655" y="262" text-anchor="middle" style="font-size:14px">revise until the critic passes (max 2)</text>
+    <text class="t" x="305" y="12" dy="0" text-anchor="middle" style="font-size:15px; fill:#555">parallel = DAG · separate contexts = multi-agent</text>
+  </svg>
+  <div class="cols">
+    <div class="sticky mint">
+      <b>Remember</b>
+      <ul>
+        <li>RAG = <b>what</b> the agent knows. ReAct = <b>how</b> it acts step by step.</li>
+        <li>Planner and DAG = <b>structure</b> decided up front. Multi-agent = <b>who</b> does it. Self-critique = <b>quality</b> control.</li>
+        <li>They are layers, not rivals. <span class="hl">Pick the least autonomy that passes your evals.</span></li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>Anti-patterns</b>
+      <ul>
+        <li>Multi-agent for a task one agent with good tools can do.</li>
+        <li>ReAct for a fixed pipeline you could write as five lines of code.</li>
+        <li>Self-critique with no external signal and no round cap.</li>
+        <li>A plan with no replanner, or a DAG with hidden shared state.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ Quiz ============ -->
+  <h2 id="quiz">✎ Pop quiz</h2>
+  <div class="cards quiz" id="quizcards" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— same loop, different shapes</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+const press = (sel, b) => document.querySelectorAll(sel).forEach(x => x.setAttribute('aria-pressed', x === b));
+
+// ---------- map ----------
+const MAP = [['RAG agent', 'rag'], ['ReAct (Reason + Act)', 'react'], ['Planner–Executor', 'plan'],
+  ['DAG agents', 'dag'], ['Multi-agents', 'multi'], ['Self-critique agents', 'critic']];
+$('mapboxes').innerHTML = MAP.map(([l, id], i) => {
+  const x = 10 + (i % 3) * 297, y = 50 + Math.floor(i / 3) * 92, w = 282, h = 70;
+  return `<a href="#${id}"><rect class="tan" x="${x}" y="${y}" width="${w}" height="${h}" rx="9" filter="url(#rough)"/>
+    <text x="${x + w / 2}" y="${y + h / 2 + 6}" text-anchor="middle" style="font-size:18px">${i + 1} · ${l}</text></a>`;
+}).join('');
+
+// ---------- generic sorter ----------
+function sorter(el, tallyEl, opts, cards) {
+  let right = 0, done = 0;
+  $(el).innerHTML = cards.map((c, i) => `<div class="card" data-i="${i}"><p class="q">${md(c.t)}</p>
+    <div class="opts">${opts.map(([k, l]) => `<button data-k="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="why"></div></div>`).join('');
+  $(el).onclick = e => {
+    const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+    if (!b || card.classList.contains('done')) return;
+    const c = cards[card.dataset.i], ok = b.dataset.k === c.a;
+    card.classList.add('done');
+    card.querySelectorAll('.opts button').forEach(x => { x.disabled = true; if (x.dataset.k === c.a) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(c.why)}`;
+    done++; right += ok;
+    $(tallyEl).textContent = `(${right}/${done} right${done === cards.length ? ', all done' : ''})`;
+  };
+}
+
+// ---------- 1 · RAG ----------
+// [question, classic: [searches, verdict, ok], agentic: [searches, verdict, ok]]
+const RAG = [
+  ['What is our refund window?', [1, 'finds the policy passage', 1], [1, 'one search, finds it', 1]],
+  ['Hi, thanks for the help!', [1, 'retrieves 5 passages for no reason', 0], [0, 'no search needed, just replies', 1]],
+  ['How did the refund window change between 2024 and 2025?', [1, 'one mixed search, only half the answer', 0], [2, 'searches each year, then compares', 1]],
+  ['What will the weather be tomorrow?', [1, 'irrelevant passages, may make something up', 0], [1, 'nothing relevant, so it says it doesn\'t know', 1]],
+];
+function renderRAG(m) {
+  const k = m === 'classic' ? 1 : 2;
+  let s = 0, ok = 0;
+  $('rag-table').innerHTML = '<tr><th>question</th><th>searches</th><th>what happens</th></tr>' + RAG.map(r => {
+    const [n, v, g] = r[k]; s += n; ok += g;
+    return `<tr><td>${esc(r[0])}</td><td>${n}</td><td class="${g ? 'green' : 'red'}">${g ? '✓' : '✗'} ${esc(v)}</td></tr>`;
+  }).join('');
+  $('rag-out').className = 'out ' + (ok === RAG.length ? 'good' : 'bad');
+  $('rag-out').innerHTML = `<b>${ok}/${RAG.length}</b> good answers from <b>${s}</b> searches. ` + (m === 'classic'
+    ? 'A fixed pipeline cannot skip, split or give up on retrieval.'
+    : 'Same number of searches, spent where they help. The cost is an extra model turn per search.');
+  return { searches: s, ok };
+}
+document.querySelectorAll('.ragm').forEach(b => b.onclick = () => { press('.ragm', b); renderRAG(b.dataset.m); });
+renderRAG('classic');
+
+// ---------- 2 · ReAct ----------
+const RE = [
+  ['th', 'Thought: I need the build year of each. Start with the Eiffel Tower.'],
+  ['ac', 'Action: search("Eiffel Tower completed")'],
+  ['ob', 'Observation: Completed in March 1889 for the World\'s Fair.'],
+  ['th', 'Thought: 1889. Now the Statue of Liberty.'],
+  ['ac', 'Action: search("Statue of Liberty dedicated")'],
+  ['ob', 'Observation: Dedicated on 28 October 1886.'],
+  ['th', 'Thought: 1886 < 1889, a difference of 3 years. I can answer.'],
+  ['an', 'Answer: The Statue of Liberty is older, by about 3 years (1886 vs 1889).'],
+];
+let reI = 0;
+function renderRE() {
+  $('re-trace').innerHTML = RE.slice(0, reI).map(([c, t], i) => `<span class="${c}${i === reI - 1 ? ' new' : ''}">${esc(t)}</span>`).join('\n')
+    || '<span class="muted">press next ▶ to start the loop</span>';
+  const kind = reI ? { th: 'reason', ac: 'act (tool_use)', ob: 'observe (tool_result)', an: 'done (end_turn)' }[RE[reI - 1][0]] : 'not started';
+  $('re-step').textContent = `step ${reI} / ${RE.length} · ${kind}`;
+  $('re-back').disabled = reI === 0; $('re-next').disabled = reI === RE.length;
+}
+$('re-next').onclick = () => { reI = Math.min(RE.length, reI + 1); renderRE(); };
+$('re-back').onclick = () => { reI = Math.max(0, reI - 1); renderRE(); };
+$('re-reset').onclick = () => { reI = 0; renderRE(); };
+renderRE();
+
+// ---------- 3 · Planner–Executor ----------
+function runPlan(fail, replan) {
+  const steps = [['Find the dates of next weekend', 'ok'], ['Get the Paris forecast', fail ? 'fail' : 'ok']];
+  let planner = 1, verdict;
+  if (fail && replan) {
+    planner = 2;
+    steps.push(['Get the forecast from a backup source (added by the replanner)', 'ok']);
+    steps.push(['Pick indoor or outdoor sights to suit the weather', 'ok'], ['Write the brief', 'ok']);
+    verdict = ['good', 'The replanner saw the failure and added a fallback step. It cost one extra planner call.'];
+  } else if (fail) {
+    steps.push(['Pick indoor or outdoor sights to suit the weather', 'bad'], ['Write the brief', 'bad']);
+    verdict = ['bad', 'The old plan ran on without a forecast. The sights are guesses and the brief looks confident but is wrong.'];
+  } else {
+    steps.push(['Pick indoor or outdoor sights to suit the weather', 'ok'], ['Write the brief', 'ok']);
+    verdict = ['good', 'The plan ran as written. The replanner was never needed.'];
+  }
+  return { steps, planner, executor: steps.length, verdict };
+}
+function renderPlan() {
+  const r = runPlan($('pe-fail').checked, $('pe-replan').checked);
+  const lab = { ok: '<span class="st green">done</span>', fail: '<span class="st red">failed</span>', bad: '<span class="st red">ran on bad data</span>' };
+  $('pe-plan').innerHTML = r.steps.map(([t, s]) => `<li>${esc(t)} ${lab[s]}</li>`).join('');
+  $('pe-out').className = 'out ' + r.verdict[0];
+  $('pe-out').innerHTML = `${r.verdict[1]}<br><span class="muted">planner calls: ${r.planner} (big model) · executor steps: ${r.executor} (small model)</span>`;
+  return r;
+}
+$('pe-fail').onchange = $('pe-replan').onchange = renderPlan; renderPlan();
+
+// ---------- 4 · DAG ----------
+const DAG = [
+  { id: 'A', t: 'fetch flights', d: 3, deps: [] },
+  { id: 'B', t: 'fetch hotels', d: 5, deps: [] },
+  { id: 'C', t: 'fetch weather', d: 2, deps: [] },
+  { id: 'D', t: 'pick dates', d: 1, deps: ['A', 'C'] },
+  { id: 'E', t: 'book hotel', d: 2, deps: ['B', 'D'] },
+  { id: 'F', t: 'write summary', d: 2, deps: ['E'] },
+];
+// ponytail: tasks are listed in topological order, so one pass is enough
+function schedule(tasks, mode) {
+  const at = {}; let clock = 0;
+  for (const k of tasks) {
+    const s = mode === 'seq' ? clock : Math.max(0, ...k.deps.map(d => at[d].end));
+    at[k.id] = { s, end: s + k.d }; clock = s + k.d;
+  }
+  const total = Math.max(...Object.values(at).map(x => x.end)), crit = new Set();
+  if (mode === 'dag') {  // walk back from the last task along the dependency that finished last
+    let cur = tasks.find(k => at[k.id].end === total);
+    while (cur) { crit.add(cur.id); const p = cur.deps.find(d => at[d].end === at[cur.id].s); cur = p && tasks.find(k => k.id === p); }
+  }
+  return { at, total, crit };
+}
+let dagMode = 'seq';
+function renderDAG() {
+  const tasks = DAG.map(k => k.id === 'C' && $('dag-slow').checked ? { ...k, d: 6 } : k);
+  const r = schedule(tasks, dagMode), other = schedule(tasks, dagMode === 'seq' ? 'dag' : 'seq').total, scale = 20;
+  $('gantt').innerHTML = tasks.map(k => `<div class="gr"><span class="gl">${k.id} · ${esc(k.t)}</span><span class="gt">
+    <span class="gb${r.crit.has(k.id) ? ' crit' : ''}" style="left:${r.at[k.id].s / scale * 100}%; width:${k.d / scale * 100}%" title="${k.d}s"></span></span></div>`).join('')
+    + `<div class="muted" style="margin-left:158px">0s ─────────── time ─────────── 20s</div>`;
+  $('dag-out').className = 'out ' + (dagMode === 'dag' ? 'good' : 'bad');
+  $('dag-out').innerHTML = dagMode === 'seq'
+    ? `Total <b>${r.total}s</b>: every step waits for the one before it, even when it doesn't need its output. As a DAG this takes ${other}s.`
+    : `Total <b>${r.total}s</b> (a list takes ${other}s). The critical path, in pink, is <b>${[...r.crit].reverse().join(' → ')}</b>. Only speeding up those steps helps.`;
+  return r;
+}
+document.querySelectorAll('.dagm').forEach(b => b.onclick = () => { press('.dagm', b); dagMode = b.dataset.m; renderDAG(); });
+$('dag-slow').onchange = renderDAG; renderDAG();
+
+// ---------- 5 · Multi-agent ----------
+const MA = [
+  ['Orchestrator–workers', '          ┌─▶ [worker: flights] ─┐\n[lead] ───┼─▶ [worker: hotels]  ─┼─▶ [lead merges]\n          └─▶ [worker: events]  ─┘',
+    'A lead agent splits the task, sends sub-tasks to workers with fresh contexts, and merges their summaries. It\'s the most common shape (deep research, the Claude Agent SDK\'s subagents).', 'broad research, parallel sub-questions'],
+  ['Hierarchical', '[director]\n ├─▶ [lead: travel] ─▶ [flights] [hotels]\n └─▶ [lead: budget] ─▶ [prices]',
+    'Orchestrators of orchestrators. It scales to big tasks, but every layer summarises, so detail gets lost and the cost multiplies.', 'very large tasks with clear sub-teams'],
+  ['Handoff / swarm', '[triage] ──handoff──▶ [billing] ──handoff──▶ [refunds]',
+    'There is no boss. The active agent passes the whole conversation to the next specialist with a `transfer_to_…` tool. Only one agent works at a time.', 'customer support routing'],
+  ['Debate / peer review', '[agent A] ◀──▶ [agent B]\n       └──▶ [judge]',
+    'Two or more agents argue or review each other, then a judge decides. Diversity helps most when the agents use different models or information.', 'hard judgment calls, fact-checking'],
+];
+$('ma-chips').innerHTML = MA.map((a, i) => `<button class="mac" data-i="${i}">${a[0]}</button>`).join('');
+$('ma-chips').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return; press('.mac', b);
+  const [n, d, t, u] = MA[b.dataset.i];
+  $('ma-out').innerHTML = `<b>${n}</b><pre>${esc(d)}</pre>${md(t)}<br><span class="muted">good for: ${esc(u)}</span>`;
+};
+document.querySelector('.mac').click();
+
+// ---------- 6 · Self-critique ----------
+// illustrative quality after each round; no-signal curve plateaus (self-agreement)
+const SC = { ext: [60, 78, 87, 91, 93, 94], self: [60, 66, 68, 68, 67, 67] };
+function renderSC() {
+  const n = +$('sc-n').value, ext = $('sc-ext').checked, q = SC[ext ? 'ext' : 'self'];
+  $('sc-nv').textContent = n;
+  $('sc-table').innerHTML = '<tr><th>round</th><th>quality (illustrative)</th><th>model calls so far</th></tr>' + q.slice(0, n + 1).map((v, i) =>
+    `<tr><td>${i === 0 ? 'first draft' : 'round ' + i}</td><td><span class="qbar" style="width:${v * 2}px"></span>${v}</td><td>${1 + 2 * i}</td></tr>`).join('');
+  const gain = q[n] - q[Math.max(0, n - 1)];
+  $('sc-out').className = 'out ' + (n && gain <= 1 ? 'bad' : 'good');
+  $('sc-out').innerHTML = n === 0 ? 'No critique: one call and the first draft ships.'
+    : gain <= 1 ? `Round ${n} ${gain < 0 ? 'lost ' + -gain : 'added ' + gain} point${Math.abs(gain) === 1 ? '' : 's'} for 2 more calls. ${ext ? 'The curve has flattened, so stop here.' : 'With no new information, the critic mostly agrees with itself.'}`
+    : `Round ${n} added <b>${gain}</b> points. ${ext ? 'The external signal gives the critic real errors to fix.' : 'Early rounds still catch obvious slips.'}`;
+  return { q: q[n], calls: 1 + 2 * n, gain };
+}
+$('sc-n').oninput = $('sc-ext').onchange = renderSC; renderSC();
+
+// ---------- which pattern? ----------
+const PATS = [['rag', 'RAG'], ['react', 'ReAct'], ['plan', 'Planner–Executor'], ['dag', 'DAG'], ['multi', 'Multi-agent'], ['critic', 'Self-critique']];
+const PCARDS = [
+  { t: 'Answer employee questions from a 4,000-page HR handbook, with citations.', a: 'rag', why: 'The knowledge lives in private documents. Retrieval is the core.' },
+  { t: 'Debug a failing deploy: read logs, try a command, read the output, decide what to check next.', a: 'react', why: 'You can\'t know step 2 until you see step 1. Think, act, observe.' },
+  { t: 'Fetch prices from 5 suppliers (no dependencies between them), then pick the cheapest.', a: 'dag', why: 'Five independent fetches run in parallel. Total time is the slowest fetch plus the pick.' },
+  { t: 'Migrate 40 files to a new API. You want a human to approve the list of steps first.', a: 'plan', why: 'Plan up front, review it, then execute each step with a cheaper model.' },
+  { t: 'Generate SQL, and make sure it actually runs and returns the right columns before showing it.', a: 'critic', why: 'Generate, run it (external signal), fix, repeat, with a cap.' },
+  { t: 'A research report that needs 8 sub-topics explored in depth, each with lots of reading.', a: 'multi', why: 'Each sub-topic gets its own context window. The lead merges the summaries.' },
+  { t: 'Support bot: triage, then pass the whole chat to billing or tech support.', a: 'multi', why: 'Handoffs between specialist agents, a swarm-style multi-agent system.' },
+  { t: 'A fixed nightly job: extract → clean → summarise → email. The steps never change.', a: 'dag', why: 'Hand-written workflow. There is no reason to let a model choose the order.' },
+  { t: 'Write a legal clause, check it against a 12-point rubric, and fix anything that fails.', a: 'critic', why: 'A rubric-driven critique loop. The rubric is the critic\'s external signal.' },
+  { t: 'Book a trip where the hotel choice depends on flight times you haven\'t looked up yet.', a: 'react', why: 'Each observation changes the next action. (A replanning planner also works.)' },
+];
+sorter('sort-pat', 't-pat', PATS, PCARDS);
+
+// ---------- quiz ----------
+const Q = [
+  { t: 'What makes a RAG agent different from classic RAG?', o: ['It uses a bigger vector database', 'Retrieval is a tool, so the model decides whether, what and how often to search', 'It never hallucinates', 'It fine-tunes on the documents'], a: 1,
+    w: 'Classic RAG always retrieves once. The agent can skip, split or rewrite searches.' },
+  { t: 'A RAG agent gives fluent answers that are wrong. What should you measure first?', o: ['Tokens per second', 'Retrieval recall: does the right passage ever come back?', 'The temperature', 'The number of tools'], a: 1,
+    w: 'If retrieval never returns the right passage, no prompt or agent loop can recover.' },
+  { t: 'In modern tool-use APIs, what is the ReAct "Action" step?', o: ['A line of text starting with "Action:"', 'A structured `tool_use` block', 'A system prompt', 'A stop sequence'], a: 1,
+    w: 'Native tool use replaced text parsing. Thought is text/thinking, Action is `tool_use`, and Observation is `tool_result`.' },
+  { t: 'What is ReAct\'s main weakness on long tasks?', o: ['It can\'t use tools', 'It is greedy: it plans one step ahead, so it drifts', 'It is too deterministic', 'It needs a GPU'], a: 1,
+    w: 'That is why planners write the whole plan up front.' },
+  { t: 'Why use a cheaper model as the executor in Planner–Executor?', o: ['Cheap models plan better', 'The hard thinking happens once in the planner, and each step is simple', 'It is required by the API', 'To avoid tool calls'], a: 1,
+    w: 'Spend the strong model where the reasoning is, and a cheap one for the repetitive steps.' },
+  { t: 'Step 2 of a plan fails and there is no replanner. What typically happens?', o: ['The agent stops cleanly', 'Later steps run on missing data and produce a confident, wrong result', 'The planner reruns automatically', 'Nothing, the steps are independent'], a: 1,
+    w: 'A stale plan silently poisons everything downstream. Add a replanner or at least a hard stop.' },
+  { t: 'A DAG has steps of 3s, 5s and 2s with no dependencies, then a 2s step needing all three. Total time?', o: ['12s', '7s', '5s', '2s'], a: 1,
+    w: 'The parallel stage takes as long as its slowest step (5s), plus 2s. That is the critical path.' },
+  { t: 'You speed up a DAG node that is not on the critical path. What changes?', o: ['Total time halves', 'Nothing: total time is set by the critical path', 'The DAG becomes a list', 'Cost goes up'], a: 1,
+    w: 'Only the longest dependency chain sets the total time.' },
+  { t: 'What is the main benefit of splitting work across multiple agents?', o: ['It is always cheaper', 'Context isolation: each agent sees only what it needs', 'It removes the need for evals', 'Fewer tokens'], a: 1,
+    w: 'The benefit is focus. The price is tokens, often several times one agent.' },
+  { t: 'In a handoff / swarm topology, how many agents are working at once?', o: ['All of them', 'One: the active agent passes the conversation on', 'Two, always', 'None, a router does it'], a: 1,
+    w: 'Handoffs move control. Orchestrator–workers is the shape that runs agents in parallel.' },
+  { t: 'Self-critique with the same model and no new information usually…', o: ['Improves forever', 'Plateaus quickly, because the model mostly agrees with itself', 'Always makes things worse', 'Is free'], a: 1,
+    w: 'Give the critic an external signal: tests, a validator, sources, or a different model.' },
+  { t: 'Which stop rule belongs in every self-critique loop?', o: ['Stop when the model says "done" in any words', 'A round cap, plus stop on pass or no improvement', 'Never stop', 'Stop after 1 token'], a: 1,
+    w: 'Each round costs two calls. Cap it and stop early on pass or plateau.' },
+  { t: 'Your pipeline is always extract → clean → summarise. Which shape?', o: ['Multi-agent debate', 'A fixed workflow (hand-written chain or DAG)', 'ReAct', 'Hierarchical agents'], a: 1,
+    w: 'When the steps never change, let code decide the order. It is cheaper, faster and testable.' },
+  { t: 'What is the best way to choose between ReAct and Planner–Executor for a task?', o: ['Whichever is newer', 'Build both thin slices and compare them on the same eval set', 'Always ReAct', 'Count the tools'], a: 1,
+    w: 'Least autonomy that passes your evals, and measure rather than guess.' },
+];
+Q.forEach((q, i) => { const n = q.o.length, r = (i * 3 + 2) % n; q.o = q.o.map((_, j) => q.o[(j + r) % n]); q.a = (q.a - r + n) % n; });
+let qr = 0, qd = 0;
+$('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
+  <div class="opts">${q.o.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quizcards').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const q = Q[card.dataset.i], ok = +b.dataset.j === q.a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === q.a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(q.w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+</body>
+</html>
