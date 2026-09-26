@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Observability · notebook</title>
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+<style>
+  .out.good { border-left-color: var(--green); }
+  .gantt { font: 13px/1 var(--mono); margin: 10px 0; }
+  .gantt .gr { display: flex; align-items: center; gap: 8px; margin: 4px 0; cursor: pointer; }
+  .gantt .gr:hover .gl, .gantt .gr.sel .gl { color: var(--red); }
+  .gantt .gl { width: 230px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gantt .gt { position: relative; flex: 1; height: 22px; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), #e6e0d0 calc(10% - 1px) 10%); }
+  .gantt .gb { position: absolute; top: 2px; height: 18px; border: 2px solid #333; border-radius: 4px; min-width: 3px; }
+  .gantt .gb.agent { background: var(--tan); } .gantt .gb.chat { background: var(--blue); } .gantt .gb.tool { background: var(--mint); }
+  .gantt .gb.err { background: var(--pink); border-color: var(--red); }
+  .gantt .gr.sel .gb { outline: 3px solid var(--hl); }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 150px; border-bottom: 2px solid #333; margin: 10px 0 4px; position: relative; }
+  .bars div { flex: 1; background: var(--blue); border: 1.5px solid #333; border-bottom: none; }
+  .bars div.tail { background: var(--pink); border-color: var(--red); }
+  .bars .line { position: absolute; left: 0; right: 0; border: none; border-top: 2px dashed; height: 0; flex: none; background: none; }
+  .kv { font: 14px/1.6 var(--mono); }
+  .stat { display: inline-block; min-width: 130px; margin: 4px 10px 4px 0; }
+  .stat b { display: block; font-family: var(--title); font-weight: normal; font-size: 26px; color: var(--ink); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="testing-and-evals.html">← Testing &amp; Evals</a><a href="ai-governance.html">AI Governance →</a></p>
+  <h1>LLM Observability</h1>
+  <p class="muted">Evals tell you an agent worked on your test set. Observability tells you <span class="hl">what it is doing right now, for real users,
+    and what that costs</span>. Three jobs: tracing &amp; logging, cost/latency monitoring, and production monitoring. Four common tools do them.</p>
+
+  <svg class="doodle" viewBox="0 0 900 360" role="img" aria-label="Map of this page. Click a box to jump to its section.">
+    <g id="mapboxes"></g>
+    <text x="450" y="238" text-anchor="middle" style="font-size:19px; fill:#222">Observability tools</text>
+    <text class="p" x="10" y="356" style="font-size:13px">↑ click any box to jump to it</text>
+  </svg>
+
+  <!-- ============ why ============ -->
+  <h2 id="why">0 · Why LLM apps need their own kind of monitoring</h2>
+  <table class="hand">
+    <tr><th></th><th>classic web service</th><th>LLM app / agent</th></tr>
+    <tr><td><b>a failure looks like</b></td><td>a 500, an exception, a timeout</td><td><b>a 200 OK with a wrong answer</b>: made-up facts, the wrong tool, an off-topic reply</td></tr>
+    <tr><td><b>same input twice</b></td><td>same output</td><td>can give different outputs, and can take a different number of steps</td></tr>
+    <tr><td><b>cost per request</b></td><td>roughly fixed</td><td>varies 100× with tokens, number of loop steps and model</td></tr>
+    <tr><td><b>latency</b></td><td>milliseconds, mostly your code</td><td>seconds, mostly the model and tools, and it grows with output length</td></tr>
+    <tr><td><b>what you must log</b></td><td>status, duration, stack trace</td><td>the <b>prompt, output, tool calls, tokens, model and prompt version</b> — the whole story</td></tr>
+  </table>
+  <div class="cols">
+    <div class="sticky blue">
+      <b>The three questions</b>
+      <ol>
+        <li><b>What happened?</b> → tracing &amp; logging</li>
+        <li><b>What did it cost, and how long did it take?</b> → cost/latency monitoring</li>
+        <li><b>Is it still working well, for everyone?</b> → production monitoring</li>
+      </ol>
+    </div>
+    <div class="sticky mint">
+      <b>Where it fits</b>
+      <ul>
+        <li><b>Offline evals</b> (previous page): fixed test set, before you ship.</li>
+        <li><b>Observability</b> (this page): real traffic, after you ship.</li>
+        <li>The two feed each other: bad production traces become new eval cases.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ 1 tracing ============ -->
+  <h2 id="trace">1 · Tracing &amp; logging</h2>
+  <p>A <b>trace</b> is one request, end to end. It is a tree of <b>spans</b>: timed steps, each with a parent. In an agent, the root span is the
+    agent run, and the children are model calls and tool calls. <span class="hl">A trace is the agentic loop, written down.</span></p>
+  <table class="hand">
+    <tr><th>span kind</th><th>records</th><th>OpenTelemetry GenAI name / attributes</th></tr>
+    <tr><td>🤖 agent run</td><td>user input, final answer, session and user id, total steps</td><td><code>invoke_agent</code> · <code>gen_ai.agent.name</code></td></tr>
+    <tr><td>💬 model call</td><td>model, messages in, output, stop reason, input/output tokens, latency</td>
+      <td><code>chat {model}</code> · <code>gen_ai.request.model</code>, <code>gen_ai.usage.input_tokens</code>, <code>gen_ai.usage.output_tokens</code></td></tr>
+    <tr><td>🔧 tool call</td><td>tool name, arguments, result or error, latency</td><td><code>execute_tool {name}</code> · <code>gen_ai.tool.name</code></td></tr>
+    <tr><td>📚 retrieval</td><td>query, top-k document ids and scores</td><td>often a custom span, e.g. <code>retrieve</code></td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">The OpenTelemetry GenAI semantic conventions are still evolving, but most tools can read them. Emitting OTel keeps you free to switch tools.</p>
+
+  <div class="box">
+    <b class="ink">✎ Try it: read three traces</b> <span class="muted">Pick a run, then click a span to open it.</span>
+    <div class="row" id="tr-runs"><button data-r="ok">✅ normal run</button><button data-r="slow">🐢 "it took forever"</button><button data-r="loop">🔁 "why is this so expensive?"</button></div>
+    <div class="gantt" id="tr-gantt"></div>
+    <div class="out kv" id="tr-span"></div>
+    <div class="out" id="tr-out" aria-live="polite"></div>
+  </div>
+
+<pre><span class="c"># the same trace, created by hand with OpenTelemetry (any tool below can ingest it)</span>
+from opentelemetry import trace
+tracer = trace.get_tracer("support-agent")
+
+with tracer.start_as_current_span("invoke_agent support") as run:
+    run.set_attribute("session.id", session_id)
+    with tracer.start_as_current_span("chat claude-sonnet") as span:
+        resp = client.messages.create(model=MODEL, messages=msgs, tools=TOOLS, max_tokens=1024)
+        span.set_attribute("gen_ai.usage.input_tokens", resp.usage.input_tokens)
+        span.set_attribute("gen_ai.usage.output_tokens", resp.usage.output_tokens)
+    with tracer.start_as_current_span("execute_tool issue_refund"):
+        result = issue_refund(**args)
+<span class="c"># in practice: one decorator or an auto-instrumentation package does all of this (see section 4)</span></pre>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>What to log on every model call</b>
+      <ul>
+        <li>model id, <b>prompt version</b>, temperature, max tokens</li>
+        <li>full input messages and output (or a pointer to them)</li>
+        <li>input, output and cached tokens; latency; stop reason</li>
+        <li>tool calls: name, arguments, result, error</li>
+        <li><b>session id and user id</b>, so you can find "that one bad chat"</li>
+        <li>user feedback (👍/👎), attached to the trace later</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>Logging gotchas</b>
+      <ul>
+        <li><b>Prompts contain PII.</b> Redact or mask before export, set a retention period, and restrict who can read traces.</li>
+        <li>Log the <b>prompt version</b>, not just the text, or you can't tell which change caused a regression.</li>
+        <li>High traffic? <b>Sample</b> the full payloads (e.g. 10%), but keep token and latency metrics for 100%.</li>
+        <li>Never let a logging failure break the request: export asynchronously.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ 2 cost / latency ============ -->
+  <h2 id="cost">2 · Cost &amp; latency monitoring</h2>
+  <div class="cols">
+    <div>
+      <p style="margin-top:0"><b class="ink">Cost</b> is just token arithmetic:</p>
+<pre>cost = input_tokens  × input_price
+     + output_tokens × output_price
+     + cached_tokens × cache_read_price   <span class="c"># often ~10% of input</span></pre>
+      <p>Output tokens usually cost several times more than input. <span class="hl">An agent pays for its whole history again on every step</span>,
+        so step count is the hidden multiplier.</p>
+    </div>
+    <div>
+      <p style="margin-top:0"><b class="ink">Latency</b> has three numbers:</p>
+      <ul>
+        <li><b>TTFT</b> (time to first token): what the user feels with streaming</li>
+        <li><b>output tokens / second</b>: how fast the answer then appears</li>
+        <li><b>end-to-end</b>: all model and tool steps. This is what an agent's user waits for.</li>
+      </ul>
+      <p>Track <b>p50, p95 and p99</b>, not the average.</p>
+    </div>
+  </div>
+
+  <div class="box">
+    <b class="ink">✎ Try it: cost calculator</b> <span class="muted">Example prices per million tokens (input / output). Check your provider's pricing page for real ones.</span>
+    <div class="row">
+      <label>requests / day <input type="number" id="c-req" value="10000" min="0" step="1000" style="width:90px"></label>
+      <label>input tokens <input type="number" id="c-in" value="2000" min="0" step="500" style="width:80px"></label>
+      <label>output tokens <input type="number" id="c-otok" value="500" min="0" step="100" style="width:70px"></label>
+    </div>
+    <div class="row">
+      <label>model <select id="c-tier"><option value="small">small ($1 / $5)</option><option value="mid" selected>mid ($3 / $15)</option><option value="large">large ($15 / $75)</option></select></label>
+      <label>prompt cache hit <input type="range" id="c-cache" min="0" max="90" step="10" value="0"> <span id="c-cachev"></span></label>
+      <label class="chk"><input type="checkbox" id="c-batch"> batch API (50% off, not real-time)</label>
+    </div>
+    <div id="c-stats"></div>
+    <div class="out" id="c-out" aria-live="polite"></div>
+  </div>
+
+  <div class="box">
+    <b class="ink">✎ Try it: why the average lies</b>
+    <div class="row"><label class="chk"><input type="checkbox" id="p-tail"> add 2 slow requests (a tool timed out and retried)</label></div>
+    <div class="bars" id="p-bars" aria-hidden="true"></div>
+    <div id="p-stats"></div>
+    <div class="out" id="p-out" aria-live="polite"></div>
+  </div>
+
+  <div class="cols">
+    <div class="sticky mint">
+      <b>Levers to cut cost</b>
+      <ul>
+        <li><b>Prompt caching</b> for the long, stable prefix (system prompt, tools, docs)</li>
+        <li><b>Model routing</b>: a small model for easy requests, a large one only when needed</li>
+        <li>Trim context: summarise old turns, drop stale tool results</li>
+        <li>Cap <code>max_tokens</code> and the number of agent steps</li>
+        <li><b>Batch</b> anything that isn't interactive</li>
+      </ul>
+    </div>
+    <div class="sticky blue">
+      <b>Levers to cut latency</b>
+      <ul>
+        <li><b>Stream</b> the answer: TTFT drops, total time doesn't</li>
+        <li>Run independent tool calls <b>in parallel</b></li>
+        <li>Fewer steps: a better tool design beats a faster model</li>
+        <li>Smaller model, shorter output, cached prefix</li>
+        <li>Set timeouts on every tool, and alert on the p95</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ 3 production ============ -->
+  <h2 id="prod">3 · Production monitoring</h2>
+  <p>Dashboards and alerts over <i>all</i> traffic. Since failures are silent 200s, <span class="hl">you have to measure quality directly</span>, not only errors.</p>
+  <table class="hand">
+    <tr><th>signal</th><th>how you measure it</th><th>example alert</th></tr>
+    <tr><td><b>quality</b></td><td><b>online evals</b>: an LLM judge or rule scores a sample of live traces (groundedness, relevance, format)</td><td>groundedness &lt; 0.85 over 1 h</td></tr>
+    <tr><td><b>user feedback</b></td><td>👍/👎, edits, retries, "talk to a human", conversation abandoned</td><td>👎 rate doubles on a topic</td></tr>
+    <tr><td><b>safety</b></td><td>guardrail triggers, refusals, jailbreak detector hits</td><td>injection hits &gt; 3× baseline</td></tr>
+    <tr><td><b>cost &amp; latency</b></td><td>tokens and $ per request / user / feature; p95 end-to-end</td><td>$ per request +50% day over day</td></tr>
+    <tr><td><b>errors</b></td><td>tool errors, 429 rate limits, timeouts, <code>max_tokens</code> stops, JSON parse failures</td><td>tool error rate &gt; 2%</td></tr>
+    <tr><td><b>agent behaviour</b></td><td>steps per task, repeated identical tool calls, tasks hitting the step cap</td><td>p95 steps &gt; 12</td></tr>
+    <tr><td><b>drift</b></td><td>input topics, language and length change; output length changes; a new model version</td><td>new topic cluster &gt; 10% of traffic</td></tr>
+  </table>
+
+  <svg class="doodle" viewBox="0 0 900 250" role="img" aria-label="The production feedback loop: live traffic produces traces, a sample is scored by online evals, bad traces become dataset cases, offline evals gate the next deploy, which goes back to live traffic.">
+    <g filter="url(#rough)" id="loopboxes"></g>
+    <text class="t" x="450" y="130" text-anchor="middle" style="font-size:22px; fill:#c0392b">the production feedback loop</text>
+    <text x="450" y="156" text-anchor="middle" style="font-size:15px; fill:#555">every bad trace you find becomes a test that stops it coming back</text>
+  </svg>
+
+  <h3>✎ Try it: which signal catches it first? <span class="tally" id="t-sig"></span></h3>
+  <div class="cards" id="sort-sig"></div>
+
+  <!-- ============ 4 tools ============ -->
+  <h2 id="tools">4 · Observability tools</h2>
+  <p>All four do tracing, cost tracking and some evals. The real differences are <b>how you plug them in</b> and <b>where your data lives</b>.</p>
+  <table class="hand">
+    <tr><th>tool</th><th>what it is</th><th>plugs in via</th><th>hosting</th><th>stands out for</th></tr>
+    <tr id="t-langsmith"><td><b>LangSmith</b></td><td>LangChain's platform for tracing, evals and prompts</td><td>SDK: <code>@traceable</code>, <code>wrap_openai</code>; automatic for LangChain / LangGraph</td>
+      <td>SaaS; self-host on enterprise plans</td><td>deepest LangChain / LangGraph integration; datasets + experiments; prompt hub</td></tr>
+    <tr id="t-langfuse"><td><b>Langfuse</b></td><td>open-source LLM engineering platform</td><td>SDK: <code>@observe</code> decorator; OpenTelemetry; many framework integrations</td>
+      <td>open source, <b>self-hostable</b>, or cloud</td><td>self-hosting; prompt management with versions; cost tracking; evals and datasets</td></tr>
+    <tr id="t-helicone"><td><b>Helicone</b></td><td>open-source LLM <b>gateway / proxy</b> with logging</td><td><b>change the base URL</b> and add a header; no SDK needed</td>
+      <td>open source, self-hostable, or cloud</td><td>fastest setup; request logs + cost; caching, rate limits, key management at the proxy</td></tr>
+    <tr id="t-arize"><td><b>Arize AI</b></td><td>ML + LLM observability: <b>Arize AX</b> (platform) and <b>Phoenix</b> (open source)</td><td>OpenTelemetry via OpenInference auto-instrumentation</td>
+      <td>Phoenix: open source, local or self-hosted; AX: SaaS</td><td>evals, drift and embedding analysis; one place for classic ML and LLM monitoring</td></tr>
+  </table>
+
+<pre><span class="c"># LangSmith</span>                                   <span class="c"># export LANGSMITH_TRACING=true  LANGSMITH_API_KEY=…</span>
+from langsmith import traceable
+@traceable
+def answer(q): ...
+
+<span class="c"># Langfuse</span>                                    <span class="c"># LANGFUSE_PUBLIC_KEY / SECRET_KEY / HOST</span>
+from langfuse import observe
+@observe()
+def answer(q): ...
+
+<span class="c"># Helicone: no decorator, just route calls through the proxy</span>
+client = Anthropic(base_url="https://anthropic.helicone.ai",
+                   default_headers={"Helicone-Auth": f"Bearer {HELICONE_KEY}"})
+
+<span class="c"># Arize Phoenix: OpenTelemetry + auto-instrument installed SDKs</span>
+from phoenix.otel import register
+register(project_name="support-agent", auto_instrument=True)</pre>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Three ways to plug in</b>
+      <ul>
+        <li><b>SDK / decorator</b> (LangSmith, Langfuse): richest traces, including your own functions and tools. Needs code changes.</li>
+        <li><b>Proxy / gateway</b> (Helicone): one line, sees every model call. Can't see tool calls or your code between calls, and adds a network hop.</li>
+        <li><b>OpenTelemetry</b> (Phoenix, Langfuse, and others): vendor-neutral; send the same spans anywhere.</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>Choosing well</b>
+      <ul>
+        <li>Is trace data allowed to leave your cloud? If not, self-host.</li>
+        <li>Do you need to see <b>tool calls and agent steps</b>, or just model calls?</li>
+        <li>Will one tool do evals and prompts too, or do you already have those?</li>
+        <li>Prefer OTel, so switching tools later is a config change.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="box">
+    <b class="ink">✎ Try it: which tool fits?</b> <span class="muted">A starting point, not a verdict. Try two on a real trace.</span>
+    <div class="row" id="tp-needs" style="flex-direction:column; align-items:flex-start"></div>
+    <div class="out" id="tp-out" aria-live="polite"></div>
+  </div>
+
+  <!-- ============ Quiz ============ -->
+  <h2 id="quiz">✎ Pop quiz</h2>
+  <div class="cards quiz" id="quizcards" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— if it isn't traced, it didn't happen</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+const press = (sel, b) => document.querySelectorAll(sel).forEach(x => x.setAttribute('aria-pressed', x === b));
+
+// ---------- map ----------
+const box = (x, y, w, h, l, id) => `<a href="#${id}"><rect class="tan" x="${x}" y="${y}" width="${w}" height="${h}" rx="9" filter="url(#rough)"/>
+  <text x="${x + w / 2}" y="${y + h / 2 + 6}" text-anchor="middle" style="font-size:19px">${l}</text></a>`;
+$('mapboxes').innerHTML = `<rect x="4" y="4" width="892" height="336" rx="12" style="fill:none; stroke:#222; stroke-width:2.5" filter="url(#rough)"/>` +
+  [['1 · Tracing &amp; logging', 'trace'], ['2 · Cost / latency monitoring', 'cost'], ['3 · Production monitoring', 'prod']]
+    .map(([l, id], i) => box(30, 22 + i * 66, 840, 54, l, id)).join('') +
+  [['LangSmith', 't-langsmith'], ['Langfuse', 't-langfuse'], ['Helicone', 't-helicone'], ['Arize AI', 't-arize']]
+    .map(([l, id], i) => box(30 + (i % 2) * 426, 252 + Math.floor(i / 2) * 44, 414, 38, l, id)).join('');
+
+// ---------- generic sorter ----------
+function sorter(el, tallyEl, opts, cards) {
+  let right = 0, done = 0;
+  $(el).innerHTML = cards.map((c, i) => `<div class="card" data-i="${i}"><p class="q">${md(c.t)}</p>
+    <div class="opts">${opts.map(([k, l]) => `<button data-k="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="why"></div></div>`).join('');
+  $(el).onclick = e => {
+    const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+    if (!b || card.classList.contains('done')) return;
+    const c = cards[card.dataset.i], ok = b.dataset.k === c.a;
+    card.classList.add('done');
+    card.querySelectorAll('.opts button').forEach(x => { x.disabled = true; if (x.dataset.k === c.a) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(c.why)}`;
+    done++; right += ok;
+    $(tallyEl).textContent = `(${right}/${done} right${done === cards.length ? ', all done' : ''})`;
+  };
+}
+
+// ---------- 1 · traces ----------
+// span: [name, kind, depth, start s, duration s, attrs]
+const chat = (n, t, d, inT, outT, stop) => [`chat claude-sonnet #${n}`, 'chat', 1, t, d, { 'gen_ai.usage.input_tokens': inT, 'gen_ai.usage.output_tokens': outT, stop_reason: stop }];
+const tool = (name, t, d, a, extra = {}) => [`execute_tool ${name}`, extra.error ? 'err' : 'tool', 1, t, d, { 'gen_ai.tool.name': name, arguments: a, ...extra }];
+const RUNS = {
+  ok: [['invoke_agent support', 'agent', 0, 0, 3.4, { input: 'Refund order 1234, it arrived broken', steps: 3 }],
+    chat(1, 0, .9, 1200, 80, 'tool_use'), tool('search_orders', .9, .3, '{"id":"1234"}', { result: 'found, $42.00' }),
+    chat(2, 1.2, 1.1, 1500, 60, 'tool_use'), tool('issue_refund', 2.3, .3, '{"id":"1234","amount":42}', { result: 'ok' }),
+    chat(3, 2.6, .8, 1700, 120, 'end_turn')],
+  slow: [['invoke_agent support', 'agent', 0, 0, 9.6, { input: 'Refund order 1234, it arrived broken', steps: 3 }],
+    chat(1, 0, .9, 1200, 80, 'tool_use'), tool('search_orders', .9, .3, '{"id":"1234"}', { result: 'found, $42.00' }),
+    chat(2, 1.2, 1.1, 1500, 60, 'tool_use'), tool('issue_refund', 2.3, 5.0, '{"id":"1234","amount":42}', { error: 'timeout after 5 s' }),
+    tool('issue_refund', 7.3, 1.5, '{"id":"1234","amount":42}', { result: 'ok (retry)' }), chat(3, 8.8, .8, 1800, 120, 'end_turn')],
+  loop: [['invoke_agent support', 'agent', 0, 0, 8.2, { input: 'Where is my order?', steps: 7 }],
+    ...Array.from({ length: 6 }, (_, i) => [chat(i + 1, i * 1.2, .9, 1200 + i * 900, 50, 'tool_use'),
+      tool('search_orders', i * 1.2 + .9, .3, '{"customer":"c-88"}', { result: '0 results' })]).flat(),
+    chat(7, 7.2, 1.0, 6800, 90, 'end_turn')],
+};
+function analyze(spans) {
+  const kids = spans.filter(s => s[2] > 0), sum = k => kids.filter(s => s[1] === k).reduce((a, s) => a + s[4], 0);
+  const calls = {}; kids.filter(s => s[1] !== 'chat').forEach(s => { const k = s[0] + s[5].arguments; calls[k] = (calls[k] || 0) + 1; });
+  const slowest = kids.reduce((a, s) => s[4] > a[4] ? s : a);
+  return {
+    total: spans[0][4], slowest: slowest[0], chats: kids.filter(s => s[1] === 'chat').length,
+    inTok: kids.reduce((a, s) => a + (s[5]['gen_ai.usage.input_tokens'] || 0), 0),
+    outTok: kids.reduce((a, s) => a + (s[5]['gen_ai.usage.output_tokens'] || 0), 0),
+    toolTime: +(sum('tool') + sum('err')).toFixed(1), repeats: Math.max(...Object.values(calls)), errors: kids.filter(s => s[1] === 'err').length,
+  };
+}
+let trRun = 'ok';
+function showSpan(i) {
+  const s = RUNS[trRun][i];
+  document.querySelectorAll('#tr-gantt .gr').forEach((r, k) => r.classList.toggle('sel', k === i));
+  $('tr-span').innerHTML = `<b>${esc(s[0])}</b> · ${s[4].toFixed(1)} s<br>` + Object.entries(s[5]).map(([k, v]) => `${esc(k)} = ${esc(v)}`).join('<br>');
+}
+function renderTrace(r) {
+  trRun = r; const S = RUNS[r], a = analyze(S), T = S[0][4];
+  press('#tr-runs button', document.querySelector(`#tr-runs button[data-r="${r}"]`));
+  $('tr-gantt').innerHTML = S.map(s => `<div class="gr"><span class="gl" style="padding-left:${s[2] * 14}px">${esc(s[0])}</span><div class="gt">
+    <div class="gb ${s[1]}" style="left:${s[3] / T * 100}%; width:${s[4] / T * 100}%"></div></div></div>`).join('');
+  showSpan(0);
+  const verdict = a.repeats >= 3 ? ['bad', `🔁 <b>Stuck loop.</b> The same tool call with the same arguments ran <b>${a.repeats}×</b>, and input tokens grew every step (${a.inTok.toLocaleString()} in total), because each step re-sends the whole history. Fix the tool's empty result ("0 results: try an order id") and cap repeated calls.`]
+    : a.errors ? ['bad', `🐢 <b>The model isn't the problem.</b> Tools took ${a.toolTime} of ${T} s. The slowest span is <code>${esc(a.slowest)}</code>: it timed out and was retried. Add a tighter timeout and alert on this tool's p95.`]
+    : ['good', `✅ Healthy: ${a.chats} model calls, ${a.inTok.toLocaleString()} input / ${a.outTok} output tokens, ${T} s end to end.`];
+  $('tr-out').className = 'out ' + verdict[0]; $('tr-out').innerHTML = verdict[1];
+  return a;
+}
+$('tr-runs').onclick = e => { const b = e.target.closest('button'); if (b) renderTrace(b.dataset.r); };
+$('tr-gantt').onclick = e => { const r = e.target.closest('.gr'); if (r) showSpan([...r.parentNode.children].indexOf(r)); };
+renderTrace('ok');
+
+// ---------- 2 · cost ----------
+const PRICE = { small: [1, 5], mid: [3, 15], large: [15, 75] };   // ponytail: example $/MTok, not live pricing
+function cost({ req, inTok, outTok, tier, cache, batch }) {
+  const [pi, po] = PRICE[tier], m = batch ? .5 : 1;
+  const inCost = inTok * (1 - cache) * pi + inTok * cache * pi * .1, outCost = outTok * po;
+  const perReq = (inCost + outCost) * m / 1e6;
+  return { perReq, day: perReq * req, month: perReq * req * 30, bigger: inCost >= outCost ? 'input' : 'output' };
+}
+const money = v => '$' + (v >= 100 ? Math.round(v).toLocaleString() : v >= 1 ? v.toFixed(2) : v.toFixed(4));
+function renderCost() {
+  const o = { req: +$('c-req').value, inTok: +$('c-in').value, outTok: +$('c-otok').value, tier: $('c-tier').value, cache: $('c-cache').value / 100, batch: $('c-batch').checked };
+  $('c-cachev').textContent = $('c-cache').value + '%';
+  const r = cost(o);
+  $('c-stats').innerHTML = [['per request', r.perReq], ['per day', r.day], ['per month', r.month]].map(([l, v]) => `<span class="stat"><b>${money(v)}</b>${l}</span>`).join('');
+  $('c-out').className = 'out good';
+  $('c-out').innerHTML = `Most of the bill is <b>${r.bigger} tokens</b>. ` + (r.bigger === 'input'
+    ? (o.cache < .5 ? 'Try a higher cache hit rate: a stable system prompt + tools prefix is usually cacheable.' : 'Next: trim context, or route easy requests to a smaller model.')
+    : 'Cap <code>max_tokens</code>, ask for shorter answers, or route to a smaller model.') +
+    (o.tier === 'large' ? ' The large model costs 5× mid: is it needed for every request?' : '');
+  return r;
+}
+['c-req', 'c-in', 'c-otok', 'c-tier', 'c-cache', 'c-batch'].forEach(id => $(id).oninput = renderCost);
+renderCost();
+
+// ---------- 2 · percentiles ----------
+const LAT = [1.1, 1.2, 1.2, 1.3, 1.3, 1.3, 1.4, 1.4, 1.4, 1.5, 1.5, 1.5, 1.6, 1.6, 1.7, 1.7, 1.8, 1.9, 2.0, 2.1];
+const pct = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.ceil(p / 100 * s.length) - 1]; };   // nearest rank
+function renderPct() {
+  const tail = $('p-tail').checked, a = tail ? [...LAT.slice(0, 18), 9.5, 12.0] : LAT, max = Math.max(...a) * 1.1;
+  const r = { mean: +(a.reduce((x, y) => x + y) / a.length).toFixed(2), p50: pct(a, 50), p95: pct(a, 95) };
+  $('p-bars').innerHTML = a.map(v => `<div class="${v > 5 ? 'tail' : ''}" style="height:${v / max * 100}%" title="${v} s"></div>`).join('') +
+    [['mean', r.mean, 'var(--ink)'], ['p95', r.p95, 'var(--red)']].map(([l, v, c]) => `<div class="line" style="bottom:${v / max * 100}%; border-color:${c}"></div>`).join('');
+  $('p-stats').innerHTML = [['mean', r.mean], ['p50 (median)', r.p50], ['p95', r.p95]].map(([l, v]) => `<span class="stat"><b>${v} s</b>${l}</span>`).join('') +
+    '<span class="muted">blue dashed line = mean, red = p95</span>';
+  $('p-out').className = 'out ' + (tail ? 'bad' : 'good');
+  $('p-out').innerHTML = tail ? `The median barely moved (${r.p50} s), and the mean looks "a bit slower" (${r.mean} s). But <b>1 user in 20 now waits ${r.p95} s</b>. Only p95 shows it. Alert on p95/p99.`
+    : `All requests are between 1 and 2 s. Mean ${r.mean} s and p95 ${r.p95} s tell the same story. Now tick the box.`;
+  return r;
+}
+$('p-tail').onchange = renderPct; renderPct();
+
+// ---------- 3 · feedback loop + sorter ----------
+$('loopboxes').innerHTML = [['live traffic', 20, 90], ['traces', 200, 20], ['online evals score a sample', 400, 20], ['bad cases → dataset', 640, 90], ['offline evals gate deploy', 400, 175], ['new version', 200, 175]]
+  .map(([l, x, y]) => `<rect x="${x}" y="${y}" width="${l.length > 12 ? 230 : 150}" height="46" rx="9" style="fill:var(--blue); stroke:#222; stroke-width:2"/>
+    <text x="${x + (l.length > 12 ? 115 : 75)}" y="${y + 29}" text-anchor="middle" style="font-size:16px; fill:#222">${l}</text>`).join('') +
+  [[170, 100, 200, 60], [350, 43, 400, 43], [630, 66, 700, 90], [700, 136, 630, 185], [400, 198, 350, 198], [200, 185, 170, 136]]
+    .map(([a, b, c, d]) => `<path class="s" d="M${a},${b} L${c},${d}" marker-end="url(#arr)"/>`).join('');
+
+sorter('sort-sig', 't-sig', [['trace', '🧵 a trace'], ['metric', '📈 cost/latency metric'], ['eval', '🧑‍⚖️ online eval'], ['feedback', '👎 user feedback']], [
+  { t: 'An answer cites a refund policy that doesn\'t exist. The response was 200 OK in 800 ms.', a: 'eval', why: 'No error and no slowness, so only a quality check on live traffic (a groundedness judge) sees it.' },
+  { t: 'Spend tripled overnight after someone edited the system prompt.', a: 'metric', why: 'A cost-per-request dashboard with a day-over-day alert. The prompt version on each trace then tells you which edit caused it.' },
+  { t: 'One customer says "it took forever and then gave up". You need to know which step.', a: 'trace', why: 'Find the trace by session id and read the waterfall: the slow or failing span is right there.' },
+  { t: 'People keep rephrasing the same question in the new onboarding flow.', a: 'feedback', why: 'Retries, rephrases and 👎 are implicit feedback. Nothing crashed, and a generic judge may not notice.' },
+  { t: 'p95 end-to-end latency went from 4 s to 9 s after a model upgrade.', a: 'metric', why: 'A latency percentile alert. The mean would hide it for longer.' },
+  { t: 'The agent called `search_orders` six times with identical arguments.', a: 'trace', why: 'Repeated identical tool spans in one trace. Track "max identical calls" as a metric too, once you know to look for it.' },
+  { t: 'Answers in Spanish score lower on the helpfulness rubric than English ones.', a: 'eval', why: 'Online evals, sliced by language. Only a scored sample, broken down by segment, reveals it.' },
+  { t: 'The 👎 rate for billing questions doubled this week.', a: 'feedback', why: 'Direct user feedback, grouped by topic. Then read those traces to see why.' },
+]);
+
+// ---------- 4 · tool picker ----------
+const TOOLS = { langsmith: 'LangSmith', langfuse: 'Langfuse', helicone: 'Helicone', arize: 'Arize AI (Phoenix / AX)' };
+const TP = [
+  ['oss', 'must be open source / self-hosted: trace data can\'t leave our cloud', { langfuse: 2, helicone: 2, arize: 2 }],
+  ['nocode', 'no code changes: just swap the base URL', { helicone: 3 }],
+  ['lc', 'the app is built on LangChain / LangGraph', { langsmith: 3 }],
+  ['prompts', 'prompt versioning, datasets and evals in the same tool', { langsmith: 2, langfuse: 2 }],
+  ['ml', 'we also monitor classic ML models (drift, embeddings)', { arize: 3 }],
+  ['gateway', 'caching, rate limits and API-key management in one place', { helicone: 2 }],
+  ['otel', 'must be OpenTelemetry-native', { arize: 2, langfuse: 1, langsmith: 1 }],
+];
+$('tp-needs').innerHTML = TP.map(([k, l]) => `<label class="chk"><input type="checkbox" value="${k}"> ${esc(l)}</label>`).join('');
+function pickTool(on) {
+  const sc = Object.fromEntries(Object.keys(TOOLS).map(k => [k, 0]));
+  TP.forEach(([k, , w]) => { if (on.has(k)) Object.entries(w).forEach(([t, n]) => sc[t] += n); });
+  const best = Math.max(...Object.values(sc));
+  return best ? Object.keys(sc).filter(k => sc[k] === best) : [];
+}
+function renderTP() {
+  const r = pickTool(new Set([...document.querySelectorAll('#tp-needs input:checked')].map(x => x.value)));
+  $('tp-out').className = 'out good';
+  $('tp-out').innerHTML = !r.length ? 'Tick what matters to you.'
+    : `Start with <b>${r.map(k => TOOLS[k]).join('</b> or <b>')}</b>. ` + (r.length > 1 ? 'A tie: trial both on the same real traces for a day.' : 'Instrument with OpenTelemetry where you can, so you can still switch later.');
+  return r;
+}
+$('tp-needs').onchange = renderTP; renderTP();
+
+// ---------- quiz ----------
+const Q = [
+  { t: 'What makes LLM failures hard to catch with classic monitoring?', o: ['They are always 500 errors', 'They are often a 200 OK with a wrong or unhelpful answer', 'They only happen at night', 'They crash the server'], a: 1,
+    w: 'Status codes and exceptions look fine. You need traces with the content, plus quality checks.' },
+  { t: 'In an agent trace, what are the child spans of the agent run?', o: ['Only the final answer', 'Model calls and tool calls (and retrievals), each timed', 'HTTP headers', 'One span per token'], a: 1,
+    w: 'A trace is the agentic loop written down: each model call and tool call is a span under the run.' },
+  { t: 'Why log the prompt version on every model-call span?', o: ['It is required by the API', 'So a regression can be tied to the prompt change that caused it', 'It makes traces smaller', 'For billing'], a: 1,
+    w: 'Without it you see that quality dropped, but not which change did it.' },
+  { t: 'Why is emitting OpenTelemetry spans a good default?', o: ['It is the fastest', 'It is vendor-neutral, so you can switch or add tools without re-instrumenting', 'It needs no configuration', 'It removes PII automatically'], a: 1,
+    w: 'Phoenix, Langfuse and others ingest OTel, following the GenAI semantic conventions.' },
+  { t: 'An agent\'s input tokens grow at every step, even though the user sent one message. Why?', o: ['A bug in the SDK', 'Each step re-sends the whole conversation, including earlier tool results', 'Tokenizers are random', 'Output tokens count as input'], a: 1,
+    w: 'That is why step count multiplies cost. Caching the stable prefix and trimming old results help.' },
+  { t: 'Latency: mean 2.4 s, p50 1.5 s, p95 9.5 s. What should you tell the team?', o: ['All good, the median is fine', '1 in 20 users waits almost 10 s: find the slow tail', 'The mean is the key number', 'Buy a faster model'], a: 1,
+    w: 'Averages hide tails. Alert on p95/p99 and read the slowest traces.' },
+  { t: 'Streaming the response mostly improves…', o: ['Total cost', 'Time to first token, which is how fast it feels', 'End-to-end latency', 'Accuracy'], a: 1,
+    w: 'The total time is about the same. The user just sees words sooner.' },
+  { t: 'What is an online eval?', o: ['A unit test in CI', 'A judge or rule that scores a sample of live production traces', 'A user survey', 'A load test'], a: 1,
+    w: 'It is how you measure quality when failures don\'t throw errors.' },
+  { t: 'What should happen to a bad production trace you find?', o: ['Delete it', 'Add it to the eval dataset, so offline evals catch it next time', 'Ignore it, it was one user', 'Retrain the model'], a: 1,
+    w: 'That is the production feedback loop: every bad trace becomes a regression test.' },
+  { t: 'You need logging and cost tracking today, with zero code changes. Which integration style?', o: ['A custom OTel exporter', 'A proxy / gateway such as Helicone: change the base URL', 'Fine-tuning', 'A decorator on every function'], a: 1,
+    w: 'A proxy sees every model call. It can\'t see tool calls or code between calls, though.' },
+  { t: 'Trace data must stay in your own cloud. Which option fits?', o: ['Only SaaS tools', 'A self-hosted open-source tool, such as Langfuse or Phoenix', 'Log to the browser console', 'No observability'], a: 1,
+    w: 'Langfuse, Helicone and Phoenix are open source and self-hostable. LangSmith self-hosting is on enterprise plans.' },
+  { t: 'What is the main risk of logging full prompts and outputs?', o: ['Traces get too colourful', 'They contain PII and secrets: redact, limit access and set retention', 'It slows the model', 'Nothing'], a: 1,
+    w: 'Treat traces like production data, because they are production data.' },
+];
+Q.forEach((q, i) => { const n = q.o.length, r = (i * 3 + 2) % n; q.o = q.o.map((_, j) => q.o[(j + r) % n]); q.a = (q.a - r + n) % n; });
+let qr = 0, qd = 0;
+$('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
+  <div class="opts">${q.o.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quizcards').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const q = Q[card.dataset.i], ok = +b.dataset.j === q.a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === q.a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(q.w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+</body>
+</html>

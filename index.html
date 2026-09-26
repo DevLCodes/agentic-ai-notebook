@@ -147,17 +147,17 @@
 </style>
 <div class="page">
   <h1>Agentic AI: my learning roadmap</h1>
-  <p class="muted">Seven notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
+  <p class="muted">Eight notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
     Follow the red numbers for the suggested order. Tick "done" as you go (saved in this browser).</p>
 
-  <svg class="doodle web" viewBox="0 0 1100 920" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to seven topic pages in learning order">
+  <svg class="doodle web" viewBox="0 0 1240 1085" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to eight topic pages in learning order">
     <g id="spokes"></g>
     <g id="links"></g>
     <g filter="url(#rough)">
-      <ellipse cx="550" cy="450" rx="130" ry="62" style="fill:#ffe066; stroke:#222; stroke-width:2.6"/>
+      <ellipse cx="620" cy="540" rx="130" ry="62" style="fill:#ffe066; stroke:#222; stroke-width:2.6"/>
     </g>
-    <text class="t" x="550" y="448" text-anchor="middle" style="font-size:32px; fill:#1f3a93">Agentic AI</text>
-    <text x="550" y="478" text-anchor="middle" style="font-size:16px; fill:#555" id="progress"></text>
+    <text class="t" x="620" y="538" text-anchor="middle" style="font-size:32px; fill:#1f3a93">Agentic AI</text>
+    <text x="620" y="568" text-anchor="middle" style="font-size:16px; fill:#555" id="progress"></text>
     <g id="nodes"></g>
   </svg>
 
@@ -166,7 +166,7 @@
       <b>How the web reads</b>
       <ul>
         <li><b>Solid lines</b>: every topic hangs off the core idea</li>
-        <li><b class="red">Red dashed ring, 1 → 7</b>: the suggested order, with why each step leads to the next</li>
+        <li><b class="red">Red dashed ring, 1 → 8</b>: the suggested order, with why each step leads to the next</li>
         <li><b>Grey dotted lines</b>: topics that share ideas across the ring</li>
         <li>Each page ends with a <b>quiz</b>. Get the gold star, then tick done.</li>
       </ul>
@@ -175,7 +175,7 @@
       <b>Coming next (from the roadmap)</b>
       <ul>
         <li>Retrieval: chunking, hybrid search, reranking, RAG evals</li>
-        <li>Observability: tracing and spans, online evals, drift</li>
+        <li>Agent memory: short-term context, long-term stores, summarisation</li>
         <li>Production: latency, caching, cost and model routing</li>
         <li>Model layer: fine-tuning vs prompting, when to buy vs build</li>
       </ul>
@@ -187,21 +187,23 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const W = 270, H = 215, C = [550, 450];
+const W = 270, H = 215, C = [620, 540];
 const T = [
-  { id: 'loop', n: 1, href: 'agentic-loop.html', t: 'The Agentic Loop', s: 'the engine everything runs on', x: 550, y: 115, c: '#fff59d',
+  { id: 'loop', n: 1, href: 'agentic-loop.html', t: 'The Agentic Loop', s: 'the engine everything runs on', x: 440, y: 140, c: '#fff59d',
     leaves: [['4 stages, explained', 'diagram'], ['step-through simulator', 'simtitle'], ['stop_reason explorer', 'srpanel'], ['quiz', 'quiz']] },
-  { id: 'pat', n: 2, href: 'agent-patterns.html', t: 'Agent Patterns', s: 'RAG · ReAct · DAG · critic…', x: 863, y: 241, c: '#ffe0b8',
+  { id: 'pat', n: 2, href: 'agent-patterns.html', t: 'Agent Patterns', s: 'RAG · ReAct · DAG · critic…', x: 800, y: 140, c: '#ffe0b8',
     leaves: [['RAG vs RAG agent', 'rag'], ['ReAct trace', 'react'], ['planner–executor', 'plan'], ['DAG critical path', 'dag'], ['self-critique rounds', 'critic']] },
-  { id: 'arch', n: 3, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'Domain 1 · many agents', x: 955, y: 525, c: '#ffd1dc',
+  { id: 'arch', n: 3, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'Domain 1 · many agents', x: 1090, y: 390, c: '#ffd1dc',
     leaves: [['multi-agent orchestration', 's2'], ['subagents & context', 's3'], ['workflow handoffs', 's4'], ['Agent SDK hooks', 's5'], ['sessions & resumption', 's7']] },
-  { id: 'tools', n: 4, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'Domain 2 · how agents act', x: 740, y: 780, c: '#cdeafe',
+  { id: 'tools', n: 4, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'Domain 2 · how agents act', x: 1090, y: 690, c: '#cdeafe',
     leaves: [['tool interface design', 's1'], ['structured errors', 's2'], ['tool_choice', 's3'], ['MCP hosts · clients · servers', 'mcp-core'], ['built-in tools', 's5']] },
-  { id: 'fw', n: 5, href: 'frameworks.html', t: 'Framework Utilisation', s: 'CrewAI · ADK · LangChain…', x: 360, y: 780, c: '#e3d4f7',
+  { id: 'fw', n: 5, href: 'frameworks.html', t: 'Framework Utilisation', s: 'CrewAI · ADK · LangChain…', x: 800, y: 940, c: '#e3d4f7',
     leaves: [['CrewAI crews & flows', 'crew'], ['Google ADK agent trees', 'adk'], ['LangChain & LangGraph', 'lc'], ['AutoGen termination lab', 'ag'], ['framework picker', 'pick']] },
-  { id: 'evals', n: 6, href: 'testing-and-evals.html', t: 'Testing & Evals', s: 'prove it works', x: 145, y: 525, c: '#c8f0d8',
+  { id: 'evals', n: 6, href: 'testing-and-evals.html', t: 'Testing & Evals', s: 'prove it works', x: 440, y: 940, c: '#c8f0d8',
     leaves: [['metrics to track', 'metrics'], ['unit & integration tests', 'unit'], ['LLM-as-judge', 'model'], ['RAG & agent metrics', 'emetrics'], ['DeepEval · RAGAS', 'tools']] },
-  { id: 'gov', n: 7, href: 'ai-governance.html', t: 'AI Governance', s: 'ship it safely', x: 237, y: 241, c: '#fbe6a2',
+  { id: 'obs', n: 7, href: 'llm-observability.html', t: 'LLM Observability', s: 'watch it in production', x: 150, y: 690, c: '#d7f0f4',
+    leaves: [['reading agent traces', 'trace'], ['cost calculator', 'cost'], ['why p95, not the mean', 'cost'], ['production signals', 'prod'], ['LangSmith · Langfuse · …', 'tools']] },
+  { id: 'gov', n: 8, href: 'ai-governance.html', t: 'AI Governance', s: 'ship it safely', x: 150, y: 390, c: '#fbe6a2',
     leaves: [['prompt injection', 'sec-inj'], ['EU AI Act', 'comp-eu'], ['NIST · ISO 42001', 'comp-fw'], ['guardrail lab', 'gr-lab'], ['defence in depth', 'swiss']] },
 ];
 const byId = Object.fromEntries(T.map(t => [t.id, t]));
@@ -224,10 +226,11 @@ $('spokes').innerHTML = T.map(t => {
 
 // ring (learning order) + cross-links
 // [from, to, label, text-anchor, [x, y]]: explicit spots, the gaps between seven cards are too tight to compute
-const RING = [['loop', 'pat', 'six ways to shape the loop', 'start', [705, 100]], ['pat', 'arch', 'multi-agent, in depth', 'end', [885, 392]],
-  ['arch', 'tools', 'agents need tools', 'start', [888, 668]], ['tools', 'fw', 'frameworks wrap loop + tools', 'middle', [550, 908]],
-  ['fw', 'evals', 'measure which one wins', 'end', [214, 660]], ['evals', 'gov', 'red teaming = evals for attacks', 'start', [228, 392]]];
-const CROSS = [['gov', 'pat', 'critic ≈ output guardrail', 22], ['evals', 'arch', 'trace every subagent', -8, .3]];
+const RING = [['loop', 'pat', 'six ways to shape the loop', 'middle', [620, 20]], ['pat', 'arch', 'multi-agent, in depth', 'start', [985, 256]],
+  ['arch', 'tools', 'agents need tools', 'end', [940, 545]], ['tools', 'fw', 'frameworks wrap loop + tools', 'start', [985, 834]],
+  ['fw', 'evals', 'measure which one wins', 'middle', [620, 1076]], ['evals', 'obs', 'offline evals → live traffic', 'end', [255, 834]],
+  ['obs', 'gov', 'prod signals → guardrails', 'start', [300, 545]]];
+const CROSS = [['gov', 'pat', 'critic ≈ output guardrail', 22], ['obs', 'tools', 'trace every tool call', -8]];
 const seg = (p, q) => { const P = [p.x, p.y], Q = [q.x, q.y]; return [exitPt(P, Q, W / 2, H / 2, 10), exitPt(Q, P, W / 2, H / 2, 16)]; };
 $('links').innerHTML =
   RING.map(([a, b, l, anchor, [tx, ty]]) => {
