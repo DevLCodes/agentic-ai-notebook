@@ -147,10 +147,10 @@
 </style>
 <div class="page">
   <h1>Agentic AI: my learning roadmap</h1>
-  <p class="muted">Five notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
+  <p class="muted">Six notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
     Follow the red numbers for the suggested order. Tick "done" as you go (saved in this browser).</p>
 
-  <svg class="doodle web" viewBox="0 0 1100 810" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to five topic pages in learning order">
+  <svg class="doodle web" viewBox="0 0 1100 880" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to six topic pages in learning order">
     <g id="spokes"></g>
     <g id="links"></g>
     <g filter="url(#rough)">
@@ -166,7 +166,7 @@
       <b>How the web reads</b>
       <ul>
         <li><b>Solid lines</b>: every topic hangs off the core idea</li>
-        <li><b class="red">Red dashed ring, 1 → 5</b>: the suggested order, with why each step leads to the next</li>
+        <li><b class="red">Red dashed ring, 1 → 6</b>: the suggested order, with why each step leads to the next</li>
         <li><b>Grey dotted lines</b>: topics that share ideas across the ring</li>
         <li>Each page ends with a <b>quiz</b>. Get the gold star, then tick done.</li>
       </ul>
@@ -191,13 +191,15 @@ const W = 270, H = 215, C = [550, 430];
 const T = [
   { id: 'loop', n: 1, href: 'agentic-loop.html', t: 'The Agentic Loop', s: 'the engine everything runs on', x: 550, y: 125, c: '#fff59d',
     leaves: [['4 stages, explained', 'diagram'], ['step-through simulator', 'simtitle'], ['stop_reason explorer', 'srpanel'], ['quiz', 'quiz']] },
-  { id: 'arch', n: 2, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'Domain 1 · many agents', x: 940, y: 350, c: '#ffd1dc',
+  { id: 'arch', n: 2, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'Domain 1 · many agents', x: 910, y: 285, c: '#ffd1dc',
     leaves: [['multi-agent orchestration', 's2'], ['subagents & context', 's3'], ['workflow handoffs', 's4'], ['Agent SDK hooks', 's5'], ['sessions & resumption', 's7']] },
-  { id: 'tools', n: 3, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'Domain 2 · how agents act', x: 790, y: 685, c: '#cdeafe',
+  { id: 'tools', n: 3, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'Domain 2 · how agents act', x: 910, y: 590, c: '#cdeafe',
     leaves: [['tool interface design', 's1'], ['structured errors', 's2'], ['tool_choice', 's3'], ['MCP servers', 's4'], ['built-in tools', 's5']] },
-  { id: 'evals', n: 4, href: 'testing-and-evals.html', t: 'Testing & Evals', s: 'prove it works', x: 310, y: 685, c: '#c8f0d8',
+  { id: 'fw', n: 4, href: 'frameworks.html', t: 'Framework Utilisation', s: 'CrewAI · ADK · LangChain…', x: 550, y: 745, c: '#e3d4f7',
+    leaves: [['CrewAI crews & flows', 'crew'], ['Google ADK agent trees', 'adk'], ['LangChain & LangGraph', 'lc'], ['AutoGen termination lab', 'ag'], ['framework picker', 'pick']] },
+  { id: 'evals', n: 5, href: 'testing-and-evals.html', t: 'Testing & Evals', s: 'prove it works', x: 190, y: 590, c: '#c8f0d8',
     leaves: [['metrics to track', 'metrics'], ['unit & integration tests', 'unit'], ['LLM-as-judge', 'model'], ['RAG & agent metrics', 'emetrics'], ['DeepEval · RAGAS', 'tools']] },
-  { id: 'gov', n: 5, href: 'ai-governance.html', t: 'AI Governance', s: 'ship it safely', x: 160, y: 350, c: '#fbe6a2',
+  { id: 'gov', n: 6, href: 'ai-governance.html', t: 'AI Governance', s: 'ship it safely', x: 190, y: 285, c: '#fbe6a2',
     leaves: [['prompt injection', 'sec-inj'], ['EU AI Act', 'comp-eu'], ['NIST · ISO 42001', 'comp-fw'], ['guardrail lab', 'gr-lab'], ['defence in depth', 'swiss']] },
 ];
 const byId = Object.fromEntries(T.map(t => [t.id, t]));
@@ -219,16 +221,17 @@ $('spokes').innerHTML = T.map(t => {
 }).join('');
 
 // ring (learning order) + cross-links
-const RING = [['loop', 'arch', 'one loop → many agents'], ['arch', 'tools', 'agents need tools'],
-  ['tools', 'evals', 'test every tool'], ['evals', 'gov', 'red teaming = evals for attacks']];
-const CROSS = [['arch', 'gov', 'hooks = deterministic guardrails', -12], ['tools', 'gov', 'MCP security', -8, .72]];
+const RING = [['loop', 'arch', 'one loop → many agents', 'start'], ['arch', 'tools', 'agents need tools'],
+  ['tools', 'fw', 'frameworks wrap loop + tools', 'start'], ['fw', 'evals', 'measure which one wins', 'end'],
+  ['evals', 'gov', 'red teaming = evals for attacks']];
+const CROSS = [['arch', 'gov', 'hooks = deterministic guardrails', -12], ['tools', 'evals', 'unit-test every tool', -8, .3]];
 const seg = (p, q) => { const P = [p.x, p.y], Q = [q.x, q.y]; return [exitPt(P, Q, W / 2, H / 2, 10), exitPt(Q, P, W / 2, H / 2, 16)]; };
 $('links').innerHTML =
-  RING.map(([a, b, l]) => {
+  RING.map(([a, b, l, anchor = 'middle']) => {
     const [s, e] = seg(byId[a], byId[b]), bend = -40, mx = (s[0] + e[0]) / 2, my = (s[1] + e[1]) / 2;
     const dx = e[0] - s[0], dy = e[1] - s[1], L = Math.hypot(dx, dy), lx = mx - dy / L * (bend - 22), ly = my + dx / L * (bend - 22);
     return `<path d="${curve(s, e, bend)}" style="fill:none; stroke:#c0392b; stroke-width:2.4; stroke-dasharray:8 6" marker-end="url(#arrR)"/>
-      <text x="${lx}" y="${ly + 5}" text-anchor="middle" style="font-size:16px; fill:#c0392b">${esc(l)}</text>`;
+      <text x="${lx}" y="${ly + 5}" text-anchor="${anchor}" style="font-size:16px; fill:#c0392b">${esc(l)}</text>`;
   }).join('') +
   CROSS.map(([a, b, l, off, at = .5]) => {
     const [s, e] = seg(byId[a], byId[b]), mx = s[0] + (e[0] - s[0]) * at, my = s[1] + (e[1] - s[1]) * at;

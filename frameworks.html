@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Framework Utilisation: notebook</title>
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  .dots { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .dot { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #444; display: grid; place-items: center;
+         font: 12px/1 var(--mono); background: #fff; transition: opacity .2s; }
+  .dot.w { background: var(--blue); } .dot.c { background: var(--pink); } .dot.u { background: var(--tan); }
+  .dot.off { opacity: .18; } .dot.stop { outline: 3px solid var(--red); outline-offset: 2px; }
+  .bar { height: 14px; background: var(--ink); border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  table.hand tr.x td { opacity: .4; }
+  .layer { cursor: pointer; }
+  .layer:hover rect, .layer:focus rect { fill: var(--hl); }
+  .layer.on rect { fill: var(--hl); stroke: var(--red); }
+  .layer:focus { outline: none; }
+  .out pre { margin: 6px 0 4px; }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="tool-design-mcp.html">← Domain 2 · Tool Design &amp; MCP</a><a href="testing-and-evals.html">Testing &amp; Evals →</a></p>
+  <h1>Framework Utilisation</h1>
+  <p class="muted">Six frameworks, one custom loop, and how to make them work together.
+    <span class="hl">Every framework is the same agentic loop with opinions on top.</span> Learn the opinions, and you can debug any of them.</p>
+
+  <!-- map -->
+  <svg class="doodle" viewBox="0 0 900 250" role="img" aria-label="Map of this page. Click a box to jump to its section.">
+    <text class="t" x="450" y="28" text-anchor="middle" style="fill:#222">Framework Utilisation</text>
+    <g id="mapboxes"></g>
+    <text class="p" x="10" y="246" style="font-size:13px">↑ click any box to jump to it</text>
+  </svg>
+
+  <!-- ============ why ============ -->
+  <h2 id="why">0 · What a framework actually gives you</h2>
+  <div class="cols">
+    <svg class="doodle" viewBox="0 0 460 300" role="img" aria-label="The agentic loop in the centre, surrounded by six things frameworks add: prompt templates, tool schemas from functions, orchestration, state and memory, human in the loop, tracing">
+      <g filter="url(#rough)">
+        <circle cx="230" cy="150" r="66" style="fill:#fff59d; stroke:#222; stroke-width:2.4"/>
+        <path class="s" d="M230,84 V52 M287,117 L352,82 M287,183 L352,218 M230,216 V248 M173,183 L108,218 M173,117 L108,82"/>
+      </g>
+      <a href="agentic-loop.html"><text class="t" x="230" y="146" text-anchor="middle" style="font-size:20px">the agentic</text>
+        <text class="t" x="230" y="170" text-anchor="middle" style="font-size:20px">loop ①</text></a>
+      <text x="230" y="40" text-anchor="middle">prompt templates</text>
+      <text x="360" y="72">tool schema</text><text x="360" y="90">from functions</text>
+      <text x="360" y="230">orchestration</text>
+      <text x="230" y="270" text-anchor="middle">state &amp; memory</text>
+      <text x="100" y="230" text-anchor="end">human-in-the-loop</text>
+      <text x="100" y="80" text-anchor="end">tracing / dev UI</text>
+    </svg>
+    <div>
+      <ul style="margin:0 0 20px; padding-left:22px">
+        <li><b>Frameworks buy you speed</b>: tool schemas from type hints, retries, streaming, state, and a dev UI.</li>
+        <li><b>They cost you visibility</b>: another layer between you and the <code>messages</code> array, plus version churn.</li>
+        <li>Each one has a <span class="hl">core idea</span>. CrewAI: roles. ADK: agent trees. LangGraph: state graphs. LlamaIndex: typed events. SK: plugins and filters. AutoGen: conversations.</li>
+      </ul>
+      <div class="sticky pink">
+        <b>Read this first</b><br>
+        These libraries change every month. The snippets show the <b>shape</b> of each API as of 2026, so check the current docs before copying one.
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PART A ============ -->
+  <p class="part">Part A · The frameworks</p>
+
+  <!-- CrewAI -->
+  <h2 id="crew">A1 · CrewAI orchestration</h2>
+  <p>Core idea: <span class="hl">a crew of role-playing agents working through a list of tasks.</span> You describe <i>who</i> (role, goal,
+    backstory) and <i>what</i> (tasks with an <code>expected_output</code>), and a <b>Process</b> decides the order.</p>
+  <div>
+<pre>from crewai import Agent, Task, Crew, Process
+
+researcher = Agent(role="Weather researcher",
+    goal="Find the afternoon forecast",
+    backstory="Checks two sources before answering.",
+    tools=[forecast_tool])
+advisor = Agent(role="Advisor", goal="One clear recommendation",
+    backstory="Blunt and practical.")
+
+research = Task(description="Hourly forecast for {city}",
+    expected_output="rain hours as a list", agent=researcher)
+advise = Task(description="Umbrella or not?",
+    expected_output="yes/no + one reason", agent=advisor,
+    context=[research])        <span class="c"># gets research's output</span>
+
+crew = Crew(agents=[researcher, advisor], tasks=[research, advise],
+            process=Process.sequential)
+crew.kickoff(inputs={"city": "Paris"})</pre>
+    <div class="box">
+      <b class="ink">✎ Try it: pick a process</b>
+      <div class="row"><button class="proc" data-p="seq" aria-pressed="true">Process.sequential</button>
+        <button class="proc" data-p="hier">Process.hierarchical</button></div>
+      <svg class="doodle" viewBox="0 0 420 190" aria-hidden="true" style="max-width:540px">
+        <g id="p-seq">
+          <g filter="url(#rough)"><rect class="sb" x="6" y="60" width="118" height="64" rx="8"/><rect class="sb" x="151" y="60" width="118" height="64" rx="8"/><rect class="sb" x="296" y="60" width="118" height="64" rx="8"/>
+            <path class="s" d="M126,92 H147" marker-end="url(#arr)"/><path class="s" d="M271,92 H292" marker-end="url(#arr)"/></g>
+          <text x="65" y="88" text-anchor="middle">Task 1</text><text class="p" x="65" y="110" text-anchor="middle" style="font-size:13px">researcher</text>
+          <text x="210" y="88" text-anchor="middle">Task 2</text><text class="p" x="210" y="110" text-anchor="middle" style="font-size:13px">advisor</text>
+          <text x="355" y="88" text-anchor="middle">Task 3</text><text class="p" x="355" y="110" text-anchor="middle" style="font-size:13px">writer</text>
+          <text class="g" x="210" y="160" text-anchor="middle">fixed order · output of each → context of the next</text>
+        </g>
+        <g id="p-hier" style="display:none">
+          <g filter="url(#rough)"><rect class="tan" x="140" y="6" width="140" height="50" rx="8"/>
+            <rect class="sb" x="6" y="120" width="118" height="50" rx="8"/><rect class="sb" x="151" y="120" width="118" height="50" rx="8"/><rect class="sb" x="296" y="120" width="118" height="50" rx="8"/>
+            <path class="s" d="M180,58 L70,116" marker-end="url(#arr)"/><path class="s" d="M210,58 V116" marker-end="url(#arr)"/><path class="s" d="M240,58 L350,116" marker-end="url(#arr)"/></g>
+          <text x="210" y="37" text-anchor="middle">manager (manager_llm)</text>
+          <text x="65" y="150" text-anchor="middle">researcher</text><text x="210" y="150" text-anchor="middle">advisor</text><text x="355" y="150" text-anchor="middle">writer</text>
+          <text class="r" x="300" y="80" style="font-size:13px">delegates + reviews</text>
+        </g>
+      </svg>
+      <div class="out" id="proc-out"></div>
+    </div>
+  </div>
+  <div>
+<pre><span class="c"># Flows: deterministic, event-driven control around crews</span>
+from crewai.flow.flow import Flow, start, listen, router
+
+class Trip(Flow):
+    @start()
+    def pick_city(self):
+        self.state["city"] = "Paris"
+
+    @listen(pick_city)
+    def forecast(self):
+        self.state["rain"] = WeatherCrew().crew().kickoff(
+            inputs={"city": self.state["city"]}).raw
+
+    @router(forecast)
+    def decide(self):
+        return "wet" if "yes" in self.state["rain"] else "dry"
+
+    @listen("wet")
+    def pack_umbrella(self): ...</pre>
+    <div class="sticky">
+      <b>Crews vs Flows</b>
+      <ul>
+        <li><b>Crew</b>: autonomy. The agents collaborate and may delegate (<code>allow_delegation=True</code>).</li>
+        <li><b>Flow</b>: control. Plain Python steps with shared <code>state</code> and branches through <code>@router</code>, and a crew can run as one step.</li>
+        <li>Production pattern: <span class="hl">a Flow on the outside, small crews inside</span>.</li>
+        <li>Also useful: <code>memory=True</code>, <code>human_input=True</code> on a task, and <code>output_pydantic</code> for typed results.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ADK -->
+  <h2 id="adk">A2 · Google ADK (Agent Development Kit)</h2>
+  <p>Core idea: <span class="hl">a tree of agents.</span> <code>LlmAgent</code>s do the thinking. <b>Workflow agents</b>
+    (<code>SequentialAgent</code>, <code>ParallelAgent</code>, <code>LoopAgent</code>) arrange them <i>deterministically</i>, with no LLM involved.
+    It's model-agnostic but built for Gemini and Google Cloud.</p>
+  <div>
+<pre>from google.adk.agents import Agent, SequentialAgent
+
+def get_forecast(city: str) -> dict:
+    """Hourly rain forecast for a city."""   <span class="c"># docstring + hints = schema</span>
+    return {"rain_hours": ["15:00", "16:00"]}
+
+weather = Agent(name="weather", model="gemini-2.5-flash",
+    instruction="Answer weather questions with get_forecast.",
+    tools=[get_forecast],
+    output_key="forecast")          <span class="c"># reply → session.state["forecast"]</span>
+
+advisor = Agent(name="advisor", model="gemini-2.5-flash",
+    instruction="Given {forecast}, say umbrella yes or no.")
+
+root_agent = SequentialAgent(name="trip", sub_agents=[weather, advisor])
+<span class="c"># adk web   → local dev UI with an event trace
+# adk eval  → run eval sets · deploy: Cloud Run / Vertex AI Agent Engine</span></pre>
+    <div class="box">
+      <b class="ink">✎ Try it: how should the children run?</b>
+      <div class="row" id="adk-chips"></div>
+      <div class="out" id="adk-out" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="sticky blue">
+    <b>The ADK runtime pieces</b>
+    <ul>
+      <li><b>Runner</b> drives the loop and yields <b>Events</b>: every model reply, tool call and state change.</li>
+      <li><b>SessionService</b> (in-memory, database or Vertex) stores <code>session.state</code>, where <code>output_key</code> writes and <code>{key}</code> reads.</li>
+      <li><b>Callbacks</b> such as <code>before_model_callback</code> and <code>before_tool_callback</code> are your guardrails and logging hooks.</li>
+      <li><b>AgentTool</b> wraps an agent as a tool. <b>MCPToolset</b> connects to MCP servers. A2A support lets agents talk across services.</li>
+    </ul>
+  </div>
+
+  <!-- LangChain -->
+  <h2 id="lc">A3 · LangChain architecture (and LangGraph)</h2>
+  <p>Core idea: <span class="hl">everything is a Runnable.</span> Prompts, models, parsers and retrievers all share <code>invoke</code>,
+    <code>stream</code> and <code>batch</code>, so they chain with <code>|</code> (LCEL). For agents, <b>LangGraph</b> adds state, cycles and checkpoints.
+    Click a layer to see what it does.</p>
+  <div>
+    <div class="cols">
+      <svg class="doodle" viewBox="0 0 440 300" role="group" aria-label="LangChain layer stack" id="layers"></svg>
+      <div class="out" id="layer-out" aria-live="polite"></div>
+    </div>
+    <div>
+<pre><span class="c"># LCEL: a pipe of Runnables</span>
+chain = prompt | model | StrOutputParser()
+chain.invoke({"city": "Paris"})       <span class="c"># or .stream / .batch</span>
+
+<span class="c"># Agent (LangChain 1.x): a prebuilt LangGraph agent</span>
+from langchain.agents import create_agent
+agent = create_agent(model="anthropic:claude-sonnet-5",
+                     tools=[get_forecast],
+                     system_prompt="Answer umbrella questions.")
+agent.invoke({"messages": [{"role": "user",
+                            "content": "Umbrella in Paris?"}]})</pre>
+<pre><span class="c"># LangGraph: the loop, drawn as a graph</span>
+from langgraph.graph import StateGraph, START, END
+g = StateGraph(State)
+g.add_node("model", call_model)
+g.add_node("tools", run_tools)
+g.add_edge(START, "model")
+g.add_conditional_edges("model",
+    lambda s: "tools" if s["messages"][-1].tool_calls else END)
+g.add_edge("tools", "model")
+app = g.compile(checkpointer=saver)   <span class="c"># resume · interrupt() · time travel</span></pre>
+    </div>
+  </div>
+
+  <!-- LlamaIndex -->
+  <h2 id="li">A4 · LlamaIndex Workflows</h2>
+  <p>Core idea: <span class="hl">steps that listen for typed events.</span> A step's type hint <i>is</i> its wiring: it runs when an event of
+    its input type appears, and whatever event it returns decides what runs next. It's async-first and pairs naturally with LlamaIndex's RAG tools.</p>
+  <div>
+<pre>from llama_index.core.workflow import (Workflow, step, Event,
+    StartEvent, StopEvent, Context)
+
+class Retrieved(Event):
+    nodes: list
+
+class Retry(Event):
+    query: str
+
+class RAGFlow(Workflow):
+    @step
+    async def retrieve(self, ctx: Context,
+                       ev: StartEvent | Retry) -> Retrieved:
+        await ctx.store.set("query", ev.query)
+        return Retrieved(nodes=retriever.retrieve(ev.query))
+
+    @step
+    async def answer(self, ctx: Context,
+                     ev: Retrieved) -> StopEvent | Retry:
+        if not ev.nodes:                        <span class="c"># loop back</span>
+            return Retry(query=rewrite(await ctx.store.get("query")))
+        return StopEvent(result=await llm.acomplete(...))
+
+result = await RAGFlow(timeout=60).run(query="Umbrella policy?")</pre>
+    <div class="cols">
+      <svg class="doodle" viewBox="0 0 440 250" role="img" aria-label="Event flow: StartEvent to retrieve, Retrieved event to answer, answer returns StopEvent or Retry which loops back to retrieve">
+        <g filter="url(#rough)">
+          <rect class="tan" x="10" y="20" width="120" height="44" rx="20"/>
+          <rect class="sb" x="160" y="20" width="120" height="44" rx="6"/>
+          <rect class="sb" x="160" y="130" width="120" height="44" rx="6"/>
+          <rect class="tan" x="310" y="130" width="120" height="44" rx="20"/>
+          <path class="s" d="M132,42 H156" marker-end="url(#arr)"/><path class="s" d="M220,66 V126" marker-end="url(#arr)"/><path class="s" d="M282,152 H306" marker-end="url(#arr)"/>
+          <path class="sr" d="M160,160 C80,180 70,70 156,50" marker-end="url(#arr)"/>
+        </g>
+        <text x="70" y="47" text-anchor="middle">StartEvent</text>
+        <text x="220" y="47" text-anchor="middle">@step retrieve</text>
+        <text class="p" x="228" y="100" style="font-size:13px">Retrieved</text>
+        <text x="220" y="157" text-anchor="middle">@step answer</text>
+        <text x="370" y="157" text-anchor="middle">StopEvent</text>
+        <text class="r" x="36" y="130" style="font-size:13px">Retry</text>
+        <text class="p" x="10" y="220" style="font-size:14px">no router code: the return type is the edge</text>
+      </svg>
+      <div class="sticky mint">
+        <b>Context tricks</b>
+        <ul>
+          <li><code>ctx.store</code>: shared state across steps (older versions: <code>ctx.set</code> / <code>ctx.get</code>)</li>
+          <li><code>ctx.send_event</code> + <code>ctx.collect_events</code>: fan out, then wait for all</li>
+          <li><code>ctx.write_event_to_stream</code>: stream progress to a UI</li>
+          <li><code>@step(num_workers=4)</code>: run a step concurrently</li>
+          <li>Ready-made agents: <code>FunctionAgent</code>, <code>ReActAgent</code>, and <code>AgentWorkflow</code> for handoffs</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Semantic Kernel -->
+  <h2 id="sk">A5 · Semantic Kernel usage</h2>
+  <p>Core idea: <span class="hl">a Kernel holding AI services and plugins.</span> A plugin is a class of <code>@kernel_function</code>s
+    (C#: <code>[KernelFunction]</code>), and <b>filters</b> wrap every call like middleware. It's Microsoft's enterprise option for C#, Python and Java, with
+    Azure first-class.</p>
+  <div>
+<pre>from semantic_kernel.agents import ChatCompletionAgent
+from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+from semantic_kernel.functions import kernel_function
+
+class WeatherPlugin:
+    @kernel_function(description="Hourly rain forecast for a city")
+    def get_forecast(self, city: str) -> str:
+        return '{"rain_hours": ["15:00", "16:00"]}'
+
+agent = ChatCompletionAgent(service=AzureChatCompletion(),
+    name="advisor", instructions="Answer umbrella questions.",
+    plugins=[WeatherPlugin()])
+reply = await agent.get_response(messages="Umbrella in Paris?")
+<span class="c"># outside agents: FunctionChoiceBehavior.Auto() in the
+# execution settings lets the model call kernel functions</span></pre>
+<pre><span class="c"># a function-invocation filter = middleware around every tool call</span>
+@kernel.filter(FilterTypes.FUNCTION_INVOCATION)
+async def approval(context, next):
+    if context.function.plugin_name in {"email", "files"} \
+            and not await ask_human(context):
+        context.result = FunctionResult(
+            function=context.function.metadata, value="denied")
+        return                        <span class="c"># next() never called</span>
+    await next(context)               <span class="c"># run the function</span></pre>
+  </div>
+  <h3>✎ Try it: the filter lab</h3>
+  <p class="muted" style="margin-bottom:6px">The model asks for four function calls. Turn filters on and see what actually happens.</p>
+  <div class="row" id="sk-filters">
+    <label class="chk"><input type="checkbox" value="log"> log every call</label>
+    <label class="chk"><input type="checkbox" value="approve"> approve side effects</label>
+    <label class="chk"><input type="checkbox" value="redact"> redact PII in arguments</label>
+  </div>
+  <table class="hand" id="sk-table"></table>
+  <div class="out" id="sk-out" aria-live="polite"></div>
+  <div class="sticky blue">
+    <b>Where SK is going</b><br>
+    SK also has <code>AgentGroupChat</code>, orchestration patterns, and a <b>Process framework</b> for long-running business
+    workflows. Microsoft is merging SK and AutoGen ideas into the <b>Microsoft Agent Framework</b>, so check which one new
+    projects should start on.
+  </div>
+
+  <!-- AutoGen -->
+  <h2 id="ag">A6 · AutoGen configuration</h2>
+  <p>Core idea: <span class="hl">agents that talk to each other in a team until a termination condition fires.</span> From v0.4 it's layered:
+    <code>autogen-core</code> (an event-driven actor runtime), <code>autogen-agentchat</code> (agents and teams) and <code>autogen-ext</code>
+    (model clients, code executors, MCP).</p>
+  <div>
+<pre>from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_agentchat.conditions import (
+    TextMentionTermination, MaxMessageTermination)
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+
+model = OpenAIChatCompletionClient(model="gpt-4o")
+writer = AssistantAgent("writer", model_client=model,
+    tools=[get_forecast], system_message="Draft the answer.")
+critic = AssistantAgent("critic", model_client=model,
+    system_message="Review it. Say TERMINATE when it's good.")
+
+stop = TextMentionTermination("TERMINATE") | MaxMessageTermination(12)
+team = RoundRobinGroupChat([writer, critic], termination_condition=stop)
+result = await team.run(task="Umbrella in Paris this afternoon?")</pre>
+    <div>
+      <table class="hand">
+        <tr><th>config knob</th><th>what it controls</th></tr>
+        <tr><td><b>team type</b></td><td><code>RoundRobinGroupChat</code> (take turns), <code>SelectorGroupChat</code> (a model picks the next speaker),
+          <code>Swarm</code> (handoffs), <code>MagenticOneGroupChat</code> (an orchestrator with a plan)</td></tr>
+        <tr><td><b>termination</b></td><td>combine with <code>|</code> (either) and <code>&amp;</code> (both). Always keep a backstop.</td></tr>
+        <tr><td><b>model_client</b></td><td>OpenAI, Azure, Anthropic, Ollama and more, from <code>autogen-ext</code></td></tr>
+        <tr><td><b>code execution</b></td><td><code>CodeExecutorAgent</code> + <code>DockerCommandLineCodeExecutor</code>, never local without a sandbox</td></tr>
+        <tr><td><b>legacy 0.2</b></td><td><code>llm_config</code>, <code>human_input_mode</code>, <code>max_consecutive_auto_reply</code>, <code>is_termination_msg</code>. Continued in the AG2 fork.</td></tr>
+      </table>
+    </div>
+  </div>
+  <h3>✎ Try it: the termination lab</h3>
+  <div class="box">
+    <div class="row">scenario:
+      <button class="agsc" data-s="ok" aria-pressed="true">critic approves at message 7</button>
+      <button class="agsc" data-s="never">they never agree</button></div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="ag-text" checked> TextMentionTermination("TERMINATE")</label>
+      <label class="chk"><input type="checkbox" id="ag-max" checked> MaxMessageTermination(<b id="ag-nv"></b>)</label>
+      <input type="range" id="ag-n" min="4" max="20" value="12" aria-label="max messages">
+    </div>
+    <div class="row">combine with:
+      <button class="agop" data-o="or" aria-pressed="true">|  (either fires)</button>
+      <button class="agop" data-o="and">&amp;  (both must fire)</button></div>
+    <div class="dots" id="ag-dots" aria-hidden="true"></div>
+    <p class="muted" style="margin:0; font-size:15px">u = task · w = writer · c = critic · each message ≈ one model call</p>
+    <div class="out" id="ag-out" aria-live="polite"></div>
+  </div>
+
+  <!-- ============ PART B ============ -->
+  <p class="part">Part B · Beyond one framework</p>
+
+  <h2 id="custom">B1 · Custom agent loops</h2>
+  <p>Sometimes the best framework is <span class="hl">15 lines of SDK code you fully understand</span>. This is the whole loop from
+    <a href="agentic-loop.html">page ①</a>, with no hidden prompts or retries and nothing to upgrade.</p>
+  <div>
+<pre>import anthropic
+client = anthropic.Anthropic()
+messages = [{"role": "user", "content": task}]
+
+for _ in range(MAX_STEPS):          <span class="c"># backstop only, not the exit</span>
+    r = client.messages.create(model="claude-sonnet-5",
+            max_tokens=1024, tools=TOOLS, messages=messages)
+    messages.append({"role": "assistant", "content": r.content})
+    if r.stop_reason != "tool_use":
+        break                       <span class="c"># end_turn (handle the others)</span>
+    messages.append({"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": b.id,
+         "content": run(b.name, b.input)}
+        for b in r.content if b.type == "tool_use"]})</pre>
+    <table class="hand">
+      <tr><th>you now own…</th><th>a framework gives you</th></tr>
+      <tr><td>tool schemas</td><td>generated from type hints and docstrings</td></tr>
+      <tr><td>retries, backoff, timeouts</td><td>built in</td></tr>
+      <tr><td>state + resume after a crash</td><td>checkpointers and session services</td></tr>
+      <tr><td>pause for a human</td><td><code>interrupt()</code>, confirmation hooks</td></tr>
+      <tr><td>tracing</td><td>a dev UI plus OpenTelemetry out of the box</td></tr>
+      <tr><td>multi-agent routing</td><td>teams, handoffs, workflow agents</td></tr>
+    </table>
+  </div>
+  <div class="cols">
+    <div class="sticky mint">
+      <b>Custom wins when…</b>
+      <ul>
+        <li>the flow is simple, like one agent with a few tools</li>
+        <li>you need exact control of prompts, caching and tokens</li>
+        <li>you can't afford dependency churn in production</li>
+        <li>you're learning, so build it once by hand to see what frameworks hide</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>A framework wins when…</b>
+      <ul>
+        <li>you need durable state, pause/resume, or long-running jobs</li>
+        <li>many agents and routing patterns are involved</li>
+        <li>the team needs shared conventions and a dev UI</li>
+        <li>its integrations (RAG, vector stores, MCP) save you weeks</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="integ">B2 · Framework integration</h2>
+  <p>Real systems mix frameworks. <span class="hl">Keep tools, prompts and evals framework-free</span>, and let standard protocols do the joining.</p>
+  <div class="cols">
+    <table class="hand">
+      <tr><th>pattern</th><th>use it for</th></tr>
+      <tr><td>🔌 <b>MCP</b></td><td>write a tool once as an MCP server, and every framework can consume it:
+        LangChain <code>langchain-mcp-adapters</code>, ADK <code>MCPToolset</code>, CrewAI <code>MCPServerAdapter</code>,
+        LlamaIndex <code>McpToolSpec</code>, AutoGen <code>McpWorkbench</code>, SK MCP plugins</td></tr>
+      <tr><td>🤝 <b>A2A</b></td><td>agent-to-agent over HTTP between services, teams or companies. Each agent publishes an <i>agent card</i>.</td></tr>
+      <tr><td>🧩 <b>agent-as-tool</b></td><td>wrap one agent or crew as a callable tool inside another framework, in the same process</td></tr>
+      <tr><td>🔭 <b>OpenTelemetry</b></td><td>one trace across frameworks, sent to Langfuse, LangSmith, Phoenix or Datadog</td></tr>
+      <tr><td>🔀 <b>LiteLLM</b></td><td>one model interface across providers (CrewAI uses it internally, and ADK has <code>LiteLlm</code>)</td></tr>
+    </table>
+    <div class="sticky">
+      <b>Integration traps</b>
+      <ul>
+        <li><b>Loops inside loops</b>: an agent inside another framework's agent doubles the retries, the memories and the costs.</li>
+        <li><b>Two sources of truth</b> for state. Pick one owner.</li>
+        <li><b>Lock-in by stealth</b>: prompts buried in framework classes. Keep them in files you version.</li>
+        <li><b>Version drift</b>: pin versions, and re-run the eval suite on every upgrade.</li>
+      </ul>
+    </div>
+  </div>
+  <h3>✎ Try it: which pattern? <span class="tally" id="t-int"></span></h3>
+  <div class="cards" id="sort-int"></div>
+
+  <h2 id="pick">B3 · The framework picker</h2>
+  <p>Choose a language, then tick what you need. It gives you a shortlist, not a verdict. <span class="hl">Build the same thin slice in
+    the top two and run the same eval set</span> (<a href="testing-and-evals.html">Testing &amp; Evals</a>).</p>
+  <div class="box">
+    <div class="row" id="pk-lang">language: </div>
+    <div id="pk-needs" style="columns: 2; column-gap: 26px; margin: 8px 0"></div>
+    <table class="hand" id="pk-table"></table>
+    <div class="out" id="pk-out" aria-live="polite"></div>
+    <p class="muted" style="margin:6px 0 0; font-size:14px">Scores are my rough rules of thumb, and SDK language lists are as of 2026.</p>
+  </div>
+
+  <h2 id="rosetta">B4 · Rosetta stone: one concept, seven dialects</h2>
+  <div class="row" id="rs-chips"></div>
+  <table class="hand" id="rs-table"></table>
+
+  <h3 id="whose">✎ Try it: whose API is this? <span class="tally" id="t-who"></span></h3>
+  <div class="cards" id="sort-who"></div>
+
+  <!-- ============ Quiz ============ -->
+  <h2 id="quiz">✎ Pop quiz</h2>
+  <div class="cards quiz" id="quizcards" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— any framework is just someone else's agentic loop</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const press = (sel, b) => document.querySelectorAll(sel).forEach(x => x.setAttribute('aria-pressed', x === b));
+
+// ---------- map ----------
+const MAP = [['CrewAI orchestration', 'crew'], ['Google ADK', 'adk'], ['LangChain architecture', 'lc'], ['LlamaIndex Workflows', 'li'],
+  ['Semantic Kernel', 'sk'], ['AutoGen configuration', 'ag'], ['Custom agent loops', 'custom'], ['Framework integration', 'integ']];
+$('mapboxes').innerHTML = MAP.map(([l, id], i) => {
+  const x = 10 + (i % 4) * 222, y = 50 + Math.floor(i / 4) * 92, w = 204, h = 70;
+  return `<a href="#${id}"><rect class="${i < 6 ? 'tan' : 'sb'}" x="${x}" y="${y}" width="${w}" height="${h}" rx="9" filter="url(#rough)"/>
+    <text x="${x + w / 2}" y="${y + h / 2 + 6}" text-anchor="middle" style="font-size:17px">${l}</text></a>`;
+}).join('');
+
+// ---------- generic sorter ----------
+function sorter(el, tallyEl, opts, cards) {
+  let right = 0, done = 0;
+  $(el).innerHTML = cards.map((c, i) => `<div class="card" data-i="${i}"><p class="q">${md(c.t)}</p>
+    <div class="opts">${opts.map(([k, l]) => `<button data-k="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="why"></div></div>`).join('');
+  $(el).onclick = e => {
+    const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+    if (!b || card.classList.contains('done')) return;
+    const c = cards[card.dataset.i], ok = b.dataset.k === c.a;
+    card.classList.add('done');
+    card.querySelectorAll('.opts button').forEach(x => { x.disabled = true; if (x.dataset.k === c.a) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(c.why)}`;
+    done++; right += ok;
+    $(tallyEl).textContent = `(${right}/${done} right${done === cards.length ? ', all done' : ''})`;
+  };
+}
+
+// ---------- A1 · CrewAI process ----------
+const PROC = {
+  seq: 'Tasks run **in list order**. Each task\'s output becomes `context` for later ones. It\'s predictable and cheap, and the default. Pick it when you already know the steps.',
+  hier: 'A **manager** (`manager_llm=` or `manager_agent=`) plans, delegates each task to the best-fit agent, and reviews results. It\'s more flexible, but uses more tokens and is less predictable.',
+};
+document.querySelectorAll('.proc').forEach(b => b.onclick = () => {
+  press('.proc', b); const p = b.dataset.p;
+  $('p-seq').style.display = p === 'seq' ? '' : 'none'; $('p-hier').style.display = p === 'hier' ? '' : 'none';
+  $('proc-out').innerHTML = md(PROC[p]).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+});
+document.querySelector('.proc').click();
+
+// ---------- A2 · ADK workflow agents ----------
+const ADK = [
+  ['SequentialAgent', '[weather] ──▶ [advisor] ──▶ [writer]',
+    'Fixed order. Each child writes `output_key` into session state, and the next reads it with `{key}` in its instruction.', 'pipelines: fetch → analyse → write'],
+  ['ParallelAgent', '      ┌─▶ [flights] ─┐\n[in] ─┼─▶ [hotels]  ─┼─▶ [merge]\n      └─▶ [weather] ─┘',
+    'All children at once, on branches of the same session. Give each a different `output_key`, then add a merge agent after (wrap both in a SequentialAgent).', 'independent lookups'],
+  ['LoopAgent', '┌─▶ [draft] ──▶ [critic] ─┐\n└──── until escalate ─────┘',
+    'Repeats the children until `max_iterations`, or until a child sets `escalate = True` (usually from a tool through `tool_context.actions`).', 'draft → critique → refine'],
+  ['LlmAgent + sub_agents', '             ┌─▶ [billing]\n[router LLM] ┼─▶ [tech]\n             └─▶ [returns]',
+    'The model decides: it calls `transfer_to_agent` based on each child\'s `description`. It\'s flexible but non-deterministic, so write sharp descriptions.', 'help-desk triage'],
+];
+$('adk-chips').innerHTML = ADK.map((a, i) => `<button class="adkc" data-i="${i}">${a[0]}</button>`).join('');
+$('adk-chips').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return; press('.adkc', b);
+  const [n, d, t, u] = ADK[b.dataset.i];
+  $('adk-out').innerHTML = `<b>${n}</b><pre>${esc(d)}</pre>${md(t)}<br><span class="muted">good for: ${esc(u)}</span>`;
+};
+document.querySelector('.adkc').click();
+
+// ---------- A3 · LangChain layers ----------
+const LAYERS = [
+  ['LangSmith', 'observe', 'Traces every run, plus datasets, evals and a prompt hub. It works even without LangChain.'],
+  ['LangGraph', 'orchestrate', 'Stateful graphs: nodes, edges, cycles, checkpointers, `interrupt()` for humans, and streaming. It is the runtime under modern LangChain agents.'],
+  ['langchain', 'agents', '`create_agent` (a prebuilt LangGraph agent) with **middleware** for summarisation, human approval and guardrails.'],
+  ['integrations', 'providers', 'One package per provider (`langchain-anthropic`, `langchain-openai`, vector stores, loaders), plus `langchain-community`.'],
+  ['langchain-core', 'interfaces', 'The `Runnable` interface (`invoke`, `stream`, `batch`, `ainvoke`), messages, prompts, tools, output parsers, and the LCEL `|` pipe.'],
+];
+$('layers').innerHTML = LAYERS.map(([n, r], i) => {
+  const y = 8 + i * 56, w = 300 + i * 30, x = 220 - w / 2;
+  return `<g class="layer" data-i="${i}" tabindex="0" role="button" aria-label="${n}">
+    <rect class="sb" x="${x}" y="${y}" width="${w}" height="48" rx="8" filter="url(#rough)"/>
+    <text class="t" x="220" y="${y + 23}" text-anchor="middle" style="font-size:18px">${n}</text>
+    <text class="p" x="220" y="${y + 41}" text-anchor="middle" style="font-size:13px">${r}</text></g>`;
+}).join('');
+function showLayer(i) {
+  document.querySelectorAll('.layer').forEach(g => g.classList.toggle('on', +g.dataset.i === i));
+  $('layer-out').innerHTML = `<b>${LAYERS[i][0]}</b>: ` + md(LAYERS[i][2]).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+$('layers').onclick = e => { const g = e.target.closest('.layer'); if (g) showLayer(+g.dataset.i); };
+$('layers').onkeydown = e => { const g = e.target.closest('.layer');
+  if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); showLayer(+g.dataset.i); } };
+showLayer(1);
+
+// ---------- A5 · SK filter lab ----------
+const CALLS = [
+  { f: 'weather.get_forecast', a: 'city="Paris"' },
+  { f: 'email.send_email', a: 'to="boss@acme.test", body="running late"', side: 1 },
+  { f: 'crm.lookup_customer', a: 'ssn="123-45-6789"', pii: 1 },
+  { f: 'files.delete_file', a: 'path="/reports/q3.pdf"', side: 1 },
+];
+function renderSK() {
+  const on = new Set([...document.querySelectorAll('#sk-filters input:checked')].map(x => x.value));
+  let risky = 0;
+  $('sk-table').innerHTML = '<tr><th>model asks for</th><th>what happens</th></tr>' + CALLS.map(c => {
+    const args = c.pii && on.has('redact') ? 'ssn="***-**-6789"' : c.a, notes = [];
+    if (c.side && on.has('approve')) notes.push('<span class="ink">⏸ paused for human approval</span>');
+    else if (c.side) { notes.push('<span class="red">runs, with a real side effect</span>'); risky++; }
+    else notes.push('<span class="green">runs</span>');
+    if (c.pii) on.has('redact') ? notes.push('<span class="green">PII redacted before it runs or is logged</span>') : (notes.push('<span class="red">raw SSN sent and stored</span>'), risky++);
+    notes.push(on.has('log') ? '📝 logged' : '<span class="muted">no record</span>');
+    return `<tr><td><code>${esc(c.f)}(${esc(args)})</code></td><td>${notes.join(' · ')}</td></tr>`;
+  }).join('');
+  $('sk-out').className = 'out ' + (risky ? 'bad' : 'good');
+  $('sk-out').innerHTML = risky ? `<b>${risky}</b> risky outcomes. The model is only <i>asking</i>. Filters are where you say no, deterministically.`
+    : on.has('log') ? 'Every call is gated, redacted and logged. That\'s the same guardrail idea as hooks on the governance page.'
+    : 'Safe, but invisible. Turn logging on so you can audit it later.';
+}
+$('sk-filters').onchange = renderSK; renderSK();
+
+// ---------- A6 · AutoGen termination ----------
+// returns the message number where the team stops, or Infinity
+function stopAt(sc, text, max, n, op) {
+  const fires = [];
+  if (text) fires.push(sc === 'ok' ? 7 : Infinity);
+  if (max) fires.push(n);
+  if (!fires.length) return Infinity;
+  return op === 'or' ? Math.min(...fires) : Math.max(...fires);
+}
+let agSc = 'ok', agOp = 'or';
+function renderAG() {
+  const n = +$('ag-n').value, text = $('ag-text').checked, max = $('ag-max').checked, s = stopAt(agSc, text, max, n, agOp);
+  $('ag-nv').textContent = n;
+  $('ag-dots').innerHTML = Array.from({ length: 20 }, (_, i) => {
+    const k = i + 1, who = k === 1 ? 'u' : k % 2 ? 'c' : 'w';
+    return `<div class="dot ${who}${k > s ? ' off' : ''}${k === s ? ' stop' : ''}">${who}${k}</div>`;
+  }).join('') + (s === Infinity ? '<div class="dot stop" style="border-style:dashed">∞</div>' : '');
+  let msg;
+  if (s === Infinity) msg = !text && !max ? 'No termination condition, so it <b>never stops</b> (unless you set <code>max_turns</code>). Unbounded cost.'
+    : agOp === 'and' ? '<code>&amp;</code> needs <b>both</b> to fire. TERMINATE never comes, so MaxMessage alone can\'t stop it. <b>Runs forever.</b>'
+    : 'TERMINATE never comes, and there\'s no backstop. <b>Runs forever.</b>';
+  else if (agSc === 'ok' && text && s === 7) msg = `Stops at message 7, when the critic says TERMINATE. ${max ? 'The MaxMessage backstop never had to fire.' : 'But with no backstop, a stubborn critic would loop forever.'}`;
+  else msg = `Stops at message ${s}, when MaxMessage fires${agSc === 'ok' && text ? ' (that\'s after TERMINATE at 7, so you paid for ' + (s - 7) + ' extra calls)' : ''}.`;
+  $('ag-out').className = 'out ' + (s === Infinity ? 'bad' : 'good');
+  $('ag-out').innerHTML = msg;
+}
+document.querySelectorAll('.agsc').forEach(b => b.onclick = () => { press('.agsc', b); agSc = b.dataset.s; renderAG(); });
+document.querySelectorAll('.agop').forEach(b => b.onclick = () => { press('.agop', b); agOp = b.dataset.o; renderAG(); });
+['ag-n', 'ag-text', 'ag-max'].forEach(id => $(id).oninput = renderAG);
+renderAG();
+
+// ---------- B2 · integration sorter ----------
+sorter('sort-int', 't-int', [['mcp', 'MCP'], ['a2a', 'A2A'], ['astool', 'agent-as-tool'], ['otel', 'OpenTelemetry'], ['llm', 'LiteLLM']], [
+  { t: 'One set of company tools should be usable from agents built in ADK, LangGraph and CrewAI.', a: 'mcp', why: 'Write each tool once as an MCP server, and every framework has an MCP client adapter.' },
+  { t: 'Your LangGraph agent must delegate to a partner\'s agent that runs in their cloud, on their stack.', a: 'a2a', why: 'Across services and organisations, agent-to-agent is A2A: an agent card plus task messages over HTTP.' },
+  { t: 'Reuse an existing CrewAI crew as one step inside your ADK agent, in the same Python process.', a: 'astool', why: 'Wrap `crew.kickoff` in a function tool. Watch for doubled retries and costs.' },
+  { t: 'One pipeline spans three frameworks. Find which agent\'s step caused the latency spike.', a: 'otel', why: 'OpenTelemetry spans give you one trace across all of them in Langfuse, Phoenix or Datadog.' },
+  { t: 'Swap between Claude, Gemini and GPT behind the same framework config to compare quality.', a: 'llm', why: 'LiteLLM gives one completion interface over many providers. Then compare them with the same eval set.' },
+  { t: 'Stop re-implementing the same `lookup_order` tool for every framework the teams use.', a: 'mcp', why: 'MCP moves tools out of framework code into a protocol.' },
+]);
+
+// ---------- B3 · picker ----------
+const FW = [
+  { id: 'crew', n: 'CrewAI', l: ['py'], s: 'crew' }, { id: 'adk', n: 'Google ADK', l: ['py', 'java', 'go'], s: 'adk' },
+  { id: 'lc', n: 'LangChain + LangGraph', l: ['py', 'ts'], s: 'lc' }, { id: 'li', n: 'LlamaIndex', l: ['py', 'ts'], s: 'li' },
+  { id: 'sk', n: 'Semantic Kernel', l: ['cs', 'py', 'java'], s: 'sk' }, { id: 'ag', n: 'AutoGen', l: ['py', 'cs'], s: 'ag' },
+  { id: 'custom', n: 'Custom loop (bare SDK)', l: ['py', 'ts', 'cs', 'java', 'go'], s: 'custom' },
+];
+const LANGS = [['py', 'Python'], ['ts', 'TypeScript'], ['cs', 'C# / .NET'], ['java', 'Java'], ['go', 'Go']];
+const NEEDS = [
+  ['a role-based team with little code', { crew: 3, ag: 1, adk: 1 }],
+  ['an explicit graph with checkpoints and pause/resume', { lc: 3, li: 1, adk: 1, sk: 1, custom: 1 }],
+  ['heavy RAG over my own documents', { li: 3, lc: 2 }],
+  ['Gemini / Google Cloud / Vertex deployment', { adk: 3 }],
+  ['enterprise .NET / Azure with middleware filters', { sk: 3, ag: 1 }],
+  ['agents that debate, or write and run code', { ag: 3, crew: 1 }],
+  ['full control, few dependencies, easy debugging', { custom: 3 }],
+  ['the biggest integration ecosystem', { lc: 3, li: 2 }],
+  ['event-driven async steps with fan-out/fan-in', { li: 3, lc: 1, ag: 1 }],
+];
+let lang = 'py';
+$('pk-lang').innerHTML += LANGS.map(([k, l]) => `<button class="lang" data-k="${k}" aria-pressed="${k === lang}">${l}</button>`).join('');
+$('pk-needs').innerHTML = NEEDS.map(([t], i) => `<label class="chk" style="display:flex; margin:2px 0"><input type="checkbox" value="${i}"> ${esc(t)}</label>`).join('');
+function rank() {
+  const on = [...document.querySelectorAll('#pk-needs input:checked')].map(x => NEEDS[x.value][1]);
+  return FW.map(f => ({ ...f, ok: f.l.includes(lang), sc: on.reduce((a, w) => a + (w[f.id] || 0), 0) }))
+    .sort((a, b) => (b.ok - a.ok) || (b.sc - a.sc));
+}
+function renderPick() {
+  const r = rank(), max = Math.max(1, ...r.map(f => f.sc)), any = document.querySelector('#pk-needs input:checked');
+  $('pk-table').innerHTML = '<tr><th>framework</th><th>fit</th></tr>' + r.map(f =>
+    `<tr class="${f.ok ? '' : 'x'}"><td><a href="#${f.s}">${f.n}</a></td><td>${f.ok
+      ? `<span class="bar" style="width:${f.sc / max * 220}px"></span>${f.sc}` : `no ${LANGS.find(l => l[0] === lang)[1]} SDK`}</td></tr>`).join('');
+  const top = r.filter(f => f.ok && f.sc > 0).slice(0, 2);
+  $('pk-out').className = 'out' + (any ? ' good' : '');
+  $('pk-out').innerHTML = !any ? 'Tick at least one need.' : top.length
+    ? `Shortlist: <b>${top.map(f => f.n).join('</b> and <b>')}</b>. Build the same slice in each, then compare them on your eval set.`
+    : 'Nothing in this language scores on those needs, so a custom loop is the safe default.';
+}
+$('pk-lang').onclick = e => { const b = e.target.closest('.lang'); if (!b) return; press('.lang', b); lang = b.dataset.k; renderPick(); };
+$('pk-needs').onchange = renderPick; renderPick();
+
+// ---------- B4 · Rosetta ----------
+const RS = {
+  'agent': ['`Agent(role, goal, backstory)`', '`LlmAgent` / `Agent`', '`create_agent(...)` or a graph node', '`FunctionAgent`, `ReActAgent`', '`ChatCompletionAgent`', '`AssistantAgent`', 'a function around `messages.create`'],
+  'tool': ['`@tool` or a `BaseTool` subclass', 'a plain function (docstring = description)', '`@tool` decorator', '`FunctionTool`, `QueryEngineTool`', '`@kernel_function` in a plugin', 'a plain function / `FunctionTool`', 'a JSON-schema dict + your dispatcher'],
+  'multi-agent': ['`Crew`', '`sub_agents` tree, `AgentTool`', 'subgraphs, supervisor pattern', '`AgentWorkflow` with handoffs', '`AgentGroupChat`, orchestrations', 'teams: RoundRobin, Selector, Swarm', 'your router function'],
+  'control flow': ['`Process` + Flows (`@listen`, `@router`)', 'Sequential / Parallel / Loop agents', 'edges and conditional edges', '`@step` + typed events', 'Process framework', 'termination conditions, team type', '`while` + `stop_reason`'],
+  'state': ['Flow `state`, `memory=True`', '`session.state`, `output_key`', 'graph State + checkpointer', '`ctx.store`', '`ChatHistory`, memory connectors', 'model context, `save_state()`', 'your `messages` list + a DB'],
+  'human-in-loop': ['`human_input=True` on a Task', 'tool confirmation, callbacks', '`interrupt()` + resume', '`InputRequiredEvent`', 'function-invocation filter', '`UserProxyAgent`', 'a pause flag you persist'],
+  'observability': ['built-in tracing integrations', '`adk web` event trace', 'LangSmith, LangGraph Studio', 'event streaming + OTel', 'OpenTelemetry', 'AutoGen Studio, OTel', 'your own logs / OTel spans'],
+};
+const RSN = ['CrewAI', 'ADK', 'LangChain / LangGraph', 'LlamaIndex', 'Semantic Kernel', 'AutoGen', 'Custom loop'];
+$('rs-chips').innerHTML = Object.keys(RS).map(k => `<button class="rsc" data-k="${k}">${k}</button>`).join('');
+$('rs-chips').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return; press('.rsc', b);
+  $('rs-table').innerHTML = `<tr><th>framework</th><th>${esc(b.dataset.k)}</th></tr>` + RS[b.dataset.k].map((v, i) => `<tr><td><b>${RSN[i]}</b></td><td>${md(v)}</td></tr>`).join('');
+};
+document.querySelector('.rsc').click();
+
+// ---------- whose API ----------
+sorter('sort-who', 't-who', [['crew', 'CrewAI'], ['adk', 'ADK'], ['lg', 'LangGraph'], ['li', 'LlamaIndex'], ['sk', 'Sem. Kernel'], ['ag', 'AutoGen']], [
+  { t: '`process=Process.hierarchical, manager_llm=...`', a: 'crew', why: 'A CrewAI manager agent delegates tasks and reviews the results.' },
+  { t: '`@listen(forecast)` and `@router(forecast)` on class methods', a: 'crew', why: 'CrewAI Flows: event-driven steps with shared state.' },
+  { t: '`SequentialAgent(sub_agents=[weather, advisor])`', a: 'adk', why: 'An ADK workflow agent: deterministic order with no LLM.' },
+  { t: '`output_key="forecast"`, read as `{forecast}` in the next instruction', a: 'adk', why: 'ADK session state is how agents hand results to each other.' },
+  { t: '`add_conditional_edges(...)` then `compile(checkpointer=...)`', a: 'lg', why: 'LangGraph: a state graph with persistence.' },
+  { t: '`interrupt()` to pause the run for a human, then resume on the same thread', a: 'lg', why: 'LangGraph human-in-the-loop, which needs a checkpointer.' },
+  { t: '`async def retrieve(self, ctx, ev: StartEvent) -> Retrieved`', a: 'li', why: 'A LlamaIndex Workflow step: the type hints are the wiring.' },
+  { t: '`await ctx.collect_events(ev, [A, B])`', a: 'li', why: 'LlamaIndex fan-in: it waits until both events arrive.' },
+  { t: '`@kernel_function(description=...)`', a: 'sk', why: 'Semantic Kernel plugin functions that the model can call.' },
+  { t: '`FunctionChoiceBehavior.Auto()`', a: 'sk', why: 'Semantic Kernel\'s switch for automatic function calling.' },
+  { t: '`TextMentionTermination("TERMINATE") | MaxMessageTermination(12)`', a: 'ag', why: 'AutoGen termination conditions, combined with OR.' },
+  { t: '`SelectorGroupChat` picks who speaks next with a model', a: 'ag', why: 'One of AutoGen\'s team types.' },
+]);
+
+// ---------- quiz ----------
+const Q = [
+  { t: 'In a CrewAI crew with `Process.hierarchical`, who decides which agent does each task?', o: ['Tasks run in list order', 'A manager agent (`manager_llm` / `manager_agent`)', 'The user picks at runtime', 'A random scheduler'], a: 1,
+    w: 'Hierarchical adds a manager that delegates and validates. Sequential just runs the list.' },
+  { t: 'When should you wrap CrewAI crews in a Flow?', o: ['Never. Flows are deprecated', 'When you need deterministic steps, shared state and branching around autonomous crews', 'Only for RAG', 'To make agents faster'], a: 1,
+    w: 'Flows give you control (`@start`, `@listen`, `@router`, state), and crews do the autonomous work inside.' },
+  { t: 'Does ADK\'s `SequentialAgent` use an LLM to decide the order of its sub-agents?', o: ['Yes, every time', 'No. Workflow agents are deterministic, and the LLMs live in the children', 'Only on the first run', 'Only when parallel'], a: 1,
+    w: 'Sequential, Parallel and Loop agents are code-driven orchestration. LLM-driven routing is `LlmAgent` + `sub_agents` (transfer).' },
+  { t: 'In ADK, how does the `weather` agent\'s answer reach the `advisor` agent?', o: ['A global variable', '`output_key` writes it to session state, and `{forecast}` in the instruction reads it', 'The advisor re-runs the tool', 'It is emailed'], a: 1,
+    w: 'Session state is the shared blackboard of an ADK agent tree.' },
+  { t: 'What does `prompt | model | parser` create in LangChain?', o: ['A shell pipe', 'A Runnable sequence (LCEL) with `invoke`, `stream` and `batch`', 'A LangGraph graph', 'A vector index'], a: 1,
+    w: 'Every component is a Runnable, so they compose with `|` and share one interface.' },
+  { t: 'Why compile a LangGraph graph with a checkpointer?', o: ['To make it faster', 'To persist state per thread, which enables resume, `interrupt()` for humans, and time travel', 'It is required for tools', 'For prettier logs'], a: 1,
+    w: 'Without a checkpointer, a crash or a human pause loses the run.' },
+  { t: 'How does a LlamaIndex Workflow decide which step runs next?', o: ['A router function you write', 'The type of the returned event, matched against each step\'s input type hint', 'Alphabetical order', 'The LLM decides'], a: 1,
+    w: 'Events are the edges. Return `Retry` and the step that accepts `Retry` runs.' },
+  { t: 'You need "ask a human before any `send_email` call" in Semantic Kernel. Where does it go?', o: ['In the prompt', 'A function-invocation filter that skips `next()` when denied', 'Inside the model', 'In the plugin\'s description'], a: 1,
+    w: 'Filters are deterministic middleware around every function call, so the prompt can\'t talk its way past them.' },
+  { t: 'Team stop condition: `TextMentionTermination("TERMINATE") & MaxMessageTermination(12)`. The critic never says TERMINATE. What happens?', o: ['It stops at 12', 'It never stops, because `&` needs both conditions to fire', 'It stops at 1', 'It errors'], a: 1,
+    w: 'Use `|` for a backstop. `&` means all conditions must fire, as the termination lab shows.' },
+  { t: 'Which AutoGen team lets a model choose the next speaker?', o: ['RoundRobinGroupChat', 'SelectorGroupChat', 'UserProxyAgent', 'CodeExecutorAgent'], a: 1,
+    w: 'RoundRobin takes turns, Selector asks a model, and Swarm uses explicit handoffs.' },
+  { t: 'What\'s the main cost of a custom agent loop?', o: ['It\'s slower at runtime', 'You build retries, state/resume, human pause and tracing yourself', 'Models refuse it', 'It can\'t call tools'], a: 1,
+    w: 'The loop is about 15 lines. Everything production needs around it is the real work.' },
+  { t: 'Teams use ADK, LangGraph and CrewAI, and all of them need the same `lookup_order` tool. What\'s best?', o: ['Copy the tool into each codebase', 'Expose it once as an MCP server', 'Use only one framework', 'Put it in the prompt'], a: 1,
+    w: 'MCP is the tool interop layer, and every major framework has a client adapter.' },
+  { t: 'Your agent must hand a task to another company\'s agent, running on their own stack. Which protocol?', o: ['MCP', 'A2A (agent-to-agent)', 'LCEL', 'LiteLLM'], a: 1,
+    w: 'MCP connects agents to tools. A2A connects agents to other agents across service boundaries.' },
+  { t: 'You nest a CrewAI crew inside a LangGraph node inside an ADK agent. What\'s the classic trap?', o: ['None', 'Loops inside loops: doubled retries, memories and cost, and two owners of state', 'It\'s too fast', 'MCP stops working'], a: 1,
+    w: 'Every framework brings its own loop and retries. Keep one owner of state and trace the whole thing.' },
+  { t: 'How should you pick between two frameworks that both seem to fit?', o: ['GitHub stars', 'Build the same thin slice in both and run the same eval set', 'Whichever has the newest release', 'Ask the model'], a: 1,
+    w: 'Measure, don\'t guess, as on the Testing & Evals page.' },
+];
+// ponytail: fixed rotation per question so the right answer isn't always B, and it stays stable across reloads
+Q.forEach((q, i) => { const n = q.o.length, r = (i * 3 + 2) % n; q.o = q.o.map((_, j) => q.o[(j + r) % n]); q.a = (q.a - r + n) % n; });
+let qr = 0, qd = 0;
+$('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
+  <div class="opts">${q.o.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quizcards').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const q = Q[card.dataset.i], ok = +b.dataset.j === q.a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === q.a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(q.w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+</body>
+</html>
