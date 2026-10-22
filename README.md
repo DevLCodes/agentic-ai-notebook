@@ -22,6 +22,8 @@ Follow them in order, or jump to whatever you need.
 
 Coming next: retrieval, agent memory, production, and the model layer.
 
+Also in this repo: [Python practice](python-practice/), runnable Python lessons and interview practice problems.
+
 ## How it's built
 
 Each page is a single HTML file with inline CSS and JavaScript: no build step, no dependencies, and it works offline.
