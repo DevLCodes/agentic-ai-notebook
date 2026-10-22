@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tool Design &amp; MCP: notebook</title>
+<meta name="description" content="Writing tool descriptions models pick correctly, structured errors, tool_choice, and building and deploying MCP servers.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Tool Design &amp; MCP">
+<meta property="og:description" content="Writing tool descriptions models pick correctly, structured errors, tool_choice, and building and deploying MCP servers.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/tool-design-mcp.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
   :root {
@@ -150,9 +159,9 @@
 </svg>
 
 <div class="page">
-  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-architecture.html">← Domain 1 · Agentic Architecture</a><a href="frameworks.html">Framework Utilisation →</a></p>
-  <h1>Domain 2 · Tool Design &amp; MCP</h1>
-  <p class="muted">18% of the exam. Five topics, one idea running through all of them:
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-architecture.html">← Agentic Architecture</a><a href="frameworks.html">⑤ Framework Utilisation →</a></p>
+  <h1>Tool Design &amp; MCP</h1>
+  <p class="muted">Five topics, one idea running through all of them:
     <span class="hl">the model can only choose well from what you describe well.</span></p>
   <nav class="toc">
     <a href="#s1">2.1 Tool interface design</a><a href="#s2">2.2 Structured errors</a>
@@ -290,7 +299,7 @@
 
   <!-- ============ 2.3 ============ -->
   <h2 id="s3">2.3 Tool distribution &amp; tool_choice</h2>
-  <p><span class="hl">4–5 tools per agent</span>, scoped to its role. Every extra tool adds a decision, and selection
+  <p><span class="hl">A small toolset per agent</span> (a common rule of thumb is 4–5), scoped to its role. Every extra tool adds a decision, and selection
     errors rise with the size of the toolkit. And remember: <b>server boundaries are invisible to the model.</b>
     Twenty-two tools split across two servers is still a 22-tool problem.</p>
 
@@ -326,7 +335,7 @@
         <text x="62" y="112" class="g">85%</text><text x="44" y="46" class="r" style="font-size:13px">15%</text>
         <text x="186" y="58">simple lookups → a <tspan class="g">scoped</tspan></text><text x="186" y="78"><tspan class="g">verify_fact</tspan> tool, run locally</text>
         <text x="186" y="114">complex checks → the</text><text x="186" y="134">coordinator (full pipeline)</text>
-        <text class="p" x="20" y="164" style="font-size:13px">sending all of them via the coordinator = 2–3 round trips, 40%+ latency</text>
+        <text class="p" x="20" y="164" style="font-size:13px">in this example, sending all of them via the coordinator = 2–3 round trips, 40%+ latency</text>
       </svg>
     </div>
   </div>
@@ -549,8 +558,8 @@ await server.connect(new StdioServerTransport());</pre>
       <b>Editing</b><br>
       <b>Edit</b> = swap one <u>unique</u> <code>old_string</code> for a <code>new_string</code>. Precise and cheap on context.<br>
       It <span class="red">fails when the text appears more than once</span> (that's a safety feature).<br>
-      Exam fallback: <span class="hl"><b>Read + Write</b></span> the whole file.
-      <span class="muted" style="font-size:15px">(In real Claude Code, widening old_string or using replace_all is cheaper, but the exam expects Read + Write.)</span>
+      When it fails: <span class="hl">widen <code>old_string</code></span> until it is unique, or use <code>replace_all</code> for a deliberate rename.
+      <span class="muted" style="font-size:15px">(Read + Write of the whole file works too, but costs far more context. Keep it as a last resort.)</span>
     </div>
     <div class="sticky blue">
       <b>Don't read the whole repo</b><br>
@@ -576,11 +585,11 @@ await server.connect(new StdioServerTransport());</pre>
 
   <!-- ============ Quiz ============ -->
   <h2 id="quiz">✎ Pop quiz</h2>
-  <p class="muted">These are exam-style scenarios. Choose an answer, then read the margin note.</p>
+  <p class="muted">Scenario questions. Choose an answer, then read the margin note.</p>
   <div class="cards quiz" id="quizcards" style="grid-template-columns: 1fr"></div>
   <div class="score"><span id="score"></span></div>
 
-  <p class="sig">— notes from claudecertificationguide.com · Domain 2</p>
+  <p class="sig">— the model can only choose well from what you describe well</p>
 </div>
 
 <script>
@@ -699,7 +708,7 @@ const TC = [
    'Using auto when you <b>need</b> structured output: the model may just reply in prose.'],
   ['"any"', '{ "type": "any" }', 'The model <b>must</b> call a tool, but chooses which one.',
    'Extraction pipelines with several possible schemas, where structured output is guaranteed.',
-   'Forcing it inside an agent loop once the model is done: it can never reach <code>end_turn</code>, so the loop never ends (Domain 1).'],
+   'Forcing it inside an agent loop once the model is done: it can never reach <code>end_turn</code>, so the loop never ends (see Agentic Architecture).'],
   ['forced', '{ "type": "tool", "name": "verify_identity" }', 'The model <b>must</b> call this exact tool.',
    'Mandatory first steps (e.g. verify identity before anything else). The model can\'t skip or reorder it. Switch back to auto afterwards.',
    'Leaving it forced on later turns, which repeats the same call.'],
@@ -719,12 +728,12 @@ sorter('sort-where', 't-where', [['project', '.mcp.json (team)'], ['user', '~/.c
   { t: 'A GitHub MCP server that every developer on the team uses.', a: 'project', why: 'Shared team config is version-controlled at the repo root.' },
   { t: 'A server you\'re trying out for your personal notes.', a: 'user', why: 'Experimental and personal, so keep it out of the shared file.' },
   { t: 'Your personal GitHub token.', a: 'env', why: 'Never commit secrets. Reference it as `${GITHUB_TOKEN}` and each developer sets their own.' },
-  { t: 'The team\'s Jira server for ticket workflows.', a: 'project', why: 'The whole team needs it, so it goes in `.mcp.json`. Putting team config in a user file is an exam trap.' },
+  { t: 'The team\'s Jira server for ticket workflows.', a: 'project', why: 'The whole team needs it, so it goes in `.mcp.json`. Putting team config in a user file means teammates silently miss it.' },
   { t: 'A server URL that\'s usually the same, but some devs point it at staging.', a: 'env', why: 'Use `${API_URL:-https://default}` inside `.mcp.json`: a shared default that each developer can override.' },
 ]);
 sorter('sort-build', 't-build', [['use', 'use community server'], ['build', 'build custom']], [
   { t: 'Posting to Slack channels.', a: 'use', why: 'Standard integration: community servers are maintained and tested.' },
-  { t: 'Reading Linear and Notion pages.', a: 'use', why: 'Standard. Building your own is the exam\'s favourite over-engineering trap.' },
+  { t: 'Reading Linear and Notion pages.', a: 'use', why: 'Standard. Building your own is a common over-engineering trap.' },
   { t: 'A proprietary internal inventory system with no public server.', a: 'build', why: 'No community alternative exists, so building is justified.' },
   { t: 'A team-specific release workflow that the community GitHub server can\'t express.', a: 'build', why: 'Build only when team workflows exceed what community servers can do.' },
 ]);
@@ -796,7 +805,7 @@ sorter('sort-tools', 't-tools', [['grep', 'Grep'], ['glob', 'Glob'], ['edit', 'E
   { t: 'Find every file that calls `processLegacyOrder()`.', a: 'grep', why: 'Callers are text inside files, so Grep. Glob can\'t see contents.' },
   { t: 'Find all `*.test.tsx` files.', a: 'glob', why: 'A naming pattern is a path match, so Glob.' },
   { t: 'Add a `validate` parameter to the single line `function processOrder(id: string)`.', a: 'edit', why: 'The anchor is unique, so Edit: precise and cheap on context.' },
-  { t: 'Rename a variable whose text appears 6 times in a file, so Edit can\'t anchor uniquely.', a: 'rw', why: 'The exam\'s documented fallback is Read + Write (in practice, widening `old_string` or `replace_all` is cheaper).' },
+  { t: 'Rename a variable whose text appears 6 times in a file, so a plain Edit can\'t anchor uniquely.', a: 'edit', why: 'Still Edit: `replace_all: true` renames every occurrence. Read + Write of the whole file is the costly last resort.' },
   { t: 'Where is the message "Payment declined: code 51" thrown?', a: 'grep', why: 'Error messages are file contents, so Grep.' },
   { t: 'List every migration under `src/**/migrations/`.', a: 'glob', why: 'A directory/name pattern, so Glob.' },
 ]);
@@ -860,9 +869,9 @@ const Q = [
   { t: 'You need to find every file that calls `processLegacyOrder()` and their tests. What\'s the right approach?',
     o: ['Glob "**/*processLegacyOrder*"', 'Read every file under src/', 'Grep the name, Glob the callers\' sibling tests, then Grep the wrapper names', 'Grep "*.test.*"'], a: 2,
     w: 'Content search first, then path matching, then wrappers: Grep → Glob → Grep.' },
-  { t: 'Edit fails because `old_string` appears in several places. What\'s the exam\'s documented fallback?',
-    o: ['Read + Write', 'Glob then Edit', 'Give up', 'Grep then Edit'], a: 0,
-    w: 'Read + Write. In real Claude Code you\'d first widen old_string or use replace_all, but that\'s not the exam\'s answer.' },
+  { t: 'Edit fails because `old_string` appears in several places. What should you try first?',
+    o: ['Read + Write the whole file', 'Glob then Edit', 'Give up', 'Widen `old_string` until it is unique, or use `replace_all` if you mean every occurrence'], a: 3,
+    w: 'Widening the anchor keeps the edit precise and cheap. Read + Write works but pulls the whole file into context.' },
   { t: 'A host is connected to three MCP servers: GitHub, filesystem and Postgres. How many MCP clients does it run?',
     o: ['One shared client', 'Three: one client per server', 'None, the model connects directly', 'Six, one per direction'], a: 1,
     w: 'Client to server is 1 : 1. The host creates one client for each server, and the model never speaks MCP itself.' },
@@ -876,6 +885,8 @@ const Q = [
     o: ['Prompts', 'Resources', 'Tools', 'Roots'], a: 2,
     w: 'Tools are model-controlled, resources are app-controlled, and prompts are user-controlled. Roots is a client feature.' }
 ];
+// fixed rotation per question so the right answer isn't always the same letter, and it stays stable across reloads
+Q.forEach((q, i) => { const n = q.o.length, r = (i * 3 + 2) % n; q.o = q.o.map((_, j) => q.o[(j + r) % n]); q.a = (q.a - r + n) % n; });
 let qr = 0, qd = 0;
 $('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
   <div class="opts">${q.o.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');

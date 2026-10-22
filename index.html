@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agentic AI: learning roadmap</title>
+<meta name="description" content="Free, interactive notes for engineers learning to build AI agents: the agentic loop, agent patterns, multi-agent architecture, tools and MCP, frameworks, evals, observability and governance.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Agentic AI: a learning roadmap">
+<meta property="og:description" content="Free, interactive notes for engineers learning to build AI agents: the agentic loop, agent patterns, multi-agent architecture, tools and MCP, frameworks, evals, observability and governance.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
   :root {
@@ -146,8 +155,9 @@
   .web text { font-family: var(--hand); }
 </style>
 <div class="page">
-  <h1>Agentic AI: my learning roadmap</h1>
-  <p class="muted">Eight notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
+  <h1>Agentic AI: a learning roadmap</h1>
+  <p class="muted">Free, interactive notes for engineers learning to build AI agents, from the first loop to evals, observability and governance. Each page has labs to play with and a quiz at the end.<br>
+    Eight notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
     Follow the red numbers for the suggested order. Tick "done" as you go (saved in this browser).</p>
 
   <svg class="doodle web" viewBox="0 0 1240 1085" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to eight topic pages in learning order">
@@ -172,7 +182,7 @@
       </ul>
     </div>
     <div class="sticky">
-      <b>Coming next (from the roadmap)</b>
+      <b>Coming next</b>
       <ul>
         <li>Retrieval: chunking, hybrid search, reranking, RAG evals</li>
         <li>Agent memory: short-term context, long-term stores, summarisation</li>
@@ -181,6 +191,17 @@
       </ul>
     </div>
   </div>
+  <h2>All topics</h2>
+  <ol class="topic-list">
+    <li><a href="agentic-loop.html">The Agentic Loop</a>: the engine everything runs on</li>
+    <li><a href="agent-patterns.html">Agent Patterns</a>: RAG, ReAct, planner–executor, DAG, multi-agent, self-critique</li>
+    <li><a href="agentic-architecture.html">Agentic Architecture</a>: orchestration, subagents, gates, hooks, sessions</li>
+    <li><a href="tool-design-mcp.html">Tool Design &amp; MCP</a>: how agents act</li>
+    <li><a href="frameworks.html">Framework Utilisation</a>: CrewAI, ADK, LangGraph, LlamaIndex, Semantic Kernel, AutoGen</li>
+    <li><a href="testing-and-evals.html">Testing &amp; Evals</a>: prove it works</li>
+    <li><a href="llm-observability.html">LLM Observability</a>: watch it in production</li>
+    <li><a href="ai-governance.html">AI Governance</a>: ship it safely</li>
+  </ol>
   <p class="sig">— start at ① and work round the ring</p>
 </div>
 
@@ -193,9 +214,9 @@ const T = [
     leaves: [['4 stages, explained', 'diagram'], ['step-through simulator', 'simtitle'], ['stop_reason explorer', 'srpanel'], ['quiz', 'quiz']] },
   { id: 'pat', n: 2, href: 'agent-patterns.html', t: 'Agent Patterns', s: 'RAG · ReAct · DAG · critic…', x: 800, y: 140, c: '#ffe0b8',
     leaves: [['RAG vs RAG agent', 'rag'], ['ReAct trace', 'react'], ['planner–executor', 'plan'], ['DAG critical path', 'dag'], ['self-critique rounds', 'critic']] },
-  { id: 'arch', n: 3, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'Domain 1 · many agents', x: 1090, y: 390, c: '#ffd1dc',
+  { id: 'arch', n: 3, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'many agents, one system', x: 1090, y: 390, c: '#ffd1dc',
     leaves: [['multi-agent orchestration', 's2'], ['subagents & context', 's3'], ['workflow handoffs', 's4'], ['Agent SDK hooks', 's5'], ['sessions & resumption', 's7']] },
-  { id: 'tools', n: 4, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'Domain 2 · how agents act', x: 1090, y: 690, c: '#cdeafe',
+  { id: 'tools', n: 4, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'how agents act', x: 1090, y: 690, c: '#cdeafe',
     leaves: [['tool interface design', 's1'], ['structured errors', 's2'], ['tool_choice', 's3'], ['MCP hosts · clients · servers', 'mcp-core'], ['built-in tools', 's5']] },
   { id: 'fw', n: 5, href: 'frameworks.html', t: 'Framework Utilisation', s: 'CrewAI · ADK · LangChain…', x: 800, y: 940, c: '#e3d4f7',
     leaves: [['CrewAI crews & flows', 'crew'], ['Google ADK agent trees', 'adk'], ['LangChain & LangGraph', 'lc'], ['AutoGen termination lab', 'ag'], ['framework picker', 'pick']] },
