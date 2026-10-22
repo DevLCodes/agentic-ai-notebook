@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent Architecture Patterns · notebook</title>
+<meta name="description" content="RAG agents, ReAct, planner-executor, DAGs, multi-agent and self-critique: six shapes of the same loop, with interactive labs.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Agent Architecture Patterns">
+<meta property="og:description" content="RAG agents, ReAct, planner-executor, DAGs, multi-agent and self-critique: six shapes of the same loop, with interactive labs.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/agent-patterns.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
   :root {
@@ -149,7 +158,7 @@
   .qbar { height: 16px; background: var(--ink); border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 8px; }
 </style>
 <div class="page">
-  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-loop.html">← The Agentic Loop</a><a href="agentic-architecture.html">Domain 1 · Agentic Architecture →</a></p>
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="agentic-loop.html">← The Agentic Loop</a><a href="agentic-architecture.html">③ Agentic Architecture →</a></p>
   <h1>Agent Architecture Patterns</h1>
   <p class="muted">Six common shapes for an agent: RAG, ReAct, Planner–Executor, DAG, Multi-agent and Self-critique.
     <span class="hl">Each one is the same agentic loop, arranged differently.</span> The question is always: who decides the next step, and how much does that cost?</p>
@@ -317,7 +326,7 @@ return writer(goal, done)</pre>
   <h2 id="multi">5 · Multi-agent systems</h2>
   <p>Core idea: <span class="hl">split the work across agents with their own prompts, tools and context windows.</span> The win is <b>context isolation</b>:
     each agent sees only what it needs. The cost is tokens, which is often several times a single agent. Details of orchestration, subagents and handoffs are on the
-    <a href="agentic-architecture.html">Domain 1 page</a>.</p>
+    <a href="agentic-architecture.html">Agentic Architecture page</a>.</p>
   <div class="box">
     <b class="ink">✎ Pick a topology</b>
     <div class="row" id="ma-chips"></div>

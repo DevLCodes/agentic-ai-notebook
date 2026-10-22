@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Agentic Loop: notebook</title>
+<meta name="description" content="How an agent actually runs: perceive, reason, act, observe, with a step-through simulator and every stop_reason explained.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="The Agentic Loop">
+<meta property="og:description" content="How an agent actually runs: perceive, reason, act, observe, with a step-through simulator and every stop_reason explained.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/agentic-loop.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
   :root {
@@ -272,7 +281,7 @@
   <h2>4 · Check yourself</h2>
   <div class="cards quiz" id="quiz" style="grid-template-columns: 1fr"></div>
   <div class="score"><span id="score"></span></div>
-  <p class="sig">— next: ② Agentic Architecture, where one loop becomes many agents</p>
+  <p class="sig">— next: ② Agent Patterns, the same loop in six shapes</p>
 </div>
 
 <script>
@@ -475,6 +484,8 @@ const Q = [
    ['Inside the tool function', 'In your loop\'s if-statement', 'In the next model call, when the model reads the tool_result', 'It doesn\'t happen'], 2,
    'Your code appends the observation. The model reflects on it in the next Reason step, which is why the exit edge leaves from Reason & Plan.'],
 ];
+// fixed rotation per question so the right answer isn't always the same letter, and it stays stable across reloads
+Q.forEach((q, i) => { const n = q[1].length, r = (i * 3 + 2) % n; q[1] = q[1].map((_, j) => q[1][(j + r) % n]); q[2] = (q[2] - r + n) % n; });
 let qr = 0, qd = 0;
 $('quiz').innerHTML = Q.map(([q, opts], i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q)}</p>
   <div class="opts">${opts.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');

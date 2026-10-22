@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Governance: security, compliance, guardrails · notebook</title>
+<meta name="description" content="Prompt injection and the OWASP LLM Top 10, the EU AI Act, NIST AI RMF and ISO 42001, and guardrails that hold.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="AI Governance">
+<meta property="og:description" content="Prompt injection and the OWASP LLM Top 10, the EU AI Act, NIST AI RMF and ISO 42001, and guardrails that hold.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/ai-governance.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
   :root {
@@ -142,7 +151,7 @@
   #grbtns button { font-size: 15px; }
 </style>
 <div class="page">
-  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="llm-observability.html">← LLM Observability</a><a href="agentic-architecture.html">Domain 1 · Agentic Architecture →</a></p>
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="llm-observability.html">← LLM Observability</a><a href="index.html">Back to the roadmap →</a></p>
   <h1>AI Governance</h1>
   <p class="muted">Security, compliance and guardrails on one page. <span class="hl">Governance = who decides what the AI may do,
     how that's enforced, and how you prove it afterwards.</span></p>
@@ -396,7 +405,7 @@
     <div class="sticky pink">
       <b>Prompt ≠ guardrail</b><br>
       "Never refund more than $500" in the system prompt is a <i>request</i>. <code>if amount &gt; 500: ask_human()</code> in the tool
-      or a PreToolUse hook is a <i>guarantee</i>. This is Domain 1's lesson again: <span class="hl">prompts are probabilistic, hooks are deterministic.</span>
+      or a PreToolUse hook is a <i>guarantee</i>. It's the Agentic Architecture lesson again: <span class="hl">prompts are probabilistic, hooks are deterministic.</span>
     </div>
   </div>
 
@@ -496,7 +505,7 @@ def pre_tool_use(tool, args, user):
   <h2 id="quiz">✎ Pop quiz</h2>
   <div class="cards quiz" id="quizcards" style="grid-template-columns: 1fr"></div>
   <div class="score"><span id="score"></span></div>
-  <p class="sig">— compiled for the Phase 5 roadmap: production</p>
+  <p class="sig">— design as if the injection will succeed</p>
 </div>
 
 <script>
@@ -728,10 +737,12 @@ const Q = [
   { t: 'Lowering a safety classifier\'s blocking threshold will…', o: ['reduce misses but increase false positives', 'reduce both', 'increase misses', 'change nothing'], a: 0,
     w: 'Choose the threshold by what each error costs, measured on a labelled set.' },
   { t: 'Why use a PreToolUse gate instead of the prompt "never refund over $500"?', o: ['It\'s cheaper', 'Prompts are probabilistic, while code-level gates are guaranteed', 'Prompts are banned by the EU AI Act', 'No reason'], a: 1,
-    w: 'Domain 1 again: enforce critical rules deterministically.' },
+    w: 'Enforce critical rules deterministically, in code.' },
   { t: 'The lesson of Moffatt v. Air Canada (2024)?', o: ['Chatbots are always legal', 'You\'re liable for what your bot tells customers, so ground its answers', 'Use a bigger model', 'Avoid refunds'], a: 1,
     w: 'The chatbot invented a refund policy, and the airline had to honour it. Grounding checks and scoped answers matter.' },
 ];
+// fixed rotation per question so the right answer isn't always the same letter, and it stays stable across reloads
+Q.forEach((q, i) => { const n = q.o.length, r = (i * 3 + 2) % n; q.o = q.o.map((_, j) => q.o[(j + r) % n]); q.a = (q.a - r + n) % n; });
 let qr = 0, qd = 0;
 $('quizcards').innerHTML = Q.map((q, i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q.t)}</p>
   <div class="opts">${q.o.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
