@@ -242,7 +242,7 @@
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · data loading</p><h1>Chunking</h1><p class="lead">How to cut documents into passages that search well, cite cleanly and still make sense on their own.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#what">What chunking is</a></li><li><a href="#lab">Try it: chunk a real policy</a></li><li><a href="#strategies">Strategies compared</a></li><li><a href="#size">Size and overlap</a></li><li><a href="#context">Keep context with every chunk</a></li><li><a href="#special">Tables, code and slides</a></li><li><a href="#tune">How to choose, with numbers</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#what">What chunking is</a></li><li><a href="#lab">Try it: chunk a real policy</a></li><li><a href="#strategies">Strategies compared</a></li><li><a href="#size">Size and overlap</a></li><li><a href="#context">Keep context with every chunk</a></li><li><a href="#metadata">Metadata to attach, by source</a></li><li><a href="#special">Tables, code and slides</a></li><li><a href="#tune">How to choose, with numbers</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="what"><h2>What chunking is</h2>
 <p class="lead">Chunking cuts each document into passages small enough to search precisely and cheap enough to put in a prompt, while keeping enough context that each passage still makes sense on its own.</p>
 <figure class="fig"><svg viewBox="0 0 722 196" class="dg" role="img" aria-label="A document is parsed, cut into chunks, embedded and indexed; at question time only the top chunks reach the model"><rect x="10" y="30" width="120" height="60" rx="8" class="k-src"/><text x="70" y="56" class="b" text-anchor="middle">Policy PDF</text><text x="70" y="72" class="sm" text-anchor="middle">40 pages</text><path d="M130 60 L166 60" class="wire" marker-end="url(#ah)"/><rect x="168" y="30" width="120" height="60" rx="8" class="k-ingest"/><text x="228" y="56" class="b" text-anchor="middle">Parse</text><text x="228" y="72" class="sm" text-anchor="middle">text, headings, tables</text><path d="M288 60 L324 60" class="wire" marker-end="url(#ah)"/><rect x="326" y="18" width="150" height="84" rx="10" class="k-ingest"/><text x="401" y="36" class="b" text-anchor="middle">Chunk</text><rect x="338" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="371" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="404" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="437" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="338" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="371" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="404" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="437" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="338" y="80" width="28" height="13" rx="3" class="cell hot"/><rect x="371" y="80" width="28" height="13" rx="3" class="cell hot"/><rect x="404" y="80" width="28" height="13" rx="3" class="cell hot"/><rect x="437" y="80" width="28" height="13" rx="3" class="cell hot"/><path d="M476 60 L512 60" class="wire" marker-end="url(#ah)"/><rect x="514" y="30" width="90" height="60" rx="8" class="k-model"/><text x="559" y="56" class="b" text-anchor="middle">Embed</text><text x="559" y="72" class="sm" text-anchor="middle">one vector each</text><path d="M604 60 L632 60" class="wire" marker-end="url(#ah)"/><rect x="634" y="30" width="82" height="60" rx="8" class="k-kb"/><text x="675" y="56" class="b" text-anchor="middle">Index</text><text x="675" y="72" class="sm" text-anchor="middle">120 chunks</text><text x="10" y="132" class="small">At question time only the best few chunks reach the model:</text><rect x="10" y="144" width="150" height="40" rx="8" class="k-user"/><text x="85" y="168.5" class="small b" text-anchor="middle">Question</text><path d="M160 164 L196 164" class="wire" marker-end="url(#ah)"/><rect x="198" y="144" width="170" height="40" rx="8" class="k-serve"/><text x="283" y="168.5" class="small b" text-anchor="middle">Retrieve top 8 of 120</text><path d="M368 164 L404 164" class="wire" marker-end="url(#ah)"/><rect x="406" y="144" width="180" height="40" rx="8" class="k-model"/><text x="496" y="168.5" class="small b" text-anchor="middle">LLM reads ~4,000 tokens</text><text x="600" y="160" class="sm">not the whole</text><text x="600" y="175" class="sm">40 pages</text></svg><figcaption>A chunk is the unit you search, cite and send to the model. Get it wrong and nothing later in the pipeline can recover.</figcaption></figure>
@@ -280,7 +280,175 @@
 <li><strong>Heading path header.</strong> Prefix each chunk with the document title and heading path before embedding. Cheap, and the biggest single win on structured documents.</li>
 <li><strong>Small-to-big.</strong> Index small child chunks for precise matching, and return their parent section to the model for context.</li>
 <li><strong>Contextual summaries.</strong> Ask a small model to write one sentence on where the chunk sits in the document, and prepend it. Costs one LLM call per chunk at ingestion.</li>
-<li><strong>Metadata, not just text.</strong> Store region, version and date as fields too, so a filter like <code>region = India</code> can do exact work that embeddings do loosely.</li>
+<li><strong>Metadata, not just text.</strong> Store region, version and date as fields too, so a filter like <code>region = India</code> can do exact work that embeddings do loosely. <a href="#metadata">Which fields, per source</a>.</li>
+</ul></section><section id="metadata"><h2>Metadata to attach, by source</h2>
+<p class="lead">Decide the metadata before you chunk, not after. The parser reads it from the source once per document, and every chunk of that document inherits it. Adding a field later means re-parsing everything.</p>
+<p>Each field should earn its place by doing one of five jobs:</p>
+<div class="table"><table><thead><tr><th>Job</th><th>Question it answers</th><th>Typical fields</th></tr></thead><tbody>
+<tr><td>Filtering</td><td>Which chunks are even eligible for this question?</td><td><code>region</code>, <code>doc_type</code>, <code>product</code>, <code>language</code>, <code>status</code></td></tr>
+<tr><td>Freshness</td><td>Is this the current version, and did it change?</td><td><code>version</code>, <code>content_hash</code>, <code>updated_at</code>, <code>effective_from</code></td></tr>
+<tr><td>Deletes</td><td>Which chunks go when the source item goes?</td><td><code>doc_id</code>, <code>source</code>, child IDs such as <code>comment_ids</code></td></tr>
+<tr><td>Citations</td><td>Where exactly did this answer come from?</td><td><code>url</code> with anchor, <code>section_path</code>, <code>page_start</code>, line range</td></tr>
+<tr><td>Permissions</td><td>Who is allowed to see this chunk?</td><td><code>acl_groups</code>, channel membership, <code>audience</code></td></tr>
+</tbody></table></div>
+<p>Three fields belong on every chunk whatever the source: a stable <code>chunk_id</code> built from <code>doc_id</code> plus version and position (so re-ingesting the same document overwrites instead of duplicating), the <code>doc_id</code> itself (so deletes are one call), and the ACL (so permissions are enforced in the query). The <code>text</code> field below is what gets embedded, with its heading-path header already added. The other fields are stored next to the vector and filtered on.</p>
+<h3 id="meta-policy">Policy and wiki pages</h3>
+<p>Chunk by heading. Most fields come from the page itself and are copied onto every chunk of it.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;wiki:leave-policy:v7:s3:c1&quot;,
+  &quot;doc_id&quot;: &quot;wiki:leave-policy&quot;,
+  &quot;source&quot;: &quot;confluence&quot;,
+  &quot;url&quot;: &quot;https://wiki.example.com/hr/leave-policy#parental-leave&quot;,
+  &quot;title&quot;: &quot;Leave policy&quot;,
+  &quot;section_path&quot;: [&quot;Leave policy&quot;, &quot;India&quot;, &quot;Parental leave&quot;],
+  &quot;chunk_index&quot;: 1,
+  &quot;text&quot;: &quot;Leave policy › India › Parental leave\nAdoptive parents get 12 weeks of paid leave from the date the child is placed with them.&quot;,
+  &quot;version&quot;: 7,
+  &quot;content_hash&quot;: &quot;sha256:9f2c…e41a&quot;,
+  &quot;updated_at&quot;: &quot;2026-09-14T08:12:00Z&quot;,
+  &quot;effective_from&quot;: &quot;2026-10-01&quot;,
+  &quot;region&quot;: &quot;IN&quot;,
+  &quot;language&quot;: &quot;en&quot;,
+  &quot;doc_type&quot;: &quot;policy&quot;,
+  &quot;status&quot;: &quot;published&quot;,
+  &quot;acl_groups&quot;: [&quot;grp:all-employees-in&quot;, &quot;grp:hr&quot;],
+  &quot;owner_team&quot;: &quot;people-ops&quot;
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>region, doc_type, language</code></td><td>Filtering. <code>region = IN</code> removes the near-identical US chunk before ranking, which embeddings alone do badly.</td></tr><tr><td><code>version, content_hash, updated_at</code></td><td>Freshness. Skip re-embedding when the hash is unchanged, reject an older version arriving late, and prefer the newest page when two disagree.</td></tr><tr><td><code>effective_from, status</code></td><td>Freshness. A policy published today may not apply until next month; drafts and archived pages should never be retrieved.</td></tr><tr><td><code>doc_id</code></td><td>Deletes. When the page is deleted or moved, remove every chunk with <code>doc_id = wiki:leave-policy</code> in one call.</td></tr><tr><td><code>url with anchor, section_path</code></td><td>Citations. Link straight to the section, and show the heading path so the reader can check it.</td></tr><tr><td><code>acl_groups</code></td><td>Permissions. Filter on the user's groups inside the search query, before the top k are chosen. See <a href="access-control.html">Access control</a>.</td></tr></tbody></table></div><h3 id="meta-tickets">Tickets with comments</h3>
+<p>A ticket is a description plus a thread. Chunk the description on its own, then group comments in time order, so a chunk never mixes the problem with an unrelated reply. Keep people as IDs, not names.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;jira:PAY-4821:comments:2&quot;,
+  &quot;doc_id&quot;: &quot;jira:PAY-4821&quot;,
+  &quot;source&quot;: &quot;jira&quot;,
+  &quot;url&quot;: &quot;https://tickets.example.com/browse/PAY-4821?focusedCommentId=88213&quot;,
+  &quot;chunk_kind&quot;: &quot;comment_group&quot;,
+  &quot;comment_ids&quot;: [88207, 88213],
+  &quot;text&quot;: &quot;PAY-4821 · Refunds fail for cards issued in EU · Comments\n[2026-10-02] Root cause: the refund call sends the amount in cents, the EU gateway expects decimal units.\n[2026-10-03] Fixed in release 4.18.2. Retried refunds now succeed.&quot;,
+  &quot;project&quot;: &quot;PAY&quot;,
+  &quot;issue_type&quot;: &quot;bug&quot;,
+  &quot;status&quot;: &quot;resolved&quot;,
+  &quot;resolution&quot;: &quot;fixed&quot;,
+  &quot;priority&quot;: &quot;P1&quot;,
+  &quot;components&quot;: [&quot;refunds&quot;, &quot;eu-gateway&quot;],
+  &quot;labels&quot;: [&quot;incident&quot;],
+  &quot;fix_version&quot;: &quot;4.18.2&quot;,
+  &quot;linked_issues&quot;: [&quot;INC-311&quot;],
+  &quot;author_ids&quot;: [&quot;u_1842&quot;, &quot;u_0977&quot;],
+  &quot;created_at&quot;: &quot;2026-10-01T10:40:00Z&quot;,
+  &quot;last_comment_at&quot;: &quot;2026-10-03T16:05:00Z&quot;,
+  &quot;updated_at&quot;: &quot;2026-10-03T16:05:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;proj:PAY:browse&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>status, resolution</code></td><td>Filtering. "How was this fixed?" should rank resolved tickets first; an open ticket only describes the problem.</td></tr><tr><td><code>project, components, issue_type, fix_version</code></td><td>Filtering. Narrow to one team or one release without trusting the embedding to notice the ticket key.</td></tr><tr><td><code>comment_ids, chunk_kind</code></td><td>Deletes and edits. A deleted or edited comment rebuilds only its group, not the whole ticket.</td></tr><tr><td><code>updated_at, last_comment_at</code></td><td>Freshness. A ticket reopened yesterday beats the same ticket's month-old resolution.</td></tr><tr><td><code>url with comment anchor</code></td><td>Citations. The answer can point to the exact comment that holds the fix.</td></tr><tr><td><code>acl_groups, author_ids</code></td><td>Permissions and privacy. Mirror project permissions; store author IDs so names stay out of the index and can be resolved at display time.</td></tr></tbody></table></div><h3 id="meta-code">Code and API reference</h3>
+<p>Split on functions, classes and endpoints, never on line counts. The file path and symbol name do most of the work.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;git:payments-svc@3a9f1c2:src/refunds/client.py#RefundClient.create&quot;,
+  &quot;doc_id&quot;: &quot;git:payments-svc:src/refunds/client.py&quot;,
+  &quot;source&quot;: &quot;github&quot;,
+  &quot;repo&quot;: &quot;payments-svc&quot;,
+  &quot;branch&quot;: &quot;main&quot;,
+  &quot;commit_sha&quot;: &quot;3a9f1c2&quot;,
+  &quot;path&quot;: &quot;src/refunds/client.py&quot;,
+  &quot;language&quot;: &quot;python&quot;,
+  &quot;symbol&quot;: &quot;RefundClient.create&quot;,
+  &quot;symbol_kind&quot;: &quot;method&quot;,
+  &quot;signature&quot;: &quot;def create(self, payment_id: str, amount: Decimal, reason: str | None = None) -&gt; Refund&quot;,
+  &quot;start_line&quot;: 48,
+  &quot;end_line&quot;: 91,
+  &quot;url&quot;: &quot;https://git.example.com/payments-svc/blob/3a9f1c2/src/refunds/client.py#L48-L91&quot;,
+  &quot;text&quot;: &quot;payments-svc · src/refunds/client.py · RefundClient.create\ndef create(self, payment_id: str, amount: Decimal, reason: str | None = None) -&gt; Refund:\n    \&quot;\&quot;\&quot;Create a refund. amount is in major units (e.g. 12.50), not cents.\&quot;\&quot;\&quot;\n    ...&quot;,
+  &quot;imports&quot;: [&quot;decimal.Decimal&quot;, &quot;refunds.models.Refund&quot;],
+  &quot;api_version&quot;: &quot;v2&quot;,
+  &quot;deprecated&quot;: false,
+  &quot;updated_at&quot;: &quot;2026-10-03T15:20:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;repo:payments-svc:read&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>repo, path, language, symbol</code></td><td>Filtering and exact match. Keyword search on <code>RefundClient.create</code> finds what embeddings blur; see <a href="search-types.html">Search types</a>.</td></tr><tr><td><code>commit_sha, branch</code></td><td>Freshness. Index the default branch at a known commit; when it moves, re-embed only files whose hash changed.</td></tr><tr><td><code>api_version, deprecated</code></td><td>Filtering. Stop the model recommending a v1 endpoint that was removed last quarter.</td></tr><tr><td><code>doc_id = file path</code></td><td>Deletes. A deleted or renamed file removes all its symbol chunks in one call.</td></tr><tr><td><code>start_line, end_line, url</code></td><td>Citations. Link to the exact line range at that commit, which never changes underneath the link.</td></tr><tr><td><code>acl_groups</code></td><td>Permissions. Private repos must not leak into answers for people who cannot read them.</td></tr></tbody></table></div><h3 id="meta-pdf">PDFs and manuals</h3>
+<p>Parse with a layout-aware parser, chunk by heading inside the PDF, and keep page numbers. People quote manuals by page.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;pdf:ac-x200-service-manual:r3:p42:c2&quot;,
+  &quot;doc_id&quot;: &quot;pdf:ac-x200-service-manual&quot;,
+  &quot;source&quot;: &quot;sharepoint&quot;,
+  &quot;file_name&quot;: &quot;AC-X200_Service_Manual_rev3.pdf&quot;,
+  &quot;url&quot;: &quot;https://files.example.com/manuals/AC-X200_Service_Manual_rev3.pdf#page=42&quot;,
+  &quot;title&quot;: &quot;AC-X200 Service Manual&quot;,
+  &quot;revision&quot;: &quot;rev3&quot;,
+  &quot;section_path&quot;: [&quot;6 Troubleshooting&quot;, &quot;6.4 Error codes&quot;],
+  &quot;page_start&quot;: 42,
+  &quot;page_end&quot;: 43,
+  &quot;text&quot;: &quot;AC-X200 Service Manual › 6 Troubleshooting › 6.4 Error codes\nE4: outdoor fan stalled. Switch off at the isolator, check the fan for obstruction, then measure the capacitor (expected 2.5 µF ±5%).&quot;,
+  &quot;contains_table&quot;: true,
+  &quot;figure_refs&quot;: [&quot;Fig 6-3&quot;],
+  &quot;product_models&quot;: [&quot;AC-X200&quot;, &quot;AC-X200P&quot;],
+  &quot;language&quot;: &quot;en&quot;,
+  &quot;ocr&quot;: false,
+  &quot;parser_confidence&quot;: 0.97,
+  &quot;published_at&quot;: &quot;2025-11-30&quot;,
+  &quot;updated_at&quot;: &quot;2026-02-11T09:00:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;grp:field-service&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>product_models, revision, language</code></td><td>Filtering. A technician on an AC-X200 must not get the AC-X100 fix, and rev2 instructions may be unsafe after rev3.</td></tr><tr><td><code>page_start, page_end, url with #page</code></td><td>Citations. "Page 42 of rev3" opens the PDF at the right page.</td></tr><tr><td><code>ocr, parser_confidence</code></td><td>Quality. Down-rank or flag chunks from poor scans instead of trusting garbled text.</td></tr><tr><td><code>contains_table, figure_refs</code></td><td>Answering. Tell the model a table or figure exists, so it says "see Fig 6-3" instead of inventing values.</td></tr><tr><td><code>doc_id, revision</code></td><td>Deletes and freshness. Uploading rev4 replaces every rev3 chunk under the same doc_id.</td></tr></tbody></table></div><h3 id="meta-chat">Chat and call transcripts</h3>
+<p>Chunk by thread or by time window (say 10 to 20 messages, or a few minutes of a call), with a small overlap. A single message is too short to mean anything on its own.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;slack:C04ONCALL:1727951412.0931:w1&quot;,
+  &quot;doc_id&quot;: &quot;slack:C04ONCALL:1727951412.0931&quot;,
+  &quot;source&quot;: &quot;slack&quot;,
+  &quot;url&quot;: &quot;https://chat.example.com/archives/C04ONCALL/p1727951412093100&quot;,
+  &quot;channel_id&quot;: &quot;C04ONCALL&quot;,
+  &quot;channel_name&quot;: &quot;payments-oncall&quot;,
+  &quot;channel_type&quot;: &quot;private&quot;,
+  &quot;thread_ts&quot;: &quot;1727951412.0931&quot;,
+  &quot;message_ids&quot;: [&quot;1727951412.0931&quot;, &quot;1727951466.1022&quot;, &quot;1727951530.4410&quot;, &quot;1727951702.0087&quot;],
+  &quot;window_start&quot;: &quot;2026-10-03T10:30:12Z&quot;,
+  &quot;window_end&quot;: &quot;2026-10-03T10:35:02Z&quot;,
+  &quot;text&quot;: &quot;#payments-oncall · thread · 3 Oct 10:30–10:35 UTC\nu_1842: EU refunds failing again after deploy?\nu_0977: yes, same amount-format error as PAY-4821\nu_1842: rolling back to 4.18.1\nu_0977: rollback done, refunds recovering&quot;,
+  &quot;participant_ids&quot;: [&quot;u_1842&quot;, &quot;u_0977&quot;],
+  &quot;mentions&quot;: [&quot;PAY-4821&quot;],
+  &quot;thread_resolved&quot;: true,
+  &quot;pii_redacted&quot;: true,
+  &quot;retention_expires_at&quot;: &quot;2027-10-03T00:00:00Z&quot;,
+  &quot;acl_members_of&quot;: &quot;C04ONCALL&quot;
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>channel_type, acl_members_of</code></td><td>Permissions. Private channel and DM content is visible only to members; check membership at query time.</td></tr><tr><td><code>window_start, window_end</code></td><td>Freshness and filtering. "What happened during Tuesday's outage?" becomes a time-range filter.</td></tr><tr><td><code>message_ids</code></td><td>Deletes. When a message is deleted or edited, rebuild the windows that contain it. Chat platforms send these events and you must honour them.</td></tr><tr><td><code>retention_expires_at, pii_redacted</code></td><td>Compliance. A nightly job removes chunks past retention; redact before embedding, since vectors can leak the text they came from.</td></tr><tr><td><code>mentions, thread_resolved</code></td><td>Linking. Joins the chat to the ticket, and lets you prefer threads that reached an answer.</td></tr></tbody></table></div><h3 id="meta-tables">Tables and FAQs</h3>
+<p>Keep a small table whole. Split a big one into row groups and repeat the header in every chunk. For an FAQ, one question with its answer is one chunk, and you can embed the question on its own.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;sheet:shipping-rates:2026Q4:rows-11-20&quot;,
+  &quot;doc_id&quot;: &quot;sheet:shipping-rates&quot;,
+  &quot;source&quot;: &quot;google-sheets&quot;,
+  &quot;sheet&quot;: &quot;Rates Q4 2026&quot;,
+  &quot;table_id&quot;: &quot;standard-rates&quot;,
+  &quot;columns&quot;: [&quot;Destination&quot;, &quot;Weight band&quot;, &quot;Standard&quot;, &quot;Express&quot;],
+  &quot;row_start&quot;: 11,
+  &quot;row_end&quot;: 20,
+  &quot;text&quot;: &quot;Shipping rates Q4 2026 · Standard rates (rows 11–20)\nDestination | Weight band | Standard | Express\nGermany | 0–2 kg | €6.90 | €14.50\nGermany | 2–5 kg | €9.40 | €19.00\n…&quot;,
+  &quot;currency&quot;: &quot;EUR&quot;,
+  &quot;valid_from&quot;: &quot;2026-10-01&quot;,
+  &quot;valid_to&quot;: &quot;2026-12-31&quot;,
+  &quot;updated_at&quot;: &quot;2026-09-28T12:00:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;grp:support&quot;, &quot;grp:sales&quot;]
+}</code></pre><pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;faq:billing:q-017&quot;,
+  &quot;doc_id&quot;: &quot;faq:billing&quot;,
+  &quot;source&quot;: &quot;help-center&quot;,
+  &quot;url&quot;: &quot;https://help.example.com/billing#q-017&quot;,
+  &quot;faq_id&quot;: &quot;q-017&quot;,
+  &quot;question&quot;: &quot;Can I change my billing date?&quot;,
+  &quot;alt_questions&quot;: [&quot;move payment date&quot;, &quot;switch billing cycle day&quot;],
+  &quot;text&quot;: &quot;Q: Can I change my billing date?\nA: Yes, once per billing cycle, from Settings › Billing. The next invoice is pro-rated.&quot;,
+  &quot;category&quot;: &quot;billing&quot;,
+  &quot;product&quot;: &quot;all-plans&quot;,
+  &quot;audience&quot;: &quot;customers&quot;,
+  &quot;updated_at&quot;: &quot;2026-07-19T08:30:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;public&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>columns, row_start, row_end</code></td><td>Answering and citations. The header travels with every row group, and the citation names the rows used.</td></tr><tr><td><code>valid_from, valid_to, currency</code></td><td>Freshness. Last quarter's rates are still in the sheet history; filter on today's date to avoid quoting them.</td></tr><tr><td><code>question, alt_questions</code></td><td>Matching. Embed the question and its paraphrases separately and point them at one answer, since users ask questions, not answers.</td></tr><tr><td><code>audience, acl_groups</code></td><td>Permissions. An internal-only answer must never reach a public help bot.</td></tr><tr><td><code>faq_id, doc_id</code></td><td>Deletes. Retiring one FAQ entry removes one chunk; deleting the sheet removes all its row groups.</td></tr></tbody></table></div>
+<h3 id="meta-mistakes">Common mistakes</h3>
+<ul class="plain">
+<li><strong>Putting filters only in the text.</strong> "Region: India" in the text helps the embedding a little; a <code>region</code> field filters exactly. Do both.</li>
+<li><strong>No <code>doc_id</code> on chunks.</strong> Then a deleted source document leaves orphan chunks that keep getting cited. Reconcile by comparing the source's ID list with the index's (a set difference) on a schedule.</li>
+<li><strong>ACLs checked after retrieval.</strong> If you take the top 8 and then drop the ones the user cannot see, they may get 1 result or none. Filter inside the search.</li>
+<li><strong>Too many unindexed fields.</strong> Only fields you filter on need a filter index in the <a href="vector-databases.html">vector database</a>. Keep the rest as plain stored payload.</li>
+<li><strong>Names and secrets in metadata.</strong> Store user IDs and resolve names at display time; redact PII before it is embedded.</li>
 </ul></section><section id="special"><h2>Tables, code and slides</h2>
 <ul class="plain">
 <li><strong>Tables:</strong> keep small tables whole. Split big ones into row groups and repeat the header row in every group, or turn each row into a sentence ("Diwali: date varies").</li>
