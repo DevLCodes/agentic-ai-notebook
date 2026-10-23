@@ -158,7 +158,28 @@
   .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
   .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
 </style>
-
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
@@ -171,7 +192,24 @@
 <p class="lead">A vector database stores embeddings and answers one question fast: which stored vectors are nearest to this query vector, among those that pass my filters?</p>
 <figure class="fig"><svg viewBox="0 0 722 98" class="dg" role="img" aria-label="A vector database record: id, vector, metadata and text"><rect x="10" y="34" width="126" height="52" rx="8" class="box"/><text x="22" y="26" class="cap">id</text><text x="22" y="64" class="mono small">conf-88213#v8#3</text><rect x="140" y="34" width="186" height="52" rx="8" class="k-kb"/><text x="152" y="26" class="cap">vector</text><text x="152" y="64" class="mono small">[0.12, -0.48, ... ]</text><rect x="330" y="34" width="206" height="52" rx="8" class="k-gov"/><text x="342" y="26" class="cap">metadata</text><text x="342" y="64" class="small">source, version, ACL, date</text><rect x="540" y="34" width="156" height="52" rx="8" class="box"/><text x="552" y="26" class="cap">text</text><text x="552" y="64" class="small">text for the prompt</text></svg><figcaption>One record per chunk. The metadata is what makes filtered search and deletes possible.</figcaption></figure>
 <p>Everything else (storage, replication, backups, access control) is ordinary database work. The hard part is nearest-neighbour search at scale, combined with metadata filters.</p></section><section id="ann"><h2>Why approximate search</h2><figure class="fig"><svg viewBox="0 0 722 162" class="dg" role="img" aria-label="Exact search compares every vector; approximate search visits a small neighbourhood"><text x="10" y="20" class="b">Exact (brute force)</text><text x="10" y="38" class="sm">compare the query with every vector</text><circle cx="20" cy="56" r="5" class="dot-it"/><circle cx="40" cy="56" r="5" class="dot-it"/><circle cx="60" cy="56" r="5" class="dot-it"/><circle cx="80" cy="56" r="5" class="dot-it"/><circle cx="100" cy="56" r="5" class="dot-it"/><circle cx="120" cy="56" r="5" class="dot-it"/><circle cx="140" cy="56" r="5" class="dot-it"/><circle cx="160" cy="56" r="5" class="dot-it"/><circle cx="180" cy="56" r="5" class="dot-it"/><circle cx="200" cy="56" r="5" class="dot-it"/><circle cx="220" cy="56" r="5" class="dot-it"/><circle cx="240" cy="56" r="5" class="dot-it"/><circle cx="260" cy="56" r="5" class="dot-it"/><circle cx="280" cy="56" r="5" class="dot-it"/><circle cx="300" cy="56" r="5" class="dot-it"/><circle cx="20" cy="76" r="5" class="dot-it"/><circle cx="40" cy="76" r="5" class="dot-it"/><circle cx="60" cy="76" r="5" class="dot-it"/><circle cx="80" cy="76" r="5" class="dot-it"/><circle cx="100" cy="76" r="5" class="dot-it"/><circle cx="120" cy="76" r="5" class="dot-it"/><circle cx="140" cy="76" r="5" class="dot-it"/><circle cx="160" cy="76" r="5" class="dot-it"/><circle cx="180" cy="76" r="5" class="dot-it"/><circle cx="200" cy="76" r="5" class="dot-it"/><circle cx="220" cy="76" r="5" class="dot-it"/><circle cx="240" cy="76" r="5" class="dot-it"/><circle cx="260" cy="76" r="5" class="dot-it"/><circle cx="280" cy="76" r="5" class="dot-it"/><circle cx="300" cy="76" r="5" class="dot-it"/><circle cx="20" cy="96" r="5" class="dot-it"/><circle cx="40" cy="96" r="5" class="dot-it"/><circle cx="60" cy="96" r="5" class="dot-it"/><circle cx="80" cy="96" r="5" class="dot-it"/><circle cx="100" cy="96" r="5" class="dot-it"/><circle cx="120" cy="96" r="5" class="dot-it"/><circle cx="140" cy="96" r="5" class="dot-it"/><circle cx="160" cy="96" r="5" class="dot-it"/><circle cx="180" cy="96" r="5" class="dot-it"/><circle cx="200" cy="96" r="5" class="dot-it"/><circle cx="220" cy="96" r="5" class="dot-it"/><circle cx="240" cy="96" r="5" class="dot-it"/><circle cx="260" cy="96" r="5" class="dot-it"/><circle cx="280" cy="96" r="5" class="dot-it"/><circle cx="300" cy="96" r="5" class="dot-it"/><circle cx="20" cy="116" r="5" class="dot-it"/><circle cx="40" cy="116" r="5" class="dot-it"/><circle cx="60" cy="116" r="5" class="dot-it"/><circle cx="80" cy="116" r="5" class="dot-it"/><circle cx="100" cy="116" r="5" class="dot-it"/><circle cx="120" cy="116" r="5" class="dot-it"/><circle cx="140" cy="116" r="5" class="dot-it"/><circle cx="160" cy="116" r="5" class="dot-it"/><circle cx="180" cy="116" r="5" class="dot-it"/><circle cx="200" cy="116" r="5" class="dot-it"/><circle cx="220" cy="116" r="5" class="dot-it"/><circle cx="240" cy="116" r="5" class="dot-it"/><circle cx="260" cy="116" r="5" class="dot-it"/><circle cx="280" cy="116" r="5" class="dot-it"/><circle cx="300" cy="116" r="5" class="dot-it"/><text x="10" y="150" class="small">50M vectors × 768 dims ≈ 38 billion multiply-adds per query</text><line x1="361" y1="10" x2="361" y2="160" class="rule"/><text x="380" y="20" class="b">Approximate (ANN index)</text><text x="380" y="38" class="sm">visit only a small, promising neighbourhood</text><circle cx="390" cy="56" r="5" class="cell"/><circle cx="410" cy="56" r="5" class="cell"/><circle cx="430" cy="56" r="5" class="cell"/><circle cx="450" cy="56" r="5" class="cell"/><circle cx="470" cy="56" r="5" class="cell"/><circle cx="490" cy="56" r="5" class="cell"/><circle cx="510" cy="56" r="5" class="cell"/><circle cx="530" cy="56" r="5" class="cell"/><circle cx="550" cy="56" r="5" class="cell"/><circle cx="570" cy="56" r="5" class="cell"/><circle cx="590" cy="56" r="5" class="cell"/><circle cx="610" cy="56" r="5" class="cell"/><circle cx="630" cy="56" r="5" class="cell"/><circle cx="650" cy="56" r="5" class="cell"/><circle cx="670" cy="56" r="5" class="cell"/><circle cx="390" cy="76" r="5" class="cell"/><circle cx="410" cy="76" r="5" class="cell"/><circle cx="430" cy="76" r="5" class="cell"/><circle cx="450" cy="76" r="5" class="cell"/><circle cx="470" cy="76" r="5" class="cell"/><circle cx="490" cy="76" r="5" class="cell"/><circle cx="510" cy="76" r="5" class="cell"/><circle cx="530" cy="76" r="5" class="cell"/><circle cx="550" cy="76" r="5" class="cell"/><circle cx="570" cy="76" r="5" class="dot-q"/><circle cx="590" cy="76" r="5" class="dot-q"/><circle cx="610" cy="76" r="5" class="dot-q"/><circle cx="630" cy="76" r="5" class="cell"/><circle cx="650" cy="76" r="5" class="cell"/><circle cx="670" cy="76" r="5" class="cell"/><circle cx="390" cy="96" r="5" class="cell"/><circle cx="410" cy="96" r="5" class="cell"/><circle cx="430" cy="96" r="5" class="cell"/><circle cx="450" cy="96" r="5" class="cell"/><circle cx="470" cy="96" r="5" class="cell"/><circle cx="490" cy="96" r="5" class="cell"/><circle cx="510" cy="96" r="5" class="cell"/><circle cx="530" cy="96" r="5" class="cell"/><circle cx="550" cy="96" r="5" class="cell"/><circle cx="570" cy="96" r="5" class="dot-q"/><circle cx="590" cy="96" r="5" class="dot-q"/><circle cx="610" cy="96" r="5" class="dot-q"/><circle cx="630" cy="96" r="5" class="cell"/><circle cx="650" cy="96" r="5" class="cell"/><circle cx="670" cy="96" r="5" class="cell"/><circle cx="390" cy="116" r="5" class="cell"/><circle cx="410" cy="116" r="5" class="cell"/><circle cx="430" cy="116" r="5" class="cell"/><circle cx="450" cy="116" r="5" class="cell"/><circle cx="470" cy="116" r="5" class="cell"/><circle cx="490" cy="116" r="5" class="cell"/><circle cx="510" cy="116" r="5" class="cell"/><circle cx="530" cy="116" r="5" class="cell"/><circle cx="550" cy="116" r="5" class="cell"/><circle cx="570" cy="116" r="5" class="cell"/><circle cx="590" cy="116" r="5" class="cell"/><circle cx="610" cy="116" r="5" class="cell"/><circle cx="630" cy="116" r="5" class="cell"/><circle cx="650" cy="116" r="5" class="cell"/><circle cx="670" cy="116" r="5" class="cell"/><text x="380" y="150" class="small">a few thousand comparisons; ~95–99% recall</text></svg><figcaption>ANN indexes trade a little recall for orders of magnitude less work. Recall is tunable.</figcaption></figure>
-<p>Exact search is fine up to roughly a million vectors. Beyond that, systems use an <strong>approximate nearest neighbour</strong> (ANN) index. You measure it by <strong>recall</strong>: how often the true nearest neighbours appear in the results.</p></section><section id="indexes"><h2>Common index types</h2><figure class="fig"><svg viewBox="0 0 722 216" class="dg" role="img" aria-label="HNSW search starts on a sparse top layer and descends to the dense bottom layer"><rect x="20" y="18" width="680" height="44" rx="10" class="zone"/><text x="30" y="12" class="cap">Layer 2: few nodes, long jumps</text><line x1="120" y1="40" x2="520" y2="40" class="rule"/><circle cx="120" cy="40" r="7" class="cell"/><circle cx="520" cy="40" r="7" class="cell"/><rect x="20" y="88" width="680" height="44" rx="10" class="zone"/><text x="30" y="82" class="cap">Layer 1</text><line x1="80" y1="110" x2="220" y2="110" class="rule"/><line x1="220" y1="110" x2="380" y2="110" class="rule"/><line x1="380" y1="110" x2="560" y2="110" class="rule"/><circle cx="80" cy="110" r="7" class="cell"/><circle cx="220" cy="110" r="7" class="cell"/><circle cx="380" cy="110" r="7" class="cell"/><circle cx="560" cy="110" r="7" class="cell"/><rect x="20" y="158" width="680" height="44" rx="10" class="zone"/><text x="30" y="152" class="cap">Layer 0: every vector</text><line x1="60" y1="180" x2="140" y2="180" class="rule"/><line x1="140" y1="180" x2="220" y2="180" class="rule"/><line x1="220" y1="180" x2="300" y2="180" class="rule"/><line x1="300" y1="180" x2="380" y2="180" class="rule"/><line x1="380" y1="180" x2="460" y2="180" class="rule"/><line x1="460" y1="180" x2="540" y2="180" class="rule"/><line x1="540" y1="180" x2="620" y2="180" class="rule"/><circle cx="60" cy="180" r="7" class="cell"/><circle cx="140" cy="180" r="7" class="cell"/><circle cx="220" cy="180" r="7" class="cell"/><circle cx="300" cy="180" r="7" class="cell"/><circle cx="380" cy="180" r="7" class="cell"/><circle cx="460" cy="180" r="7" class="cell"/><circle cx="540" cy="180" r="7" class="cell"/><circle cx="620" cy="180" r="7" class="cell"/><path d="M120 40 L520 40 L520 110 L560 110 L560 180 L540 180" class="wire hot" marker-end="url(#ah)"/><circle cx="540" cy="180" r="8" class="dot-q"/><text x="560" y="206" class="small b">nearest neighbour</text></svg><figcaption>HNSW: start at the top with long hops, then drop down a layer each time you cannot get closer.</figcaption></figure><figure class="fig"><svg viewBox="0 0 722 258" class="dg" role="img" aria-label="IVF clusters vectors and probes only the nearest clusters"><circle cx="110" cy="80" r="52" class="zone"/><circle cx="140" cy="80" r="3.5" class="dot-it"/><circle cx="124.927" cy="102.553" r="3.5" class="dot-it"/><circle cx="94.8546" cy="102.443" r="3.5" class="dot-it"/><circle cx="80.0011" cy="79.7814" r="3.5" class="dot-it"/><circle cx="95.2922" cy="57.339" r="3.5" class="dot-it"/><circle cx="125.363" cy="57.6677" r="3.5" class="dot-it"/><circle cx="110" cy="80" r="5" class="f-cross"/><circle cx="260" cy="60" r="52" class="zone"/><circle cx="276.209" cy="81.8782" r="3.5" class="dot-it"/><circle cx="246.168" cy="83.0714" r="3.5" class="dot-it"/><circle cx="230.026" cy="61.0811" r="3.5" class="dot-it"/><circle cx="244.004" cy="38.0044" r="3.5" class="dot-it"/><circle cx="274.056" cy="37.0302" r="3.5" class="dot-it"/><circle cx="289.983" cy="59.1373" r="3.5" class="dot-it"/><circle cx="260" cy="60" r="5" class="f-cross"/><circle cx="420" cy="90" r="52" class="k-kb"/><circle cx="407.516" cy="113.642" r="3.5" class="dot-it"/><circle cx="390.126" cy="92.3781" r="3.5" class="dot-it"/><circle cx="402.755" cy="68.7248" r="3.5" class="dot-it"/><circle cx="432.713" cy="66.4501" r="3.5" class="dot-it"/><circle cx="449.896" cy="87.8397" r="3.5" class="dot-it"/><circle cx="437.038" cy="111.4" r="3.5" class="dot-it"/><circle cx="420" cy="90" r="5" class="f-cross"/><circle cx="570" cy="70" r="52" class="zone"/><circle cx="540.3" cy="73.6691" r="3.5" class="dot-it"/><circle cx="551.55" cy="49.4983" r="3.5" class="dot-it"/><circle cx="581.339" cy="45.9288" r="3.5" class="dot-it"/><circle cx="599.734" cy="66.5474" r="3.5" class="dot-it"/><circle cx="588.251" cy="90.6354" r="3.5" class="dot-it"/><circle cx="558.428" cy="93.9877" r="3.5" class="dot-it"/><circle cx="570" cy="70" r="5" class="f-cross"/><circle cx="180" cy="170" r="52" class="zone"/><circle cx="160.391" cy="150.323" r="3.5" class="dot-it"/><circle cx="189.937" cy="145.468" r="3.5" class="dot-it"/><circle cx="209.498" cy="165.264" r="3.5" class="dot-it"/><circle cx="199.418" cy="189.819" r="3.5" class="dot-it"/><circle cx="169.825" cy="194.459" r="3.5" class="dot-it"/><circle cx="150.457" cy="174.521" r="3.5" class="dot-it"/><circle cx="180" cy="170" r="5" class="f-cross"/><circle cx="360" cy="180" r="52" class="k-kb"/><circle cx="368.51" cy="155.068" r="3.5" class="dot-it"/><circle cx="389.188" cy="173.992" r="3.5" class="dot-it"/><circle cx="380.536" cy="198.953" r="3.5" class="dot-it"/><circle cx="351.249" cy="204.869" r="3.5" class="dot-it"/><circle cx="330.755" cy="185.795" r="3.5" class="dot-it"/><circle cx="339.648" cy="160.898" r="3.5" class="dot-it"/><circle cx="360" cy="180" r="5" class="f-cross"/><circle cx="530" cy="175" r="52" class="zone"/><circle cx="558.805" cy="167.735" r="3.5" class="dot-it"/><circle cx="551.604" cy="193.04" r="3.5" class="dot-it"/><circle cx="522.694" cy="200.217" r="3.5" class="dot-it"/><circle cx="501.125" cy="182.055" r="3.5" class="dot-it"/><circle cx="508.572" cy="156.803" r="3.5" class="dot-it"/><circle cx="537.551" cy="149.837" r="3.5" class="dot-it"/><circle cx="530" cy="175" r="5" class="f-cross"/><circle cx="400" cy="134" r="8" class="dot-q"/><text x="640" y="140" class="small b">query</text><path d="M636 136 L412 134" class="wire dash" marker-end="url(#ah)"/><text x="10" y="248" class="sm">IVF: vectors are grouped around centroids; a query searches only the closest few groups (here 2 of 7).</text></svg><figcaption>More probes means better recall and slower queries. The same knob exists in every ANN index.</figcaption></figure>
+<p>Exact search is fine up to roughly a million vectors. Beyond that, systems use an <strong>approximate nearest neighbour</strong> (ANN) index. You measure it by <strong>recall</strong>: how often the true nearest neighbours appear in the results.</p></section><section id="indexes"><h2>Common index types</h2><figure class="fig"><svg viewBox="0 0 722 216" class="dg" role="img" aria-label="HNSW search starts on a sparse top layer and descends to the dense bottom layer"><rect x="20" y="18" width="680" height="44" rx="10" class="zone"/><text x="30" y="12" class="cap">Layer 2: few nodes, long jumps</text><line x1="120" y1="40" x2="520" y2="40" class="rule"/><circle cx="120" cy="40" r="7" class="cell"/><circle cx="520" cy="40" r="7" class="cell"/><rect x="20" y="88" width="680" height="44" rx="10" class="zone"/><text x="30" y="82" class="cap">Layer 1</text><line x1="80" y1="110" x2="220" y2="110" class="rule"/><line x1="220" y1="110" x2="380" y2="110" class="rule"/><line x1="380" y1="110" x2="560" y2="110" class="rule"/><circle cx="80" cy="110" r="7" class="cell"/><circle cx="220" cy="110" r="7" class="cell"/><circle cx="380" cy="110" r="7" class="cell"/><circle cx="560" cy="110" r="7" class="cell"/><rect x="20" y="158" width="680" height="44" rx="10" class="zone"/><text x="30" y="152" class="cap">Layer 0: every vector</text><line x1="60" y1="180" x2="140" y2="180" class="rule"/><line x1="140" y1="180" x2="220" y2="180" class="rule"/><line x1="220" y1="180" x2="300" y2="180" class="rule"/><line x1="300" y1="180" x2="380" y2="180" class="rule"/><line x1="380" y1="180" x2="460" y2="180" class="rule"/><line x1="460" y1="180" x2="540" y2="180" class="rule"/><line x1="540" y1="180" x2="620" y2="180" class="rule"/><circle cx="60" cy="180" r="7" class="cell"/><circle cx="140" cy="180" r="7" class="cell"/><circle cx="220" cy="180" r="7" class="cell"/><circle cx="300" cy="180" r="7" class="cell"/><circle cx="380" cy="180" r="7" class="cell"/><circle cx="460" cy="180" r="7" class="cell"/><circle cx="540" cy="180" r="7" class="cell"/><circle cx="620" cy="180" r="7" class="cell"/><path d="M120 40 L520 40 L520 110 L560 110 L560 180 L540 180" class="wire hot" marker-end="url(#ah)"/><circle cx="540" cy="180" r="8" class="dot-q"/><text x="560" y="206" class="small b">nearest neighbour</text></svg><figcaption>HNSW: start at the top with long hops, then drop down a layer each time you cannot get closer.</figcaption></figure>
+<h3>HNSW in 3D</h3>
+<p>The same idea as a real layered graph. The search enters at the top, hops greedily, and drops a layer each time no neighbour is closer to the query.</p>
+<figure class="fig3d" id="hnsw3d">
+<div class="stage3d" role="img" aria-label="Three stacked graph layers of an HNSW index, with a search path that hops across the sparse top layer and descends to the dense bottom layer"><p class="hint3">3D · drag to turn</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The flat figure above shows the same idea.</p></div>
+<div class="ctl3"><button data-run>Replay the search</button><button data-new>New query</button></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>Illustrative: 40 vectors. The search hops greedily on each layer until no neighbour is closer to the query, then drops one layer down. Real indexes hold millions of vectors and keep a candidate list (efSearch) instead of a single best node.</figcaption>
+</figure>
+<figure class="fig"><svg viewBox="0 0 722 258" class="dg" role="img" aria-label="IVF clusters vectors and probes only the nearest clusters"><circle cx="110" cy="80" r="52" class="zone"/><circle cx="140" cy="80" r="3.5" class="dot-it"/><circle cx="124.927" cy="102.553" r="3.5" class="dot-it"/><circle cx="94.8546" cy="102.443" r="3.5" class="dot-it"/><circle cx="80.0011" cy="79.7814" r="3.5" class="dot-it"/><circle cx="95.2922" cy="57.339" r="3.5" class="dot-it"/><circle cx="125.363" cy="57.6677" r="3.5" class="dot-it"/><circle cx="110" cy="80" r="5" class="f-cross"/><circle cx="260" cy="60" r="52" class="zone"/><circle cx="276.209" cy="81.8782" r="3.5" class="dot-it"/><circle cx="246.168" cy="83.0714" r="3.5" class="dot-it"/><circle cx="230.026" cy="61.0811" r="3.5" class="dot-it"/><circle cx="244.004" cy="38.0044" r="3.5" class="dot-it"/><circle cx="274.056" cy="37.0302" r="3.5" class="dot-it"/><circle cx="289.983" cy="59.1373" r="3.5" class="dot-it"/><circle cx="260" cy="60" r="5" class="f-cross"/><circle cx="420" cy="90" r="52" class="k-kb"/><circle cx="407.516" cy="113.642" r="3.5" class="dot-it"/><circle cx="390.126" cy="92.3781" r="3.5" class="dot-it"/><circle cx="402.755" cy="68.7248" r="3.5" class="dot-it"/><circle cx="432.713" cy="66.4501" r="3.5" class="dot-it"/><circle cx="449.896" cy="87.8397" r="3.5" class="dot-it"/><circle cx="437.038" cy="111.4" r="3.5" class="dot-it"/><circle cx="420" cy="90" r="5" class="f-cross"/><circle cx="570" cy="70" r="52" class="zone"/><circle cx="540.3" cy="73.6691" r="3.5" class="dot-it"/><circle cx="551.55" cy="49.4983" r="3.5" class="dot-it"/><circle cx="581.339" cy="45.9288" r="3.5" class="dot-it"/><circle cx="599.734" cy="66.5474" r="3.5" class="dot-it"/><circle cx="588.251" cy="90.6354" r="3.5" class="dot-it"/><circle cx="558.428" cy="93.9877" r="3.5" class="dot-it"/><circle cx="570" cy="70" r="5" class="f-cross"/><circle cx="180" cy="170" r="52" class="zone"/><circle cx="160.391" cy="150.323" r="3.5" class="dot-it"/><circle cx="189.937" cy="145.468" r="3.5" class="dot-it"/><circle cx="209.498" cy="165.264" r="3.5" class="dot-it"/><circle cx="199.418" cy="189.819" r="3.5" class="dot-it"/><circle cx="169.825" cy="194.459" r="3.5" class="dot-it"/><circle cx="150.457" cy="174.521" r="3.5" class="dot-it"/><circle cx="180" cy="170" r="5" class="f-cross"/><circle cx="360" cy="180" r="52" class="k-kb"/><circle cx="368.51" cy="155.068" r="3.5" class="dot-it"/><circle cx="389.188" cy="173.992" r="3.5" class="dot-it"/><circle cx="380.536" cy="198.953" r="3.5" class="dot-it"/><circle cx="351.249" cy="204.869" r="3.5" class="dot-it"/><circle cx="330.755" cy="185.795" r="3.5" class="dot-it"/><circle cx="339.648" cy="160.898" r="3.5" class="dot-it"/><circle cx="360" cy="180" r="5" class="f-cross"/><circle cx="530" cy="175" r="52" class="zone"/><circle cx="558.805" cy="167.735" r="3.5" class="dot-it"/><circle cx="551.604" cy="193.04" r="3.5" class="dot-it"/><circle cx="522.694" cy="200.217" r="3.5" class="dot-it"/><circle cx="501.125" cy="182.055" r="3.5" class="dot-it"/><circle cx="508.572" cy="156.803" r="3.5" class="dot-it"/><circle cx="537.551" cy="149.837" r="3.5" class="dot-it"/><circle cx="530" cy="175" r="5" class="f-cross"/><circle cx="400" cy="134" r="8" class="dot-q"/><text x="640" y="140" class="small b">query</text><path d="M636 136 L412 134" class="wire dash" marker-end="url(#ah)"/><text x="10" y="248" class="sm">IVF: vectors are grouped around centroids; a query searches only the closest few groups (here 2 of 7).</text></svg><figcaption>More probes means better recall and slower queries. The same knob exists in every ANN index.</figcaption></figure>
+<h3>IVF in 3D</h3>
+<p>Change how many clusters are probed and watch recall and work move together.</p>
+<figure class="fig3d" id="ivf3d">
+<div class="stage3d" role="img" aria-label="Vectors grouped into seven clusters in 3D around their centroids; the query searches only the nearest clusters"><p class="hint3">3D · drag to turn</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The flat figure above shows the same idea.</p></div>
+<div class="ctl3"><span class="k">Clusters probed (nprobe)</span><button data-n="1" aria-pressed="true">1</button><button data-n="2" aria-pressed="false">2</button><button data-n="3" aria-pressed="false">3</button><button data-n="7" aria-pressed="false">all 7</button></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>Illustrative: 147 vectors in 7 clusters. Coloured points are searched; grey ones are skipped. Red points are true nearest neighbours the search missed because their cluster was not probed.</figcaption>
+</figure>
 <div class="table"><table><thead><tr><th>Index</th><th>Strength</th><th>Cost</th></tr></thead><tbody>
 <tr><td>HNSW (graph)</td><td>High recall and low latency; handles inserts well</td><td>Memory-hungry; the graph lives in RAM</td></tr>
 <tr><td>IVF (clusters)</td><td>Smaller and simpler; good for very large sets</td><td>Needs training on a sample; recall depends on probes</td></tr>
@@ -197,6 +235,632 @@
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarse = window.matchMedia('(pointer: coarse)').matches;
+const BG = 0xe6eaee;
+const COL = { hr: 0xb2456e, it: 0x4d5fd8, eng: 0x2a9d8f, q: 0xe3a13b, kb: 0x4d5fd8, wire: 0x9aa5b1, dlq: 0xc0392b, off: 0xc3cad2 };
+const UP = new THREE.Vector3(0, 1, 0);
+const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+
+// ---------- building blocks ----------
+function rbox(w, h, d, color, o = {}) {
+  const r = Math.min(o.r ?? 0.12, h / 2 - 0.001, w / 2 - 0.001, d / 2 - 0.001);
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.5, metalness: 0,
+    emissive: new THREE.Color(color), emissiveIntensity: o.glow ?? 0,
+    transparent: o.opacity !== undefined, opacity: o.opacity ?? 1, depthWrite: o.opacity === undefined });
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, o.seg ?? 3, r), mat);
+  m.castShadow = o.cast ?? true; m.receiveShadow = true;
+  return m;
+}
+const SPHERE = new THREE.SphereGeometry(1, 24, 16);
+function ball(r, color, o = {}) {
+  const m = new THREE.Mesh(SPHERE, new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.38, metalness: 0,
+    emissive: new THREE.Color(color), emissiveIntensity: o.glow ?? 0 }));
+  m.scale.setScalar(r); m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 12);
+function rod(r, color, o = {}) {
+  const m = new THREE.Mesh(CYL, new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0,
+    emissive: new THREE.Color(color), emissiveIntensity: o.glow ?? 0,
+    transparent: o.opacity !== undefined, opacity: o.opacity ?? 1, depthWrite: o.opacity === undefined }));
+  m.userData.r = r; m.castShadow = o.cast ?? false;
+  return m;
+}
+const _d = new THREE.Vector3();
+function place(m, a, b) {
+  _d.subVectors(b, a);
+  const len = Math.max(_d.length(), 0.0001);
+  m.position.copy(a).addScaledVector(_d, 0.5);
+  m.scale.set(m.userData.r, len, m.userData.r);
+  m.quaternion.setFromUnitVectors(UP, _d.normalize());
+  return m;
+}
+function label(parent, html, cls, pos, center = [0.5, 1]) {
+  const el = document.createElement('div');
+  el.className = 'l3 ' + cls; el.innerHTML = html;
+  const o = new CSS2DObject(el); o.position.copy(pos); o.center.set(center[0], center[1]);
+  parent.add(o);
+  return o;
+}
+function rng(seed) {
+  return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const ease = (f) => f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+
+// ---------- one stage per figure ----------
+function stage(fig, { target, dist, elev, az, shadow = 16 }) {
+  const host = fig.querySelector('.stage3d');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.appendChild(renderer.domElement);
+  const labels = new CSS2DRenderer();
+  labels.domElement.className = 'labels3';
+  host.appendChild(labels.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(BG);
+  scene.fog = new THREE.Fog(BG, dist + 8, dist + 45);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 300);
+  scene.add(new THREE.HemisphereLight(0xf3f6ff, 0x8e98a3, 1.15));
+  const sun = new THREE.DirectionalLight(0xfff2df, 2.4);
+  sun.position.set(target.x - 10, 24, target.z + 14);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1536, 1536);
+  Object.assign(sun.shadow.camera, { left: -shadow, right: shadow, top: shadow, bottom: -shadow, near: 1, far: 80 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; sun.shadow.radius = 5;
+  sun.target.position.copy(target);
+  scene.add(sun, sun.target);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xdce1e6, roughness: 0.95 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+  scene.add(ground);
+
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const gtao = new GTAOPass(scene, camera, 1, 1);
+  gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.2, scale: 1.1, samples: 16 });
+  composer.addPass(gtao);
+  composer.addPass(new OutputPass());
+
+  camera.position.set(target.x + Math.sin(az) * Math.cos(elev) * dist, target.y + Math.sin(elev) * dist, target.z + Math.cos(az) * Math.cos(elev) * dist);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(target);
+  controls.enableDamping = true;
+  controls.enableZoom = false; // keep the page's own scrolling
+  controls.enablePan = false;
+  controls.maxPolarAngle = Math.PI * 0.48;
+  controls.autoRotate = !reduceMotion;
+  controls.autoRotateSpeed = 0.5;
+  if (coarse) { controls.enabled = false; renderer.domElement.style.touchAction = 'auto'; }
+  controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+  let dirty = true, visible = false;
+  const S = { scene, camera, controls, ticks: [], invalidate: () => { dirty = true; } };
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    // narrow screens step back so the whole model stays in frame
+    camera.zoom = Math.min(1, 0.25 + camera.aspect / 1.6);
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); labels.setSize(w, h);
+    dirty = true;
+  }
+  new ResizeObserver(resize).observe(host);
+  new IntersectionObserver((es) => { visible = es[0].isIntersecting; if (visible) dirty = true; }).observe(host);
+  resize();
+  const clock = new THREE.Clock();
+  (function loop() {
+    requestAnimationFrame(loop);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    if (!visible) return;
+    let anim = false;
+    for (const f of S.ticks) anim = f(dt) || anim;
+    const moved = controls.update();
+    if (anim || moved || dirty || controls.autoRotate) {
+      composer.render(); labels.render(scene, camera); dirty = false;
+    }
+  })();
+  host.classList.add('ready');
+  return S;
+}
+
+function pressGroup(btns, cur) { btns.forEach((b) => b.setAttribute('aria-pressed', String(b === cur))); }
+
+// =====================================================================
+// Embeddings: meaning as position, similarity as angle
+// =====================================================================
+function embeddings(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(3, 2.8, 3), dist: 23, elev: 0.36, az: 0.78, shadow: 12 });
+  const out = fig.querySelector('.out3');
+  const O = new THREE.Vector3(0, 0, 0);
+  const AX = [['dim 1', [8.5, 0, 0]], ['dim 2', [0, 8, 0]], ['dim 3', [0, 0, 8.5]]];
+  for (const [n, p] of AX) {
+    S.scene.add(place(rod(0.05, 0x7d8996, { cast: true }), O, V(p)));
+    label(S.scene, n, 'cap', V(p).add(new THREE.Vector3(0, 0.25, 0)), [0.5, 1]);
+  }
+  const origin = rbox(0.4, 0.4, 0.4, 0x4a5562, { r: 0.1 }); origin.position.set(0, 0.2, 0); S.scene.add(origin);
+
+  const DOCS = [
+    ['hr', 'Parental leave policy', [5.4, 2.6, 1.0]], ['hr', 'Maternity benefits', [5.6, 1.6, 2.0]],
+    ['hr', 'Holiday calendar', [3.9, 3.9, 0.4]], ['hr', 'Sick leave rules', [5.2, 0.7, 0.5]],
+    ['it', 'VPN setup guide', [1.4, 2.4, 5.5]], ['it', 'Reset your password', [0.5, 3.9, 4.6]],
+    ['it', 'Laptop request', [2.6, 1.4, 5.4]], ['it', 'Office Wi-Fi', [0.6, 1.2, 4.9]],
+    ['eng', 'Deploy runbook', [2.2, 5.6, 2.0]], ['eng', 'On-call rotation', [0.6, 5.6, 1.0]],
+    ['eng', 'Incident review', [2.9, 5.9, 0.5]], ['eng', 'Release checklist', [1.0, 4.6, 2.8]],
+  ];
+  const QUERIES = [
+    { text: 'how much baby leave do I get?', p: [4.9, 2.5, 2.4],
+      note: 'None of these shares a word with the question, so keyword search would miss them. The embedding finds them by meaning.' },
+    { text: "can't connect from home", p: [1.6, 3.2, 5.6],
+      note: '"VPN" never appears in the question, yet the VPN guide ranks first.' },
+    { text: 'who is on call this weekend?', p: [0.3, 5.2, 2.0],
+      note: 'Here the words overlap too ("on-call"), so keyword search would also find it. Hybrid search covers both cases.' },
+  ];
+  const docs = DOCS.map(([c, name, p]) => {
+    const pos = V(p);
+    const m = ball(0.3, COL[c]); m.position.copy(pos); S.scene.add(m);
+    const drop = place(rod(0.018, 0x9aa5b1, { opacity: 0.55 }), new THREE.Vector3(pos.x, 0, pos.z), pos); S.scene.add(drop);
+    const arrow = place(rod(0.04, COL[c], { opacity: 0.6 }), O, pos); arrow.visible = false; S.scene.add(arrow);
+    label(m, name, '', new THREE.Vector3(1.3, 0, 0), [0, 0.5]);
+    return { name, pos, arrow, drop };
+  });
+
+  const qm = rbox(0.62, 0.62, 0.62, COL.q, { r: 0.16, glow: 0.3 });
+  S.scene.add(qm);
+  const qLabel = label(qm, '', 'q', new THREE.Vector3(0, 1.3, 0));
+  const qDrop = rod(0.022, COL.q, { opacity: 0.7 }); S.scene.add(qDrop);
+  const qArrow = rod(0.07, COL.q, { glow: 0.2 }); qArrow.visible = false; S.scene.add(qArrow);
+  const links = [0, 1, 2].map(() => {
+    const r = rod(0.05, COL.q, { glow: 0.25 }); S.scene.add(r);
+    const holder = new THREE.Object3D(); S.scene.add(holder);
+    const l = label(holder, '', 'sc', new THREE.Vector3(), [0.5, 0.5]);
+    return { r, holder, l };
+  });
+
+  let arrows = false, qi = 0, from = V(QUERIES[0].p), to = from.clone(), t = 1;
+  const cos = (a, b) => a.dot(b) / (a.length() * b.length());
+  function ranked(p) { return docs.map((d) => ({ d, s: cos(p, d.pos) })).sort((a, b) => b.s - a.s).slice(0, 3); }
+  function setQueryPos(p, showLinks) {
+    qm.position.copy(p);
+    place(qDrop, new THREE.Vector3(p.x, 0, p.z), p);
+    place(qArrow, O, p);
+    const top = ranked(p);
+    links.forEach((L, i) => {
+      L.r.visible = showLinks && !arrows; L.l.visible = showLinks;
+      place(L.r, p, top[i].d.pos);
+      L.holder.position.copy(arrows ? top[i].d.pos.clone().add(new THREE.Vector3(0, 0.75, 0)) : p.clone().lerp(top[i].d.pos, 0.5));
+      L.l.element.textContent = (arrows ? 'cos ' : '') + top[i].s.toFixed(2);
+    });
+    return top;
+  }
+  function describe() {
+    const q = QUERIES[qi], top = ranked(V(q.p));
+    const far = docs.map((d) => cos(V(q.p), d.pos)).sort((a, b) => a - b)[0];
+    out.innerHTML = `<strong>Nearest to "${q.text}":</strong> ${top.map((x) => `${x.d.name} (${x.s.toFixed(2)})`).join(', ')}. ` +
+      `The least similar document scores ${far.toFixed(2)}. ${q.note}`;
+    qLabel.element.innerHTML = `query: "${q.text}"`;
+  }
+  function setArrows(on) {
+    arrows = on;
+    docs.forEach((d) => { d.arrow.visible = on; d.drop.visible = !on; });
+    qArrow.visible = on; qDrop.visible = !on;
+    setQueryPos(qm.position, t >= 1);
+    S.invalidate();
+  }
+  S.ticks.push((dt) => {
+    if (t >= 1) return false;
+    t = Math.min(1, t + dt / 0.7);
+    setQueryPos(from.clone().lerp(to, ease(t)), t >= 1);
+    return true;
+  });
+  const qBtns = [...fig.querySelectorAll('[data-q]')];
+  qBtns.forEach((b) => b.addEventListener('click', () => {
+    qi = +b.dataset.q; pressGroup(qBtns, b);
+    from = qm.position.clone(); to = V(QUERIES[qi].p);
+    t = reduceMotion ? 1 : 0;
+    if (reduceMotion) setQueryPos(to, true);
+    describe(); S.invalidate();
+  }));
+  const aBtn = fig.querySelector('[data-arrows]');
+  aBtn.addEventListener('click', () => { setArrows(!arrows); aBtn.setAttribute('aria-pressed', String(arrows)); });
+  setQueryPos(to, true); describe();
+}
+
+// =====================================================================
+// HNSW: a layered graph, searched top-down
+// =====================================================================
+function hnsw(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(0, 2.6, 0), dist: 28, elev: 0.36, az: 0.5, shadow: 14 });
+  const out = fig.querySelector('.out3');
+  const LY = [0.5, 3.1, 5.7];
+  const R = rng(11);
+  const nodes = [];
+  while (nodes.length < 40) {
+    const x = -6.3 + R() * 12.6, z = -4.2 + R() * 8.4;
+    if (nodes.every((n) => Math.hypot(n.x - x, n.z - z) > 1.15)) nodes.push({ x, z });
+  }
+  // the first nodes reach the upper layers, as if their random level came up high
+  nodes.forEach((n, i) => { n.top = i < 3 ? 2 : i < 11 ? 1 : 0; });
+  const at = (n, l) => new THREE.Vector3(n.x, LY[l] + 0.24, n.z);
+  const M = [4, 3, 2];
+  const adj = [0, 1, 2].map(() => new Map());
+  for (let l = 0; l < 3; l++) {
+    const ids = nodes.map((n, i) => i).filter((i) => nodes[i].top >= l);
+    for (const i of ids) {
+      const near = ids.filter((j) => j !== i).sort((a, b) =>
+        Math.hypot(nodes[a].x - nodes[i].x, nodes[a].z - nodes[i].z) - Math.hypot(nodes[b].x - nodes[i].x, nodes[b].z - nodes[i].z)).slice(0, M[l]);
+      for (const j of near) {
+        if (!adj[l].has(i)) adj[l].set(i, new Set());
+        if (!adj[l].has(j)) adj[l].set(j, new Set());
+        adj[l].get(i).add(j); adj[l].get(j).add(i);
+      }
+    }
+  }
+  const CAP = ['Layer 0 · all 40 vectors · short links', 'Layer 1 · 11 vectors', 'Layer 2 · 3 vectors · long jumps'];
+  const PLATE = [0xdfe3fa, 0xe3e8fb, 0xe9ecfc];
+  for (let l = 0; l < 3; l++) {
+    const p = rbox(14.8, 0.16, 10.6, PLATE[l], { r: 0.08, cast: false, rough: 0.9, opacity: l ? 0.62 : undefined });
+    p.position.set(0, LY[l] + 0.0, 0); S.scene.add(p);
+    label(S.scene, CAP[l], 'cap', new THREE.Vector3(-7.7, LY[l] + 0.1, 0), [1, 0.5]);
+    const seen = new Set();
+    for (const [i, set] of adj[l]) for (const j of set) {
+      const k = i < j ? `${i}-${j}` : `${j}-${i}`;
+      if (seen.has(k)) continue; seen.add(k);
+      S.scene.add(place(rod(l ? 0.045 : 0.03, 0x8f9bb0, { opacity: 0.85 }), at(nodes[i], l), at(nodes[j], l)));
+    }
+  }
+  const balls = nodes.map((n) => {
+    const per = [];
+    for (let l = 0; l <= n.top; l++) {
+      const b = ball(l ? 0.27 : 0.2, COL.kb); b.position.copy(at(n, l)); S.scene.add(b); per.push(b);
+      if (l) S.scene.add(place(rod(0.025, 0x9aa5b1, { opacity: 0.5 }), at(n, l - 1), at(n, l)));
+    }
+    return per;
+  });
+
+  // query: a pillar through every layer, with a marker on each
+  const qPillar = rod(0.035, COL.q, { opacity: 0.55 }); S.scene.add(qPillar);
+  const qMarks = LY.map(() => { const m = rbox(0.42, 0.42, 0.42, COL.q, { r: 0.1, glow: 0.3 }); m.rotation.set(Math.PI / 4, 0, Math.PI / 4); S.scene.add(m); return m; });
+  const qHolder = new THREE.Object3D(); S.scene.add(qHolder);
+  label(qHolder, 'query', 'q', new THREE.Vector3());
+  const packet = rbox(0.5, 0.5, 0.5, COL.q, { r: 0.14, glow: 0.45, rough: 0.35 }); packet.visible = false; S.scene.add(packet);
+  const pathRods = [];
+  const far = nodes.reduce((f, n) => Math.hypot(n.x - nodes[0].x, n.z - nodes[0].z) > Math.hypot(f.x - nodes[0].x, f.z - nodes[0].z) ? n : f, nodes[0]);
+  let q = { x: far.x * 0.92 + 0.3, z: far.z * 0.92 - 0.3 }, plan = null, prog = 0, playing = false;
+
+  const dist = (i) => Math.hypot(nodes[i].x - q.x, nodes[i].z - q.z);
+  function search() {
+    const segs = [], hops = [0, 0, 0], checked = new Set();
+    let cur = 0; checked.add(cur);
+    for (let l = 2; l >= 0; l--) {
+      for (;;) {
+        let best = cur;
+        for (const j of adj[l].get(cur) || []) { checked.add(j); if (dist(j) < dist(best)) best = j; }
+        if (best === cur) break;
+        segs.push({ a: at(nodes[cur], l), b: at(nodes[best], l), node: [best, l], checks: checked.size });
+        hops[l]++; cur = best;
+      }
+      if (l) segs.push({ a: at(nodes[cur], l), b: at(nodes[cur], l - 1), node: [cur, l - 1], drop: true, checks: checked.size });
+    }
+    let exact = 0; nodes.forEach((n, i) => { if (dist(i) < dist(exact)) exact = i; });
+    return { segs, hops, checks: checked.size, found: cur, exact };
+  }
+  function resetLook() {
+    balls.forEach((per) => per.forEach((b) => { b.material.color.setHex(COL.kb); b.material.emissive.setHex(COL.kb); b.material.emissiveIntensity = 0; }));
+    pathRods.forEach((r) => S.scene.remove(r)); pathRods.length = 0;
+    const lit = balls[0][2]; lit.material.color.setHex(COL.q); lit.material.emissive.setHex(COL.q); lit.material.emissiveIntensity = 0.35;
+  }
+  function light([i, l], final) {
+    const b = balls[i][l];
+    const c = final ? 0x2f8f5b : COL.q;
+    b.material.color.setHex(c); b.material.emissive.setHex(c); b.material.emissiveIntensity = 0.4;
+  }
+  function addSeg(s) {
+    const r = place(rod(s.drop ? 0.06 : 0.075, COL.q, { glow: 0.3 }), s.a, s.b); S.scene.add(r); pathRods.push(r);
+  }
+  function setQuery() {
+    place(qPillar, new THREE.Vector3(q.x, 0, q.z), new THREE.Vector3(q.x, LY[2] + 1.4, q.z));
+    qMarks.forEach((m, l) => m.position.set(q.x, LY[l] + 0.42, q.z));
+    qHolder.position.set(q.x, LY[2] + 1.6, q.z);
+  }
+  function report() {
+    const { hops, checks, found, exact } = plan;
+    out.innerHTML = `<strong>Hops:</strong> layer 2: ${hops[2]} · layer 1: ${hops[1]} · layer 0: ${hops[0]}. ` +
+      `<strong>${checks} distance checks</strong> instead of 40 for brute force. ` +
+      (found === exact ? 'It reached the true nearest neighbour (green).'
+                       : 'It stopped one step short of the true nearest neighbour. That is the "approximate" in ANN; a larger candidate list (efSearch) makes it rare.');
+  }
+  function finish() {
+    plan.segs.forEach((s, k) => { addSeg(s); light(s.node, k === plan.segs.length - 1); });
+    if (!plan.segs.length) light([0, 0], true);
+    packet.visible = false; playing = false; report(); S.invalidate();
+  }
+  function start(animate) {
+    setQuery(); resetLook(); plan = search();
+    if (!animate || reduceMotion) { finish(); return; }
+    prog = 0; playing = true; packet.visible = true;
+    out.innerHTML = 'Searching: start at the single entry point on the top layer…';
+  }
+  S.ticks.push((dt) => {
+    if (!playing) return false;
+    const before = Math.floor(prog);
+    prog += dt / 0.55;
+    const k = Math.floor(prog);
+    if (k > before && before < plan.segs.length) {
+      const s = plan.segs[before]; addSeg(s); light(s.node, false);
+      out.innerHTML = `${s.drop ? 'No closer neighbour on this layer, so drop down one layer.' : 'Hop to the neighbour closest to the query.'} Distance checks so far: ${s.checks}.`;
+    }
+    if (k >= plan.segs.length) { resetLook(); finish(); return true; }
+    const s = plan.segs[k];
+    packet.position.copy(s.a).lerp(s.b, ease(prog - k)).add(new THREE.Vector3(0, 0.35, 0));
+    packet.rotation.y += dt * 3;
+    return true;
+  });
+  fig.querySelector('[data-run]').addEventListener('click', () => start(true));
+  const R2 = rng(97);
+  fig.querySelector('[data-new]').addEventListener('click', () => {
+    // keep new queries away from the entry point so the walk has somewhere to go
+    do { q = { x: -6 + R2() * 12, z: -4 + R2() * 8 }; } while (Math.hypot(q.x - nodes[0].x, q.z - nodes[0].z) < 5);
+    start(true);
+  });
+  start(false);
+}
+
+// =====================================================================
+// IVF: cluster, then probe only the nearest clusters
+// =====================================================================
+function ivf(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(0, 3.4, 0), dist: 26, elev: 0.34, az: 0.6, shadow: 14 });
+  const out = fig.querySelector('.out3');
+  const CENT = [[-1.6, 3.4, -0.4], [1.9, 3.0, 0.6], [-5.2, 2.2, 2.2], [5.4, 4.4, -2.4], [-3.8, 5.6, -3.4], [0.8, 6.4, 3.6], [4.6, 1.8, 3.4]];
+  const CC = [0x4d5fd8, 0x2a9d8f, 0xe3a13b, 0xe2674f, 0xb2456e, 0x2f8f5b, 0x6b7f99];
+  const R = rng(5);
+  const gauss = () => { const u = Math.max(R(), 1e-9), v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const pts = [];
+  CENT.forEach((c) => { for (let k = 0; k < 21; k++) pts.push(new THREE.Vector3(c[0] + gauss() * 1.05, Math.max(0.5, c[1] + gauss() * 0.9), c[2] + gauss() * 1.05)); });
+  const cents = CENT.map(V);
+  const owner = pts.map((p) => { let b = 0; cents.forEach((c, i) => { if (p.distanceTo(c) < p.distanceTo(cents[b])) b = i; }); return b; });
+  const q = new THREE.Vector3(0.15, 3.3, 0.05);
+  const order = cents.map((c, i) => i).sort((a, b) => q.distanceTo(cents[a]) - q.distanceTo(cents[b]));
+  const truth = new Set(pts.map((p, i) => i).sort((a, b) => q.distanceTo(pts[a]) - q.distanceTo(pts[b])).slice(0, 10));
+
+  cents.forEach((c, i) => { const k = rbox(0.55, 0.55, 0.55, CC[i], { r: 0.13 }); k.position.copy(c); S.scene.add(k); });
+  // a spoke from every vector to the centroid it belongs to
+  const spokes = pts.map((p, i) => { const r = rod(0.018, COL.off, { opacity: 0.6 }); place(r, p, cents[owner[i]]); S.scene.add(r); return r; });
+  const dots = pts.map((p) => { const b = ball(0.17, COL.off); b.position.copy(p); S.scene.add(b); return b; });
+  const qm = rbox(0.6, 0.6, 0.6, COL.q, { r: 0.16, glow: 0.35 }); qm.position.copy(q); S.scene.add(qm);
+  label(qm, 'query', 'q', new THREE.Vector3(0, 0.7, 0));
+  const qDrop = place(rod(0.022, COL.q, { opacity: 0.7 }), new THREE.Vector3(q.x, 0, q.z), q); S.scene.add(qDrop);
+  const probes = order.map((i) => { const r = rod(0.035, COL.q, { opacity: 0.8 }); place(r, q, cents[i]); S.scene.add(r); return r; });
+  const missHolder = new THREE.Object3D(); S.scene.add(missHolder);
+  const missLabel = label(missHolder, 'missed neighbours', 'miss', new THREE.Vector3(), [0.5, 0]);
+
+  function setN(n) {
+    const probed = new Set(order.slice(0, n));
+    let searched = 0, hit = 0; const missed = [];
+    pts.forEach((p, i) => {
+      const on = probed.has(owner[i]); if (on) searched++;
+      const isTrue = truth.has(i), found = isTrue && on;
+      if (found) hit++; if (isTrue && !on) missed.push(p);
+      const c = isTrue && !on ? COL.dlq : on ? CC[owner[i]] : COL.off;
+      const d = dots[i];
+      d.material.color.setHex(c); d.material.emissive.setHex(c);
+      d.material.emissiveIntensity = isTrue ? 0.35 : 0;
+      d.scale.setScalar(isTrue ? 0.27 : on ? 0.19 : 0.15);
+    });
+    spokes.forEach((r, i) => { const on = probed.has(owner[i]); r.material.color.setHex(on ? CC[owner[i]] : COL.off); r.material.opacity = on ? 0.75 : 0.35; });
+    probes.forEach((r, k) => { r.visible = k < n; });
+    missLabel.visible = missed.length > 0;
+    if (missed.length) { const m = missed.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / missed.length); missHolder.position.copy(m).add(new THREE.Vector3(0, -0.8, 0)); }
+    out.innerHTML = `<strong>nprobe = ${n}:</strong> searched ${searched} of ${pts.length} vectors (${Math.round(100 * searched / pts.length)}%). ` +
+      `<strong>recall@10 = ${hit}/10.</strong> ` +
+      (hit < 10 ? `The ${10 - hit} red point${10 - hit > 1 ? 's are' : ' is'} true neighbours in clusters that were never opened, because the query sits near a cluster border.`
+                : n < 7 ? 'Every true neighbour found while still skipping most of the data.' : 'Probing every cluster is just brute force with extra steps.');
+    S.invalidate();
+  }
+  const btns = [...fig.querySelectorAll('[data-n]')];
+  btns.forEach((b) => b.addEventListener('click', () => { pressGroup(btns, b); setN(+b.dataset.n); }));
+  setN(1);
+}
+
+// =====================================================================
+// Semantic routing: routes are clusters of example requests
+// =====================================================================
+function routes(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(1.2, 2.8, 1.2), dist: 26, elev: 0.34, az: 0.72, shadow: 12 });
+  const out = fig.querySelector('.out3');
+  const O = new THREE.Vector3(0, 0, 0);
+  const ROUTES = [
+    { name: 'HR agent', c: COL.hr, ex: [[5.6, 1.9, 1.0], [5.0, 2.4, 1.6], [6.0, 1.3, 1.4], [5.3, 1.1, 0.6], [4.8, 1.8, 0.4]] },
+    { name: 'IT agent', c: COL.it, ex: [[1.3, 5.6, 1.6], [0.8, 5.0, 1.0], [1.9, 5.3, 0.8], [1.2, 6.0, 1.9], [0.6, 5.5, 2.1]] },
+    { name: 'Procurement agent', c: COL.eng, ex: [[1.2, 1.8, 5.6], [0.7, 1.4, 5.0], [1.8, 1.0, 5.3], [1.4, 2.4, 5.9], [0.9, 2.0, 4.8]] },
+  ];
+  const Q = [
+    { text: 'my VPN drops every hour', p: [0.2, 5.0, 2.4] },
+    { text: 'order me a 27-inch monitor', p: [1.0, 1.7, 5.3] },
+    { text: 'can I expense a standing desk?', p: [3.9, 1.6, 3.8] },
+    { text: 'will it rain tomorrow?', p: [-3.2, 2.6, -2.8] },
+  ];
+  const TH = 0.9, MARGIN = 0.08, FLOOR = 0.7;
+  for (const [n, p] of [['dim 1', [7.5, 0, 0]], ['dim 2', [0, 7.5, 0]], ['dim 3', [0, 0, 7.5]]]) {
+    S.scene.add(place(rod(0.04, 0x7d8996, { cast: true }), O, V(p)));
+    label(S.scene, n, 'cap', V(p).add(new THREE.Vector3(0, 0.25, 0)));
+  }
+  const hubs = ROUTES.map((r) => {
+    const pts = r.ex.map(V);
+    const c = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+    pts.forEach((p) => {
+      const b = ball(0.2, r.c); b.position.copy(p); S.scene.add(b);
+      S.scene.add(place(rod(0.02, r.c, { opacity: 0.6 }), p, c));
+    });
+    const hub = rbox(0.7, 0.7, 0.7, r.c, { r: 0.16 }); hub.position.copy(c); S.scene.add(hub);
+    label(hub, r.name, '', new THREE.Vector3(0, -0.55, 0), [0.5, 0]);
+    return { ...r, c3: c, hub };
+  });
+  const qm = rbox(0.6, 0.6, 0.6, COL.q, { r: 0.15, glow: 0.3 }); S.scene.add(qm);
+  const qLabel = label(qm, '', 'q', new THREE.Vector3(0, 0.8, 0));
+  const qDrop = rod(0.022, COL.q, { opacity: 0.7 }); S.scene.add(qDrop);
+  const links = hubs.map(() => {
+    const r = rod(0.04, COL.q, { opacity: 0.85 }); S.scene.add(r);
+    const h = new THREE.Object3D(); S.scene.add(h);
+    return { r, h, l: label(h, '', 'sc', new THREE.Vector3(), [0.5, 0.5]) };
+  });
+  const cos = (a, b) => a.dot(b) / (a.length() * b.length());
+  let qi = 0, from = V(Q[0].p), to = from.clone(), t = 1;
+  function set(p, final) {
+    qm.position.copy(p);
+    place(qDrop, new THREE.Vector3(p.x, 0, p.z), p);
+    const sc = hubs.map((h) => cos(p, h.c3));
+    const best = sc.indexOf(Math.max(...sc));
+    links.forEach((L, i) => {
+      place(L.r, p, hubs[i].c3);
+      L.r.scale.x = L.r.scale.z = 0.015 + 0.06 * Math.max(0, sc[i] - 0.3);
+      L.r.visible = final; L.l.visible = final;
+      L.h.position.copy(p.clone().lerp(hubs[i].c3, 0.55));
+      L.l.element.textContent = sc[i].toFixed(2);
+    });
+    hubs.forEach((h, i) => { h.hub.material.emissiveIntensity = final && i === best ? 0.45 : 0; });
+    return { sc, best };
+  }
+  function describe() {
+    const q = Q[qi], { sc, best } = set(V(q.p), true);
+    const sorted = [...sc].sort((a, b) => b - a), margin = sorted[0] - sorted[1];
+    let verdict;
+    if (sorted[0] < FLOOR) verdict = `<strong>Fallback.</strong> Nothing is close (best ${sorted[0].toFixed(2)} &lt; ${FLOOR}). Say it is out of scope, or hand it to a general assistant.`;
+    else if (sorted[0] < TH || margin < MARGIN) verdict = `<strong>Ask a clarifying question</strong>, or escalate to an LLM classifier. Best ${sorted[0].toFixed(2)}, but the runner-up is only ${margin.toFixed(2)} behind.`;
+    else verdict = `<strong>Route to the ${hubs[best].name}.</strong> Similarity ${sorted[0].toFixed(2)} clears the ${TH} threshold with a ${margin.toFixed(2)} margin.`;
+    out.innerHTML = `"${q.text}": ` + hubs.map((h, i) => `${h.name} ${sc[i].toFixed(2)}`).join(' · ') + '. ' + verdict;
+    qLabel.element.textContent = `"${q.text}"`;
+  }
+  S.ticks.push((dt) => {
+    if (t >= 1) return false;
+    t = Math.min(1, t + dt / 0.7);
+    set(from.clone().lerp(to, ease(t)), t >= 1);
+    if (t >= 1) describe();
+    return true;
+  });
+  const btns = [...fig.querySelectorAll('[data-q]')];
+  btns.forEach((b) => b.addEventListener('click', () => {
+    qi = +b.dataset.q; pressGroup(btns, b);
+    from = qm.position.clone(); to = V(Q[qi].p);
+    if (reduceMotion) { t = 1; describe(); } else { t = 0; out.textContent = 'Embedding the request and comparing it with each route…'; }
+    S.invalidate();
+  }));
+  describe();
+}
+
+// =====================================================================
+// Chunk size in vector space: bigger chunks are averages
+// =====================================================================
+function chunkSpace(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(3, 2.8, 3), dist: 24, elev: 0.36, az: 0.78, shadow: 12 });
+  const out = fig.querySelector('.out3');
+  const O = new THREE.Vector3(0, 0, 0);
+  const SEC = [
+    { name: 'Parental leave', c: COL.hr, s: [
+      ['Birth mothers in India get 26 weeks of paid leave.', [5.6, 1.6, 1.1]], ['It applies to the first two children.', [5.0, 2.3, 1.7]],
+      ['Fathers get 2 weeks of paid paternity leave.', [5.9, 1.0, 1.5]], ['Adoptive parents get 12 weeks.', [5.3, 1.9, 0.6]]] },
+    { name: 'Expense claims', c: COL.eng, s: [
+      ['Submit claims within 30 days.', [1.4, 5.6, 1.5]], ['Meals are capped at $50 a day when travelling.', [0.8, 5.1, 2.0]],
+      ['Receipts are needed for anything over $25.', [1.9, 5.4, 0.9]], ['Managers approve claims over $500.', [1.1, 6.0, 1.2]]] },
+    { name: 'Laptop security', c: COL.it, s: [
+      ['Laptops must use full-disk encryption.', [1.3, 1.7, 5.6]], ['Lock your screen when you step away.', [0.7, 2.3, 5.1]],
+      ['Report a lost laptop within 24 hours.', [1.9, 1.2, 5.4]], ['Only install software from the company portal.', [1.0, 1.9, 6.0]]] },
+  ];
+  const query = new THREE.Vector3(5.3, 2.6, 0.2);
+  for (const [n, p] of [['dim 1', [7.5, 0, 0]], ['dim 2', [0, 7.5, 0]], ['dim 3', [0, 0, 7.5]]]) {
+    S.scene.add(place(rod(0.04, 0x7d8996, { cast: true }), O, V(p)));
+    label(S.scene, n, 'cap', V(p).add(new THREE.Vector3(0, 0.25, 0)));
+  }
+  const all = [];
+  SEC.forEach((sec, si) => sec.s.forEach(([text, p]) => all.push({ text, si, p: V(p), c: sec.c })));
+  const secMean = SEC.map((_, si) => { const ps = all.filter((a) => a.si === si); return ps.reduce((a, x) => a.add(x.p), new THREE.Vector3()).multiplyScalar(1 / ps.length); });
+  const docMean = all.reduce((a, x) => a.add(x.p), new THREE.Vector3()).multiplyScalar(1 / all.length);
+  const balls = all.map((a) => { const b = ball(0.24, a.c); b.position.copy(a.p); S.scene.add(b); return b; });
+  const qm = rbox(0.58, 0.58, 0.58, COL.q, { r: 0.15, glow: 0.3 }); qm.position.copy(query); S.scene.add(qm);
+  label(qm, 'query: "How many weeks do adoptive parents get?"', 'q', new THREE.Vector3(0, 0.8, 0));
+  S.scene.add(place(rod(0.022, COL.q, { opacity: 0.7 }), new THREE.Vector3(query.x, 0, query.z), query));
+  const link = rod(0.05, COL.q, { glow: 0.25 }); S.scene.add(link);
+  const lh = new THREE.Object3D(); S.scene.add(lh);
+  const ll = label(lh, '', 'sc', new THREE.Vector3(), [0.5, 0.5]);
+  const tags = SEC.map((sec) => { const h = new THREE.Object3D(); S.scene.add(h); return label(h, sec.name, '', new THREE.Vector3(1.0, 0, 0), [0, 0.5]); });
+  const docTag = (() => { const h = new THREE.Object3D(); h.position.copy(docMean); S.scene.add(h); return label(h, 'whole handbook', '', new THREE.Vector3(0, -0.75, 0), [0.5, 0]); })();
+  const cos = (a, b) => a.dot(b) / (a.length() * b.length());
+  const targetOf = (m, a) => m === 0 ? a.p : m === 1 ? secMean[a.si] : docMean;
+  const sizeOf = [0.24, 0.42, 0.62];
+  let mode = 0, prevMode = 0, t = 1;
+  function apply(f) {
+    all.forEach((a, i) => {
+      balls[i].position.copy(targetOf(prevMode, a)).lerp(targetOf(mode, a), ease(f));
+      balls[i].scale.setScalar(sizeOf[prevMode] + (sizeOf[mode] - sizeOf[prevMode]) * ease(f));
+    });
+    tags.forEach((tg, si) => { tg.visible = f >= 1 && mode === 1; tg.parent.position.copy(secMean[si]); });
+    docTag.visible = f >= 1 && mode === 2;
+    const chunks = mode === 0 ? all.map((a) => ({ p: a.p, text: `"${a.text}"` }))
+      : mode === 1 ? SEC.map((s, si) => ({ p: secMean[si], text: `the ${s.name} section` })) : [{ p: docMean, text: 'the whole handbook' }];
+    const best = chunks.map((c) => ({ ...c, s: cos(query, c.p) })).sort((a, b) => b.s - a.s)[0];
+    link.visible = ll.visible = f >= 1;
+    place(link, query, best.p); lh.position.copy(query.clone().lerp(best.p, 0.5)); ll.element.textContent = best.s.toFixed(2);
+    return { best, n: chunks.length };
+  }
+  function describe() {
+    const { best, n } = apply(1);
+    const note = [
+      'A sharp match, and this sentence happens to hold the answer. But one sentence often loses its context: "It applies to the first two children" never says what "it" is.',
+      'Still a strong match, and the chunk carries the surrounding context. Sections of a few hundred tokens are the usual sweet spot.',
+      'The handbook vector is the average of three unrelated topics. It sits between them and matches every question only weakly, so a better chunk elsewhere would beat it.',
+    ][mode];
+    out.innerHTML = `<strong>${n} chunk${n > 1 ? 's' : ''}.</strong> Nearest: ${best.text} (cosine ${best.s.toFixed(2)}). ${note}`;
+  }
+  S.ticks.push((dt) => {
+    if (t >= 1) return false;
+    t = Math.min(1, t + dt / 0.8);
+    apply(t);
+    if (t >= 1) { prevMode = mode; describe(); }
+    return true;
+  });
+  const btns = [...fig.querySelectorAll('[data-m]')];
+  btns.forEach((b) => b.addEventListener('click', () => {
+    pressGroup(btns, b);
+    prevMode = mode === +b.dataset.m ? prevMode : mode;
+    mode = +b.dataset.m;
+    if (reduceMotion) { prevMode = mode; t = 1; describe(); } else t = 0;
+    S.invalidate();
+  }));
+  describe();
+}
+
+const run = (id, f) => { const el = document.getElementById(id); if (el) { try { f(el); } catch (e) { console.error(e); } } };
+run('emb3d', embeddings);
+run('hnsw3d', hnsw);
+run('ivf3d', ivf);
+run('route3d', routes);
+run('chunk3d', chunkSpace);
+</script>
 </body>
 </html>

@@ -315,6 +315,7 @@
       <figure class="fig"><svg viewBox="0 0 722 232" class="dg" role="img" aria-label="A fixed retrieval workflow with one optional retry, instead of an agent loop"><rect x="10" y="40" width="120" height="46" rx="8" class="k-serve"/><text x="70.0" y="67.5" class="b" text-anchor="middle">Rewrite</text><path d="M130 63 L152 63" class="wire" marker-end="url(#ah)"/><rect x="154" y="40" width="120" height="46" rx="8" class="k-serve"/><text x="214.0" y="67.5" class="b" text-anchor="middle">Retrieve</text><path d="M274 63 L296 63" class="wire" marker-end="url(#ah)"/><rect x="298" y="40" width="120" height="46" rx="8" class="k-serve"/><text x="358.0" y="67.5" class="b" text-anchor="middle">Rerank</text><path d="M418 63 L440 63" class="wire" marker-end="url(#ah)"/><rect x="442" y="40" width="120" height="46" rx="8" class="k-gov"/><text x="502.0" y="67.5" class="b" text-anchor="middle">Check ACL</text><path d="M562 63 L584 63" class="wire" marker-end="url(#ah)"/><rect x="586" y="40" width="120" height="46" rx="8" class="k-model"/><text x="646.0" y="67.5" class="b" text-anchor="middle">Generate</text><text x="10" y="24" class="b">Chosen: a fixed workflow with one bounded decision</text><path d="M214 86 L214 118 L70 118 L70 88" class="wire dash" marker-end="url(#ah)"/><text x="232" y="122" class="sm">nothing relevant? rewrite and search once more (max 1)</text><rect x="10" y="160" width="702" height="62" rx="10" class="ghost"/><text x="30" y="186" class="b mute">Not chosen: an open-ended agent loop (plan, act, observe, repeat)</text><text x="30" y="206" class="sm">Slower, costlier and harder to evaluate, and a read-only Q&amp;A product gains nothing from it.</text></svg><figcaption>The model makes exactly one decision: whether to search again.</figcaption></figure>
       <p>Retrieve, filter, rerank and generate always happen in the same order, so a fixed pipeline is cheaper, faster and easier to evaluate than an agent loop. Add one bounded agentic step: when the first retrieval finds nothing relevant, the model may rewrite the query and search once more. Multi-agent is not justified for a read-only Q&amp;A product.</p>
       <div class="note"><p class="say">"I'd start with a workflow and let the model make exactly one decision: whether to search again. If we later add actions like filing a ticket, I'd add a router and give each action its own narrowly scoped tool."</p></div>
+    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="routing.html">Routing</a></li></ul>
     </section>
 
     <section id="architecture">
@@ -420,7 +421,7 @@
 
       <h3>Changing the embedding model</h3>
       <p>Never mix vectors from two models in one index. Build a second index with the new model, backfill it, run the golden-set evals on both, then switch traffic over (a blue-green swap) and keep the old index for a quick rollback.</p>
-    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="knowledge-base.html">Knowledge base</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="vector-databases.html">Vector databases</a></li></ul>
+    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="knowledge-base.html">Knowledge base</a></li><li><a href="chunking.html">Chunking</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="vector-databases.html">Vector databases</a></li></ul>
     </section>
 
     <section id="query-path">
@@ -563,6 +564,7 @@
       </table></div>
       <h3>Using them</h3>
       <p>Run the full suite in CI as a regression gate on every prompt, model, chunking or index change. Slice results by department and source so a drop in one area is not hidden by the average. Feed every reported bad answer back into the golden set.</p>
+    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="evals.html">Evals</a></li></ul>
     </section>
 
     <section id="risks">
