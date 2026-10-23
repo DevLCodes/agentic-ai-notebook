@@ -22,6 +22,16 @@ Follow them in order, or jump to whatever you need.
 
 Coming next: retrieval, agent memory, production, and the model layer.
 
+## System design walkthroughs
+
+Worked designs that combine the topics above, in [`system-design/`](system-design/): **https://devlcodes.github.io/agentic-ai-notebook/system-design/**
+
+- [Enterprise Search Assistant](https://devlcodes.github.io/agentic-ai-notebook/system-design/enterprise-search.html): RAG over 10M documents in Drive, Confluence and Jira, with an animated 3D architecture
+- Topic deep dives: [knowledge base](https://devlcodes.github.io/agentic-ai-notebook/system-design/knowledge-base.html), [backfills and re-indexing](https://devlcodes.github.io/agentic-ai-notebook/system-design/backfills.html), [embeddings](https://devlcodes.github.io/agentic-ai-notebook/system-design/embeddings.html), [vector databases](https://devlcodes.github.io/agentic-ai-notebook/system-design/vector-databases.html), [search types](https://devlcodes.github.io/agentic-ai-notebook/system-design/search-types.html), [reranking](https://devlcodes.github.io/agentic-ai-notebook/system-design/reranking.html), [access control](https://devlcodes.github.io/agentic-ai-notebook/system-design/access-control.html)
+- [Glossary](https://devlcodes.github.io/agentic-ai-notebook/system-design/glossary.html): every term in one line
+
+These pages are also single HTML files with inline CSS. The Enterprise Search animation loads Three.js from a CDN, so it needs a connection; everything else works offline.
+
 ## How it's built
 
 Each page is a single HTML file with inline CSS and JavaScript: no build step, no dependencies, and it works offline.

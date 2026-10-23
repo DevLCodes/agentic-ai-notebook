@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enterprise Search Assistant · Agentic System Designs</title>
+<meta name="description" content="A worked system design for an enterprise search assistant over 10 million documents: ingestion, knowledge base, hybrid retrieval, permissions, deployment, observability and evals.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a 3D "studio" diagram as the hero, its caption bar beneath, then one reading column of design sections with a topic tag on each. Single deliberate light look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef;
+    --paper: #f7f8f9;
+    --ink: #1c2530;
+    --muted: #586473;
+    --line: #cdd4dc;
+    --card: rgba(248, 249, 251, 0.9);
+    --accent: #4255d4;
+    --accent-ink: #ffffff;
+    --track: #d3d9e0;
+    --code-bg: #eef1f4;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562;
+    --line-strong: #9aa5b1; --wire: #7d8996; --c-dlq: #b23a3a;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  .wrap {
+    max-width: 1240px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* ---------- hero ---------- */
+  .intro { padding-block: 40px 20px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 48px); line-height: 1.05; text-wrap: balance; }
+  .prompt { margin: 0; font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .prompt q { font-style: italic; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .stage-wrap {
+    position: relative; height: clamp(440px, 72vh, 780px);
+    border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee;
+  }
+  #stage { position: absolute; inset: 0; }
+  #stage canvas { display: block; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .hint { position: absolute; left: 14px; top: 12px; margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  #reset { position: absolute; top: 12px; right: 12px; }
+
+  .lbl {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 3px 8px 4px; border-radius: 7px;
+    background: rgba(250, 251, 252, 0.84); border: 1px solid var(--line);
+    font-family: var(--font-body); font-size: 12px; line-height: 1.2; color: var(--ink);
+    white-space: nowrap; transition: background .2s, border-color .2s, transform .2s;
+  }
+  .lbl b { font-weight: 600; }
+  .lbl span { display: none; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .lbl.on span { display: block; }
+  .lbl.on { background: var(--ink); border-color: var(--ink); color: #fff; transform: translateY(-3px); }
+  .lbl.on span { color: #c9d2dc; }
+  .plate-lbl { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .lane-lbl { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+
+  .cap {
+    margin-top: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px 14px; display: grid; gap: 10px;
+  }
+  .cap-top { display: flex; align-items: center; gap: 12px; }
+  .meta { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .cap-top .meta:last-child { margin-left: auto; }
+  button {
+    font: 600 13px var(--font-body); color: var(--accent-ink); background: var(--accent);
+    border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; min-width: 72px;
+  }
+  button.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+  button:focus-visible, #bar:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #caption { margin: 0; font-size: 16px; line-height: 1.45; min-height: 2.9em; }
+  #bar { position: relative; height: 8px; border-radius: 4px; background: var(--track); cursor: pointer; touch-action: none; }
+  #fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 4px; background: var(--ink); }
+  #bar .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--paper); }
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  #chips a {
+    display: inline-block; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); text-decoration: none; transition: background .2s, color .2s, border-color .2s;
+  }
+  #chips a:hover { border-color: var(--ink); color: var(--ink); }
+  #chips li.on a { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.6; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg rect.k-serve[height="16"], .dg rect.k-kb[height="16"], .dg rect.k-model[height="16"], .dg rect.k-gov[height="16"], .dg rect.k-cross[height="16"] { stroke-width: 0; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-cross { fill: #b8c0c9; }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .deeper-k { margin: 20px 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+
+  /* ---------- article ---------- */
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 48px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 40px; margin-bottom: 40px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 28px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; color: var(--ink); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .tags li { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .say { font-style: italic; }
+  .budget { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 6px 0 6px; font-family: var(--font-mono); font-size: 11px; color: #fff; }
+  .budget div { display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; min-width: 0; }
+  .budget-key { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  footer { padding-block: 0 48px; font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 32px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+  }
+  @media (max-width: 760px) {
+    .lbl span, .plate-lbl, .lane-lbl, .hint { display: none; }
+    .lbl { font-size: 10.5px; padding: 2px 6px; }
+    #caption { font-size: 14.5px; }
+    #chips a { font-size: 11.5px; }
+    .prompt, .lead { font-size: 16.5px; }
+    h2 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html" aria-current="page">Enterprise search</a><a href="index.html#topics">Topics</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<header class="wrap"><div class="intro">
+  <p class="eyebrow">Agentic system design walkthrough</p>
+  <h1>Enterprise Search Assistant</h1>
+  <p class="prompt"><q>A company has about 10 million documents across Google Drive, Confluence and Jira. Employees waste hours hunting for answers. Design an AI assistant that answers their questions over this content.</q></p>
+  <ul class="legend" aria-label="Colour key">
+    <li><i style="background:var(--c-ingest)"></i>Ingestion</li>
+    <li><i style="background:var(--c-kb)"></i>Knowledge base</li>
+    <li><i style="background:var(--c-serve)"></i>Serving</li>
+    <li><i style="background:var(--c-model)"></i>Model</li>
+    <li><i style="background:var(--c-gov)"></i>Governance</li>
+    <li><i style="background:var(--c-cross)"></i>Cross-cutting</li>
+  </ul>
+</div></header>
+
+<div class="wrap">
+  <div class="stage-wrap">
+    <div id="stage"></div>
+    <p class="hint">Drag to orbit</p>
+    <button id="reset" class="ghost" type="button" hidden>Reset view</button>
+  </div>
+
+  <div class="cap" aria-live="polite">
+    <div class="cap-top">
+      <button id="play" type="button">Pause</button>
+      <span class="meta" id="stepno">Step 1 of 10</span>
+      <span class="meta" id="clock">0.0 s / 10 s</span>
+    </div>
+    <p id="caption"></p>
+    <div id="bar" role="slider" tabindex="0" aria-label="Animation time" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><div id="fill"></div></div>
+    <ul id="chips">
+      <li data-k="kb"><a href="#knowledge-base">Knowledge base &amp; loading</a></li>
+      <li data-k="pipe"><a href="#deployment">Pipeline deploy</a></li>
+      <li data-k="rag"><a href="#query-path">RAG</a></li>
+      <li data-k="agent"><a href="#deployment">Agent deploy</a></li>
+      <li data-k="obs"><a href="#observability">Monitoring &amp; tracing</a></li>
+      <li data-k="evals"><a href="#evals">Evals</a></li>
+      <li data-k="gov"><a href="#governance">Governance</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="wrap doc">
+  <nav class="toc" aria-label="Sections">
+    <p>The solution</p>
+    <ol>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#success">Success metrics</a></li>
+      <li><a href="#how-agentic">Workflow or agent</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#ingestion">Ingestion</a></li>
+      <li><a href="#knowledge-base">Knowledge base</a></li>
+      <li><a href="#query-path">Query path and RAG</a></li>
+      <li><a href="#governance">Permissions and governance</a></li>
+      <li><a href="#deployment">Deployment</a></li>
+      <li><a href="#observability">Observability</a></li>
+      <li><a href="#evals">Evals</a></li>
+      <li><a href="#risks">Risks and v2</a></li>
+      <li><a href="#presenting">Presenting it in 45 minutes</a></li>
+      <li><a href="#numbers">Numbers to remember</a></li>
+      <li><a href="glossary.html">Glossary</a></li>
+    </ol>
+  </nav>
+
+  <article>
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul class="tags"><li>Clarify</li></ul>
+      <p class="lead">Before designing anything, pin down scale, freshness, permissions and the cost of a wrong answer. These assumptions drive every later choice.</p>
+      <figure class="fig"><svg viewBox="0 0 722 190" class="dg" role="img" aria-label="Each scale assumption maps to a design choice"><rect x="10" y="10" width="162" height="92" rx="8" class="box"/><text x="26" y="52" class="big">10M</text><text x="26" y="80" class="sm">docs in 3 sources</text><path d="M91 104 L91 134" class="wire" marker-end="url(#ah)"/><rect x="10" y="138" width="162" height="40" rx="8" class="k-kb"/><text x="91.0" y="162.5" class="b small" text-anchor="middle">Index ahead of time</text><rect x="188" y="10" width="162" height="92" rx="8" class="box"/><text x="204" y="52" class="big">50k</text><text x="204" y="80" class="sm">employees, 20k daily</text><path d="M269 104 L269 134" class="wire" marker-end="url(#ah)"/><rect x="188" y="138" width="162" height="40" rx="8" class="k-kb"/><text x="269.0" y="162.5" class="b small" text-anchor="middle">Autoscaled serving</text><rect x="366" y="10" width="162" height="92" rx="8" class="box"/><text x="382" y="52" class="big">100/s</text><text x="382" y="80" class="sm">questions at peak</text><path d="M447 104 L447 134" class="wire" marker-end="url(#ah)"/><rect x="366" y="138" width="162" height="40" rx="8" class="k-kb"/><text x="447.0" y="162.5" class="b small" text-anchor="middle">Model quota and caching</text><rect x="544" y="10" width="162" height="92" rx="8" class="box"/><text x="560" y="52" class="big">&lt; 2 s</text><text x="560" y="80" class="sm">to the first word</text><path d="M625 104 L625 134" class="wire" marker-end="url(#ah)"/><rect x="544" y="138" width="162" height="40" rx="8" class="k-kb"/><text x="625.0" y="162.5" class="b small" text-anchor="middle">Stream the answer</text></svg><figcaption>Every assumption you clarify should change a design choice. If it changes nothing, it was not worth asking.</figcaption></figure>
+      <div class="table"><table>
+        <thead><tr><th>Question</th><th>Assumption</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td>Corpus</td><td class="num">10M docs, 3 sources</td><td>Too large to fetch live at question time, so it must be indexed ahead</td></tr>
+          <tr><td>Users</td><td class="num">50k employees, 20k daily</td><td>Sizes the serving tier and model quota</td></tr>
+          <tr><td>Peak load</td><td class="num">~100 questions/s</td><td>Monday mornings across US, EU and India time zones</td></tr>
+          <tr><td>Latency</td><td class="num">first token &lt; 2 s, full &lt; 8 s</td><td>Sets the budget for retrieval, reranking and generation</td></tr>
+          <tr><td>Freshness</td><td>Edits in minutes, revoked access in seconds</td><td>Drives change capture and how permissions are checked</td></tr>
+          <tr><td>Permissions</td><td>Per-source ACLs, central identity provider with groups</td><td>Every answer must respect who can see what</td></tr>
+          <tr><td>Actions</td><td>Read-only in v1</td><td>No tools that change state, so far less risk</td></tr>
+          <tr><td>Answer format</td><td>Direct answer with clickable citations</td><td>Users can verify, and trust builds faster</td></tr>
+          <tr><td>Cost of a wrong answer</td><td>High for HR, legal and security policy</td><td>Prefer citing and refusing over guessing</td></tr>
+        </tbody>
+      </table></div>
+      <p>Two more worth asking: which languages and file types (scanned PDFs, slides, spreadsheets), and whether any data has residency rules.</p>
+    </section>
+
+    <section id="success">
+      <h2>Success metrics</h2>
+      <ul class="tags"><li>Define success</li><li>Evals</li></ul>
+      <p class="lead">Name one product metric, one quality metric and one guardrail before drawing boxes. It shows you know what you are optimising.</p>
+      <figure class="fig"><svg viewBox="0 0 722 212" class="dg" role="img" aria-label="Launch targets for product, quality and guardrail metrics"><text x="10" y="32" class="b">Product</text><text x="10" y="48" class="sm">Questions resolved</text><rect x="250" y="24" width="380" height="16" rx="8" class="track"/><rect x="250" y="24" width="228" height="16" rx="8" class="f-serve"/><text x="642" y="37" class="b mono">60%</text><text x="10" y="82" class="b">Quality</text><text x="10" y="98" class="sm">Answers grounded in a cited chunk</text><rect x="250" y="74" width="380" height="16" rx="8" class="track"/><rect x="250" y="74" width="361" height="16" rx="8" class="f-kb"/><text x="642" y="87" class="b mono">95%</text><text x="10" y="132" class="b">Guardrail</text><text x="10" y="148" class="sm">p95 latency within budget</text><rect x="250" y="124" width="380" height="16" rx="8" class="track"/><rect x="250" y="124" width="361" height="16" rx="8" class="f-model"/><text x="642" y="137" class="b mono">&lt; 8 s</text><text x="10" y="182" class="b">Guardrail</text><text x="10" y="198" class="sm">Permission leaks</text><rect x="250" y="168" width="380" height="30" rx="8" class="k-gov"/><text x="440.0" y="187.5" class="b small" text-anchor="middle">Zero tolerance: one leak blocks the launch</text><text x="642" y="187" class="b mono">0</text></svg><figcaption>One product, one quality and one guardrail metric, each with a target you can defend.</figcaption></figure>
+      <div class="table"><table>
+        <thead><tr><th>Kind</th><th>Metric</th><th>Launch target</th></tr></thead>
+        <tbody>
+          <tr><td>Product</td><td>Questions resolved without the user opening another search tool afterwards; thumbs-up rate</td><td class="num">60% resolved, 80% up</td></tr>
+          <tr><td>Quality</td><td>Groundedness (every claim backed by a cited chunk); retrieval recall@10 on a golden set</td><td class="num">95% grounded, 85% recall</td></tr>
+          <tr><td>Guardrail</td><td>p95 latency, cost per question, permission leaks</td><td class="num">8 s, &lt; $0.02, zero leaks</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="how-agentic">
+      <h2>Workflow or agent</h2>
+      <ul class="tags"><li>Agent architecture</li></ul>
+      <p class="lead">This is mostly a fixed workflow, not an autonomous agent. Pick the simplest design that works, and say why.</p>
+      <figure class="fig"><svg viewBox="0 0 722 232" class="dg" role="img" aria-label="A fixed retrieval workflow with one optional retry, instead of an agent loop"><rect x="10" y="40" width="120" height="46" rx="8" class="k-serve"/><text x="70.0" y="67.5" class="b" text-anchor="middle">Rewrite</text><path d="M130 63 L152 63" class="wire" marker-end="url(#ah)"/><rect x="154" y="40" width="120" height="46" rx="8" class="k-serve"/><text x="214.0" y="67.5" class="b" text-anchor="middle">Retrieve</text><path d="M274 63 L296 63" class="wire" marker-end="url(#ah)"/><rect x="298" y="40" width="120" height="46" rx="8" class="k-serve"/><text x="358.0" y="67.5" class="b" text-anchor="middle">Rerank</text><path d="M418 63 L440 63" class="wire" marker-end="url(#ah)"/><rect x="442" y="40" width="120" height="46" rx="8" class="k-gov"/><text x="502.0" y="67.5" class="b" text-anchor="middle">Check ACL</text><path d="M562 63 L584 63" class="wire" marker-end="url(#ah)"/><rect x="586" y="40" width="120" height="46" rx="8" class="k-model"/><text x="646.0" y="67.5" class="b" text-anchor="middle">Generate</text><text x="10" y="24" class="b">Chosen: a fixed workflow with one bounded decision</text><path d="M214 86 L214 118 L70 118 L70 88" class="wire dash" marker-end="url(#ah)"/><text x="232" y="122" class="sm">nothing relevant? rewrite and search once more (max 1)</text><rect x="10" y="160" width="702" height="62" rx="10" class="ghost"/><text x="30" y="186" class="b mute">Not chosen: an open-ended agent loop (plan, act, observe, repeat)</text><text x="30" y="206" class="sm">Slower, costlier and harder to evaluate, and a read-only Q&amp;A product gains nothing from it.</text></svg><figcaption>The model makes exactly one decision: whether to search again.</figcaption></figure>
+      <p>Retrieve, filter, rerank and generate always happen in the same order, so a fixed pipeline is cheaper, faster and easier to evaluate than an agent loop. Add one bounded agentic step: when the first retrieval finds nothing relevant, the model may rewrite the query and search once more. Multi-agent is not justified for a read-only Q&amp;A product.</p>
+      <div class="note"><p class="say">"I'd start with a workflow and let the model make exactly one decision: whether to search again. If we later add actions like filing a ticket, I'd add a router and give each action its own narrowly scoped tool."</p></div>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture</h2>
+      <ul class="tags"><li>Whole system</li></ul>
+      <p class="lead">Two paths share one index. An offline ingestion path keeps the index fresh, and an online query path answers questions. Four concerns run across both.</p>
+      <figure class="fig"><svg viewBox="0 0 722 350" class="dg" role="img" aria-label="Offline ingestion and online query paths share one index; four concerns cut across both"><text x="10" y="16" class="cap">OFFLINE · KEEP THE INDEX FRESH</text><rect x="10" y="26" width="132" height="50" rx="8" class="k-src"/><text x="76.0" y="47.0" class="b" text-anchor="middle">Sources</text><text x="76.0" y="63.0" class="sm" text-anchor="middle">Drive · Jira · wiki</text><path d="M142 51 L158 51" class="wire" marker-end="url(#ah)"/><rect x="160" y="26" width="132" height="50" rx="8" class="k-ingest"/><text x="226.0" y="47.0" class="b" text-anchor="middle">Change topic</text><text x="226.0" y="63.0" class="sm" text-anchor="middle">keyed by doc_id</text><path d="M292 51 L308 51" class="wire" marker-end="url(#ah)"/><rect x="310" y="26" width="132" height="50" rx="8" class="k-ingest"/><text x="376.0" y="47.0" class="b" text-anchor="middle">Workers</text><text x="376.0" y="63.0" class="sm" text-anchor="middle">fetch · parse · chunk</text><path d="M442 51 L458 51" class="wire" marker-end="url(#ah)"/><rect x="460" y="26" width="132" height="50" rx="8" class="k-ingest"/><text x="526.0" y="47.0" class="b" text-anchor="middle">Embed</text><text x="526.0" y="63.0" class="sm" text-anchor="middle">batched</text><path d="M526 76 L526 110" class="wire" marker-end="url(#ah)"/><rect x="380" y="112" width="330" height="50" rx="8" class="k-kb"/><text x="545.0" y="133.0" class="b" text-anchor="middle">Vector + keyword index</text><text x="545.0" y="149.0" class="sm" text-anchor="middle">ACL, version and source on every chunk</text><text x="10" y="196" class="cap">ONLINE · ANSWER A QUESTION</text><rect x="10" y="206" width="90" height="50" rx="8" class="k-user"/><text x="55.0" y="235.5" class="b" text-anchor="middle">Employee</text><path d="M100 231 L118 231" class="wire" marker-end="url(#ah)"/><rect x="120" y="206" width="132" height="50" rx="8" class="k-serve"/><text x="186.0" y="227.0" class="b" text-anchor="middle">Query service</text><text x="186.0" y="243.0" class="sm" text-anchor="middle">SSO · rewrite</text><path d="M252 231 L270 231" class="wire" marker-end="url(#ah)"/><rect x="272" y="206" width="120" height="50" rx="8" class="k-serve"/><text x="332.0" y="227.0" class="b" text-anchor="middle">Hybrid search</text><text x="332.0" y="243.0" class="sm" text-anchor="middle">ACL pre-filter</text><path d="M392 231 L410 231" class="wire" marker-end="url(#ah)"/><rect x="412" y="206" width="140" height="50" rx="8" class="k-gov"/><text x="482.0" y="227.0" class="b" text-anchor="middle">Rerank + recheck</text><text x="482.0" y="243.0" class="sm" text-anchor="middle">top 50 to 8</text><path d="M552 231 L570 231" class="wire" marker-end="url(#ah)"/><rect x="572" y="206" width="140" height="50" rx="8" class="k-model"/><text x="642.0" y="227.0" class="b" text-anchor="middle">LLM</text><text x="642.0" y="243.0" class="sm" text-anchor="middle">grounded, cited</text><path d="M332 206 L332 137 L378 137" class="wire" marker-end="url(#ah)"/><path d="M642 256 L642 278 L55 278 L55 258" class="wire" marker-end="url(#ah)"/><text x="348" y="292" class="sm" text-anchor="middle">answer + citations, streamed</text><rect x="10" y="306" width="166" height="34" rx="8" class="k-cross"/><text x="93.0" y="327.5" class="b small" text-anchor="middle">Observability</text><rect x="188" y="306" width="166" height="34" rx="8" class="k-cross"/><text x="271.0" y="327.5" class="b small" text-anchor="middle">Evals</text><rect x="366" y="306" width="166" height="34" rx="8" class="k-gov"/><text x="449.0" y="327.5" class="b small" text-anchor="middle">Governance</text><rect x="544" y="306" width="166" height="34" rx="8" class="k-cross"/><text x="627.0" y="327.5" class="b small" text-anchor="middle">Deploy</text></svg><figcaption>Two paths meet at the index. Observability, evals, governance and deploy apply to both.</figcaption></figure>
+      <div class="table"><table>
+        <thead><tr><th>Component</th><th>Job</th><th>Default on Google Cloud</th><th>Alternative</th></tr></thead>
+        <tbody>
+          <tr><td>Change capture</td><td>Turn webhooks and a periodic crawl into doc-change events</td><td>Pub/Sub</td><td>Kafka</td></tr>
+          <tr><td>Ingestion workers</td><td>Fetch, parse, chunk, embed, upsert</td><td>Dataflow or Cloud Run jobs</td><td>Kubernetes consumers</td></tr>
+          <tr><td>Embeddings</td><td>Text to vectors</td><td>Vertex AI text embeddings</td><td>Open-source model on GPUs</td></tr>
+          <tr><td>Index</td><td>Vector and keyword search with metadata filters</td><td>Vertex AI Vector Search, or AlloyDB with pgvector</td><td>Elasticsearch, MongoDB Atlas Vector Search</td></tr>
+          <tr><td>Query service</td><td>Auth, rewrite, retrieve, rerank, permission check, prompt</td><td>Cloud Run, stateless</td><td>GKE</td></tr>
+          <tr><td>LLM</td><td>Grounded answer with citations</td><td>Gemini via Vertex AI</td><td>Any hosted frontier model</td></tr>
+          <tr><td>Observability</td><td>Traces, metrics, logs</td><td>Cloud Trace and Logging via OpenTelemetry</td><td>Langfuse, SigNoz</td></tr>
+          <tr><td>Evals</td><td>Offline regression and online quality</td><td>Vertex AI evaluation, custom harness</td><td>Ragas, Langfuse evals</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="ingestion">
+      <h2>Ingestion</h2>
+      <ul class="tags"><li>Knowledge base &amp; data loading</li><li>Pipeline deploy</li></ul>
+      <p class="lead">The unit of work is a document ID, not a chunk. A webhook is only a hint that says "go re-read this document."</p>
+      <figure class="fig"><svg viewBox="0 0 722 232" class="dg" role="img" aria-label="Webhooks and a crawl feed a partitioned topic; idempotent workers update the index"><rect x="10" y="20" width="130" height="44" rx="8" class="k-src"/><text x="75.0" y="38.0" class="b" text-anchor="middle">Webhooks</text><text x="75.0" y="54.0" class="sm" text-anchor="middle">a hint, not the data</text><rect x="10" y="92" width="130" height="44" rx="8" class="k-ingest"/><text x="75.0" y="110.0" class="b" text-anchor="middle">Hourly crawl</text><text x="75.0" y="126.0" class="sm" text-anchor="middle">catches missed events</text><path d="M140 42 L176 42 L176 70 L196 70" class="wire" marker-end="url(#ah)"/><path d="M140 114 L176 114 L176 82 L196 82" class="wire" marker-end="url(#ah)"/><rect x="198" y="16" width="170" height="126" rx="8" class="k-ingest"/><text x="283" y="36" class="b" text-anchor="middle">doc-changes topic</text><text x="210" y="64" class="sm mono">p0</text><rect x="232" y="50" width="22" height="20" rx="4" class="cell"/><rect x="258" y="50" width="22" height="20" rx="4" class="cell"/><rect x="284" y="50" width="22" height="20" rx="4" class="cell"/><rect x="310" y="50" width="22" height="20" rx="4" class="cell"/><rect x="336" y="50" width="22" height="20" rx="4" class="cell"/><text x="210" y="92" class="sm mono">p1</text><rect x="232" y="78" width="22" height="20" rx="4" class="cell"/><rect x="258" y="78" width="22" height="20" rx="4" class="cell hot"/><rect x="284" y="78" width="22" height="20" rx="4" class="cell"/><rect x="310" y="78" width="22" height="20" rx="4" class="cell hot"/><rect x="336" y="78" width="22" height="20" rx="4" class="cell"/><text x="210" y="120" class="sm mono">p2</text><rect x="232" y="106" width="22" height="20" rx="4" class="cell"/><rect x="258" y="106" width="22" height="20" rx="4" class="cell"/><rect x="284" y="106" width="22" height="20" rx="4" class="cell"/><rect x="310" y="106" width="22" height="20" rx="4" class="cell"/><rect x="336" y="106" width="22" height="20" rx="4" class="cell"/><text x="283" y="160" class="sm" text-anchor="middle">same doc_id, same partition, in order</text><path d="M368 79 L398 79" class="wire" marker-end="url(#ah)"/><rect x="400" y="16" width="170" height="126" rx="8" class="k-ingest"/><text x="485" y="36" class="b" text-anchor="middle">Idempotent worker</text><text x="414" y="58" class="sm">1 fetch latest version</text><text x="414" y="75" class="sm">2 skip if version unchanged</text><text x="414" y="92" class="sm">3 chunk + attach ACL</text><text x="414" y="109" class="sm">4 embed in batches</text><text x="414" y="126" class="sm">5 upsert, delete old</text><path d="M570 79 L600 79" class="wire" marker-end="url(#ah)"/><rect x="602" y="50" width="110" height="58" rx="8" class="k-kb"/><text x="657.0" y="75.0" class="b" text-anchor="middle">Index</text><text x="657.0" y="91.0" class="sm" text-anchor="middle">vector + keyword</text><path d="M485 142 L485 178" class="wire dash" marker-end="url(#ah)"/><rect x="420" y="180" width="130" height="40" rx="8" class="k-dlq"/><text x="485.0" y="204.5" class="b small" text-anchor="middle">Dead-letter queue</text><text x="560" y="205" class="sm">after retries: alert + replay</text></svg><figcaption>Events say which document changed. The worker always reads the latest version, so duplicates and reordering are harmless.</figcaption></figure><figure class="fig"><svg viewBox="0 0 722 134" class="dg" role="img" aria-label="A shrinking document writes new-version chunks then deletes older versions"><text x="10" y="18" class="b">Before: doc v7, 12 chunks</text><rect x="10" y="30" width="28" height="28" rx="6" class="cell old"/><rect x="44" y="30" width="28" height="28" rx="6" class="cell old"/><rect x="78" y="30" width="28" height="28" rx="6" class="cell old"/><rect x="112" y="30" width="28" height="28" rx="6" class="cell old"/><rect x="146" y="30" width="28" height="28" rx="6" class="cell old"/><rect x="180" y="30" width="28" height="28" rx="6" class="cell old"/><rect x="10" y="64" width="28" height="28" rx="6" class="cell old"/><rect x="44" y="64" width="28" height="28" rx="6" class="cell old"/><rect x="78" y="64" width="28" height="28" rx="6" class="cell old"/><rect x="112" y="64" width="28" height="28" rx="6" class="cell old"/><rect x="146" y="64" width="28" height="28" rx="6" class="cell old"/><rect x="180" y="64" width="28" height="28" rx="6" class="cell old"/><path d="M230 63 L290 63" class="wire" marker-end="url(#ah)"/><text x="260" y="52" class="sm" text-anchor="middle">edit</text><text x="300" y="18" class="b">Step 1: write 9 chunks at v8</text><rect x="300" y="30" width="28" height="28" rx="6" class="cell new"/><rect x="334" y="30" width="28" height="28" rx="6" class="cell new"/><rect x="368" y="30" width="28" height="28" rx="6" class="cell new"/><rect x="402" y="30" width="28" height="28" rx="6" class="cell new"/><rect x="436" y="30" width="28" height="28" rx="6" class="cell new"/><rect x="300" y="64" width="28" height="28" rx="6" class="cell new"/><rect x="334" y="64" width="28" height="28" rx="6" class="cell new"/><rect x="368" y="64" width="28" height="28" rx="6" class="cell new"/><rect x="402" y="64" width="28" height="28" rx="6" class="cell new"/><text x="510" y="18" class="b">Step 2: delete version &lt; 8</text><rect x="510" y="30" width="28" height="28" rx="6" class="cell gone"/><path d="M517 37 L531 51 M531 37 L517 51" class="xmark"/><rect x="544" y="30" width="28" height="28" rx="6" class="cell gone"/><path d="M551 37 L565 51 M565 37 L551 51" class="xmark"/><rect x="578" y="30" width="28" height="28" rx="6" class="cell gone"/><path d="M585 37 L599 51 M599 37 L585 51" class="xmark"/><rect x="612" y="30" width="28" height="28" rx="6" class="cell gone"/><path d="M619 37 L633 51 M633 37 L619 51" class="xmark"/><rect x="646" y="30" width="28" height="28" rx="6" class="cell gone"/><path d="M653 37 L667 51 M667 37 L653 51" class="xmark"/><rect x="680" y="30" width="28" height="28" rx="6" class="cell gone"/><path d="M687 37 L701 51 M701 37 L687 51" class="xmark"/><rect x="510" y="64" width="28" height="28" rx="6" class="cell gone"/><path d="M517 71 L531 85 M531 71 L517 85" class="xmark"/><rect x="544" y="64" width="28" height="28" rx="6" class="cell gone"/><path d="M551 71 L565 85 M565 71 L551 85" class="xmark"/><rect x="578" y="64" width="28" height="28" rx="6" class="cell gone"/><path d="M585 71 L599 85 M599 71 L585 85" class="xmark"/><rect x="612" y="64" width="28" height="28" rx="6" class="cell gone"/><path d="M619 71 L633 85 M633 71 L619 85" class="xmark"/><rect x="646" y="64" width="28" height="28" rx="6" class="cell gone"/><path d="M653 71 L667 85 M667 71 L653 85" class="xmark"/><rect x="680" y="64" width="28" height="28" rx="6" class="cell gone"/><path d="M687 71 L701 85 M701 71 L687 85" class="xmark"/><text x="10" y="124" class="sm">chunk_id = doc_id # version # n, so one query finds every stale chunk of a document.</text></svg><figcaption>Updates and deletes: write the new version first, then remove anything older for that doc_id.</figcaption></figure>
+
+      <h3>The pipeline</h3>
+      <ol class="plain">
+        <li><strong>Change capture.</strong> Webhooks and an hourly crawler publish a small message to a <code>doc-changes</code> topic: <code>{source, doc_id, event, seen_at}</code>, where event is upsert, delete or acl_change. The topic is keyed by <code>doc_id</code>, so all events for one document arrive in order on one partition.</li>
+        <li><strong>Fetch and parse.</strong> A worker always fetches the latest version from the source API. It compares the version or a content hash with what is indexed and skips the event when nothing changed.</li>
+        <li><strong>Chunk.</strong> Source-aware chunking, described under Knowledge base.</li>
+        <li><strong>Embed.</strong> Chunks are embedded in batches behind a rate limiter, with retries.</li>
+        <li><strong>Index.</strong> Upsert into the vector and keyword indexes together. Repeated failures go to a dead-letter queue that alerts.</li>
+      </ol>
+<pre><code>def handle(event):
+    doc = source_api.fetch_latest(event.doc_id)       # never trust the webhook body
+    if doc is None or event.kind == "delete":
+        index.delete(doc_id=event.doc_id)
+        return
+    if event.kind == "acl_change":
+        index.update_acl(event.doc_id, doc.allowed_principals)   # no re-embedding
+        return
+    if doc.version &lt;= index.current_version(event.doc_id):
+        return                                          # duplicate or stale event
+    chunks = chunk(doc)                                 # carries doc.version + ACL
+    index.upsert(embed(chunks))
+    index.delete(doc_id=event.doc_id, version_lt=doc.version)</code></pre>
+
+      <h3>Updates and deletes</h3>
+      <p>Because the worker re-processes the whole document, it owns all of that document's chunks. Chunk IDs look like <code>doc_id#version#n</code>. When a page shrinks from 12 chunks to 9, the worker writes 9 chunks at the new version, then deletes every chunk for that doc with an older version. In pgvector both steps fit in one transaction. A deleted document removes everything for its <code>doc_id</code>. A permission change only rewrites the ACL metadata.</p>
+
+      <h3>Missed, duplicated or out-of-order webhooks</h3>
+      <ul class="plain">
+        <li><strong>Duplicates and reordering are harmless</strong> because every event triggers "fetch the latest and compare versions." The handler is idempotent.</li>
+        <li><strong>Missed events are caught by reconciliation.</strong> Every hour, ask each source what changed since the last cursor: the Drive changes feed with a page token, Confluence CQL on <code>lastmodified</code>, Jira JQL on <code>updated</code>. A nightly full listing catches deletes the change feeds missed. Webhooks give speed; the crawl gives correctness.</li>
+        <li><strong>Bursts are debounced.</strong> A page saved 30 times in a minute is processed once, about 30 seconds after the last edit.</li>
+      </ul>
+
+      <h3>The initial backfill</h3>
+      <p>Webhooks only report changes from now on, so the 10M documents that already exist need a separate one-off load.</p>
+      <div class="table"><table><tbody>
+        <tr><td>Documents</td><td class="num">10,000,000</td></tr>
+        <tr><td>Sustained rate per connector</td><td class="num">~50 docs/s (API quota)</td></tr>
+        <tr><td>One connector</td><td class="num">200,000 s ≈ 2.3 days</td></tr>
+        <tr><td>Three sources in parallel</td><td class="num">≈ 18.5 h if evenly split; the largest source sets the finish</td></tr>
+      </tbody></table></div>
+      <figure class="fig"><svg viewBox="0 0 722 162" class="dg" role="img" aria-label="Live changes and the backfill flow through separate lanes sharing one rate limiter"><rect x="10" y="20" width="150" height="46" rx="8" class="k-src"/><text x="85" y="39" class="b" text-anchor="middle">Webhooks + crawl</text><text x="85" y="55" class="sm" text-anchor="middle">live changes</text><rect x="10" y="104" width="150" height="46" rx="8" class="k-cross"/><text x="85" y="123" class="b" text-anchor="middle">Backfill lister</text><text x="85" y="139" class="sm" text-anchor="middle">pages through sources</text><path d="M160 43 L200 43" class="wire" marker-end="url(#ah)"/><path d="M160 127 L200 127" class="wire" marker-end="url(#ah)"/><rect x="202" y="20" width="150" height="46" rx="8" class="k-ingest"/><text x="277" y="39" class="b" text-anchor="middle">live topic</text><text x="277" y="55" class="sm" text-anchor="middle">high priority</text><rect x="202" y="104" width="150" height="46" rx="8" class="k-cross"/><text x="277" y="123" class="b" text-anchor="middle">backfill topic</text><text x="277" y="139" class="sm" text-anchor="middle">low priority</text><path d="M352 43 L420 74" class="wire" marker-end="url(#ah)"/><path d="M352 127 L420 98" class="wire" marker-end="url(#ah)"/><rect x="422" y="50" width="140" height="72" rx="10" class="k-gov"/><text x="492" y="76" class="b small" text-anchor="middle">Rate limiter</text><text x="492" y="94" class="sm" text-anchor="middle">live: reserved share</text><text x="492" y="110" class="sm" text-anchor="middle">backfill: the rest</text><path d="M562 86 L600 86" class="wire" marker-end="url(#ah)"/><rect x="602" y="60" width="110" height="52" rx="8" class="k-src"/><text x="657" y="82" class="b" text-anchor="middle">Source API</text><text x="657" y="98" class="sm" text-anchor="middle">quota</text></svg><figcaption>One quota, two lanes. Live updates keep headroom; the backfill uses the rest and can be paused on its own.</figcaption></figure>
+      <ul class="plain">
+        <li><strong>List, then process.</strong> Phase 1 pages through each source and writes every document ID to a backfill topic, saving the page token after each page. Phase 2 workers process IDs with the same idempotent handler as live events.</li>
+        <li><strong>Separate lane, shared quota.</strong> The backfill has its own topic and consumer group. One rate limiter per source API reserves headroom for live updates, so a 2-day load never delays today's edits.</li>
+        <li><strong>Version-checked writes.</strong> If the backfill reads v3 slowly while a live edit writes v4, the late v3 write is rejected because writes only go through when the version is newer.</li>
+        <li><strong>Resumable.</strong> Offsets are committed after the index write; documents that keep failing go to the dead-letter queue instead of blocking the run.</li>
+        <li><strong>Watched.</strong> Track docs per second per source, projected finish, live ingestion lag (must stay flat), DLQ depth and coverage (source count vs index count).</li>
+        <li><strong>Verified before launch.</strong> Reconcile counts per source, spot-check documents end to end, run the golden-set evals, then open it to users.</li>
+      </ul>
+      <p>If 2 days is too slow for the launch date, ask the vendors for a higher quota for the largest source. Re-indexing later (a new embedding model or chunk size) rebuilds from the stored parsed documents into a new index and swaps blue-green, so it needs no source quota. Full detail: <a href="backfills.html">Backfills and re-indexing</a>.</p>
+    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="backfills.html">Backfills and re-indexing</a></li><li><a href="knowledge-base.html#freshness">Keeping a knowledge base fresh</a></li></ul>
+    </section>
+
+    <section id="knowledge-base">
+      <h2>Knowledge base</h2>
+      <ul class="tags"><li>Knowledge base &amp; data loading</li></ul>
+      <p class="lead">Chunk each source by its own structure, and put enough metadata on every chunk to filter, cite and delete it later.</p>
+      <figure class="fig"><svg viewBox="0 0 722 216" class="dg" role="img" aria-label="Anatomy of one chunk: text with heading path, plus metadata for filtering, citing and deleting"><rect x="10" y="10" width="380" height="196" rx="10" class="k-kb"/><text x="26" y="34" class="mono b">conf-88213#v8#3</text><text x="26" y="62" class="b">Leave policy &gt; India &gt; Parental leave</text><text x="26" y="86" class="sm">Employees in India are eligible for 26 weeks</text><text x="26" y="104" class="sm">of paid parental leave for the birth or adoption</text><text x="26" y="122" class="sm">of a child. Leave can start up to 8 weeks before</text><text x="26" y="140" class="sm">the expected date and must be requested in the</text><text x="26" y="158" class="sm">HR portal at least 30 days in advance.</text><text x="26" y="192" class="sm it">heading path is prefixed so the chunk stands alone</text><path d="M390 108 L420 108" class="wire" marker-end="url(#ah)"/><rect x="422" y="10" width="290" height="196" rx="10" class="box"/><text x="438" y="34" class="b">Metadata</text><text x="438" y="58" class="sm mono">doc_id</text><text x="574" y="58" class="sm">conf-88213</text><text x="438" y="77" class="sm mono">version</text><text x="574" y="77" class="sm">8</text><text x="438" y="96" class="sm mono">source</text><text x="574" y="96" class="sm">confluence / HR space</text><text x="438" y="115" class="sm mono">url</text><text x="574" y="115" class="sm">link to the page section</text><text x="438" y="134" class="sm mono">updated_at</text><text x="574" y="134" class="sm">2025-03-14</text><text x="438" y="153" class="sm mono">region</text><text x="574" y="153" class="sm">IN</text><text x="438" y="172" class="sm mono">allowed_principals</text><text x="574" y="172" class="sm gov">grp:all-india, grp:hr</text><text x="438" y="191" class="sm mono">embedding_model</text><text x="574" y="191" class="sm">text-emb-v2</text></svg><figcaption>Example chunk (illustrative values). The metadata is what makes filtering, citing and deleting possible.</figcaption></figure>
+      <div class="table"><table>
+        <thead><tr><th>Source</th><th>How to chunk</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Confluence page</td><td>Split on headings, then by size. Prefix each chunk with the title and heading path, such as "Leave policy &gt; India &gt; Parental leave"</td><td>A chunk without its heading loses its meaning</td></tr>
+          <tr><td>Jira ticket</td><td>One chunk for summary, description and key fields; comments in small windows; ticket key and status as metadata</td><td>People search by IDs like HR-4512, and long threads need splitting</td></tr>
+          <tr><td>Docs and PDFs</td><td>Headings where present, else recursive split by paragraph; tables kept whole with their header row</td><td>A table split mid-row is useless</td></tr>
+          <tr><td>Sheets and slides</td><td>One slide per chunk; row groups with the header repeated</td><td>Each chunk must stand on its own</td></tr>
+        </tbody>
+      </table></div>
+      <p>A sane default is 300 to 800 tokens per chunk with 10 to 20% overlap.</p>
+
+      <h3>Metadata on every chunk</h3>
+      <p><code>doc_id</code>, <code>chunk_id</code>, <code>version</code>, source, URL, title, heading path, author, <code>updated_at</code>, space or project, document type, region tags, <code>embedding_model_version</code>, and <code>allowed_principals</code>: the users and groups allowed to read the source document.</p>
+
+      <h3>Sizing</h3>
+      <p>10M documents at about 5 chunks each is roughly 50M chunks. At 768 dimensions in float32, each vector is about 3 KB, so roughly 150 GB of vectors before index overhead. That means a sharded, managed index rather than a single machine.</p>
+
+      <h3>Changing the embedding model</h3>
+      <p>Never mix vectors from two models in one index. Build a second index with the new model, backfill it, run the golden-set evals on both, then switch traffic over (a blue-green swap) and keep the old index for a quick rollback.</p>
+    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="knowledge-base.html">Knowledge base</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="vector-databases.html">Vector databases</a></li></ul>
+    </section>
+
+    <section id="query-path">
+      <h2>Query path and RAG</h2>
+      <ul class="tags"><li>RAG pipelines</li></ul>
+      <p class="lead">Follow one question, <q>What's our parental leave policy in India?</q>, from the moment it is typed to the streamed answer.</p>
+      <figure class="fig"><svg viewBox="0 0 722 232" class="dg" role="img" aria-label="Retrieval funnel from 50 million chunks to one cited answer"><rect x="10" y="10" width="440" height="34" rx="8" class="k-kb"/><text x="230" y="32" class="b mono" text-anchor="middle">50M</text><text x="472" y="26" class="b">Indexed chunks</text><text x="472" y="41" class="sm">about 50M</text><rect x="58" y="54" width="343" height="34" rx="8" class="k-gov"/><text x="230" y="76" class="b mono" text-anchor="middle">subset</text><text x="472" y="70" class="b">Chunks this user may read</text><text x="472" y="85" class="sm">ACL filter inside the query</text><rect x="120" y="98" width="220" height="34" rx="8" class="k-serve"/><text x="230" y="120" class="b mono" text-anchor="middle">50</text><text x="472" y="114" class="b">Hybrid search candidates</text><text x="472" y="129" class="sm">dense + BM25, fused</text><rect x="164" y="142" width="132" height="34" rx="8" class="k-serve"/><text x="230" y="164" class="b mono" text-anchor="middle">8</text><text x="472" y="158" class="b">After reranking</text><text x="472" y="173" class="sm">cross-encoder</text><rect x="195" y="186" width="70" height="34" rx="8" class="k-model"/><text x="230" y="208" class="b mono" text-anchor="middle">1</text><text x="472" y="202" class="b">Answer</text><text x="472" y="217" class="sm">grounded, with citations</text></svg><figcaption>Each stage narrows the candidates. Widths are not to scale.</figcaption></figure>
+      <div class="budget" aria-label="Latency budget to first token, about 1.8 seconds">
+        <div style="flex:50;background:var(--c-serve)">auth</div>
+        <div style="flex:300;background:#c4851f">rewrite</div>
+        <div style="flex:150;background:var(--c-kb)">search</div>
+        <div style="flex:200;background:#3c4cb8">rerank</div>
+        <div style="flex:30;background:var(--c-gov)"></div>
+        <div style="flex:1000;background:var(--c-model)">LLM first token</div>
+      </div>
+      <p class="budget-key">Rough budget to first token: about 1.7 seconds, most of it the model.</p>
+      <ol class="plain">
+        <li><strong>Identify the user (~50 ms).</strong> Validate the SSO token and load the user's groups from the identity provider, cached for about a minute.</li>
+        <li><strong>Rewrite the query (~300 ms, small model).</strong> Turn follow-ups into standalone questions using chat history. Extract filters such as country = India, and spot exact identifiers such as HR-4512 for keyword lookup.</li>
+        <li><strong>Hybrid retrieval (~150 ms).</strong> Run dense vector search (catches meaning: "maternity" matches "parental leave") and BM25 keyword search (catches exact names and IDs) in parallel. Both are filtered to chunks this user can read. Merge with reciprocal rank fusion and keep the top 50.</li>
+        <li><strong>Rerank (~200 ms).</strong> A cross-encoder scores each candidate against the question and keeps the best 8, with small boosts for recent and authoritative sources.</li>
+        <li><strong>Permission recheck (~20 ms).</strong> Re-verify the final 8 against the freshest permission data. See Permissions and governance.</li>
+        <li><strong>Generate (~1 s to first token, streamed).</strong> The prompt holds the 8 chunks with numbered IDs, titles and last-updated dates, plus rules: answer only from these sources, cite every claim, and say so when the sources do not answer the question.</li>
+        <li><strong>Check and return.</strong> Confirm every citation points to a chunk that was actually provided, attach links, and record the trace.</li>
+      </ol>
+
+      <h3>Why hybrid search</h3>
+      <p>Embeddings blur exact tokens. A search for a ticket ID, an error code or a product name often fails on vectors alone and succeeds instantly on keywords. Hybrid search costs little and fixes a whole class of misses.</p>
+
+      <h3>When sources disagree</h3>
+      <p>Suppose the current policy page and an old 2022 version that was never deleted both come back. Handle it at three layers. At ingestion, mark archived or deprecated documents and store <code>updated_at</code>. At ranking, boost recency and authoritative spaces. At generation, show each source's date and tell the model to prefer the newest authoritative source and mention the older one. The user sees something like: <q>Per the 2025 India leave policy [1], 26 weeks. An older 2022 page [3] says 12 weeks and appears outdated.</q></p>
+
+      <h3>When nothing relevant is found</h3>
+      <p>Refuse clearly and help the user: <q>I couldn't find this in the documents you have access to.</q> Show the closest matches as links. A confident wrong answer about policy is worse than no answer.</p>
+    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="search-types.html">Search types and when to use which</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="embeddings.html">Embeddings</a></li></ul>
+    </section>
+
+    <section id="governance">
+      <h2>Permissions and governance</h2>
+      <ul class="tags"><li>Governance</li></ul>
+      <p class="lead">Authorization is plain code, never an LLM decision, and the model must never see a chunk the user is not allowed to read.</p>
+      <figure class="fig"><svg viewBox="0 0 722 202" class="dg" role="img" aria-label="Filtering after retrieval leaves 2 chunks; filtering inside the search keeps 20 relevant permitted chunks"><text x="10" y="18" class="b">Filter after retrieval</text><text x="10" y="36" class="sm">top 20, then drop what the user cannot see</text><rect x="10" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M16 56 L26 66 M26 56 L16 66" class="xmark"/><rect x="40" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M46 56 L56 66 M56 56 L46 66" class="xmark"/><rect x="70" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M76 56 L86 66 M86 56 L76 66" class="xmark"/><rect x="100" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="130" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M136 56 L146 66 M146 56 L136 66" class="xmark"/><rect x="160" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M166 56 L176 66 M176 56 L166 66" class="xmark"/><rect x="190" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M196 56 L206 66 M206 56 L196 66" class="xmark"/><rect x="220" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M226 56 L236 66 M236 56 L226 66" class="xmark"/><rect x="250" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M256 56 L266 66 M266 56 L256 66" class="xmark"/><rect x="280" y="50" width="22" height="22" rx="6" class="cell gone"/><path d="M286 56 L296 66 M296 56 L286 66" class="xmark"/><rect x="10" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M16 86 L26 96 M26 86 L16 96" class="xmark"/><rect x="40" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M46 86 L56 96 M56 86 L46 96" class="xmark"/><rect x="70" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M76 86 L86 96 M86 86 L76 96" class="xmark"/><rect x="100" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M106 86 L116 96 M116 86 L106 96" class="xmark"/><rect x="130" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="160" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M166 86 L176 96 M176 86 L166 96" class="xmark"/><rect x="190" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M196 86 L206 96 M206 86 L196 96" class="xmark"/><rect x="220" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M226 86 L236 96 M236 86 L226 96" class="xmark"/><rect x="250" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M256 86 L266 96 M266 86 L256 96" class="xmark"/><rect x="280" y="80" width="22" height="22" rx="6" class="cell gone"/><path d="M286 86 L296 96 M296 86 L286 96" class="xmark"/><rect x="10" y="124" width="300" height="40" rx="8" class="k-dlq"/><text x="160.0" y="148.5" class="b small" text-anchor="middle">LLM answers from 2 weak chunks</text><text x="392" y="18" class="b">Filter inside the search</text><text x="392" y="36" class="sm">top 20 computed only over permitted chunks</text><rect x="392" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="422" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="452" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="482" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="512" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="542" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="572" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="602" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="632" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="662" y="50" width="22" height="22" rx="6" class="cell new"/><rect x="392" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="422" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="452" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="482" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="512" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="542" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="572" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="602" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="632" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="662" y="80" width="22" height="22" rx="6" class="cell new"/><rect x="392" y="124" width="300" height="40" rx="8" class="k-ingest"/><text x="542.0" y="148.5" class="b small" text-anchor="middle">Rerank picks the best 8 of 20</text><line x1="361" y1="10" x2="361" y2="166" class="rule"/><text x="10" y="192" class="sm">Keep a final plain-code recheck before the prompt as a safety net, and fail closed.</text></svg><figcaption>Where the permission filter runs decides answer quality, not just safety.</figcaption></figure>
+
+      <h3>Filter inside the search, not after it</h3>
+      <p>If you retrieve the top 20 and then remove the 18 the user cannot see, the model answers from 2 weak chunks. Instead, apply the permission filter inside the vector and keyword queries, so the top results are computed only over permitted chunks. Vertex AI Vector Search supports this with restricts on each vector, and pgvector with a <code>WHERE</code> clause. Keep a second check just before the prompt as a safety net.</p>
+
+      <h3>What the check compares</h3>
+      <p>Each chunk stores <code>allowed_principals</code>: the users and groups from the source document's ACL (Drive sharing, Confluence space and page restrictions, Jira project permissions), mapped to identity-provider groups at ingestion. The user side is their ID plus group list. The check is a set overlap.</p>
+
+      <h3>Keeping permissions fresh</h3>
+      <ul class="plain">
+        <li><strong>A user leaves a group:</strong> the group cache expires within about a minute.</li>
+        <li><strong>A document's sharing changes:</strong> the source's permission webhook becomes an <code>acl_change</code> event that rewrites metadata in seconds, and the hourly crawl catches anything missed.</li>
+        <li><strong>The recheck errors:</strong> drop the chunk. Fail closed.</li>
+      </ul>
+
+      <h3>One index or many</h3>
+      <p>One shared index with permission filters scales and is cheap to run. A separate index per team gives hard isolation but multiplies cost and operations. For an internal assistant, one filtered index is the default; separate indexes make sense for strictly regulated data or external customers.</p>
+
+      <h3>Other controls</h3>
+      <ul class="plain">
+        <li><strong>Prompt injection from documents.</strong> Anyone can write "ignore your instructions" into a Confluence page. Mark retrieved text as data in the prompt, keep the assistant read-only, and never let retrieved text trigger tools.</li>
+        <li><strong>PII.</strong> Redact personal data in logs and traces; restrict who can view raw prompts.</li>
+        <li><strong>Audit log.</strong> Record who asked what, which documents were used, and what was answered.</li>
+        <li><strong>Data residency and retention.</strong> Keep indexes and logs in the required regions; expire chat history on a schedule.</li>
+        <li><strong>Model and prompt registry.</strong> Every prompt and model version is reviewed and traceable to the answers it produced.</li>
+      </ul>
+    <p class="deeper-k">Go deeper</p><ul class="related"><li><a href="access-control.html">Access control (ACL)</a></li></ul>
+    </section>
+
+    <section id="deployment">
+      <h2>Deployment</h2>
+      <ul class="tags"><li>Deploying pipelines</li><li>Deploying agents</li></ul>
+      <p class="lead">Treat ingestion as an idempotent, replayable pipeline and the assistant as a stateless, versioned service with canary releases.</p>
+      <figure class="fig"><svg viewBox="0 0 722 226" class="dg" role="img" aria-label="Every change passes an eval gate, then a 5 percent canary, then full rollout or automatic rollback"><rect x="10" y="40" width="140" height="50" rx="8" class="box"/><text x="80.0" y="61.0" class="b" text-anchor="middle">Change</text><text x="80.0" y="77.0" class="sm" text-anchor="middle">prompt, model, index</text><path d="M150 65 L162 65" class="wire" marker-end="url(#ah)"/><polygon points="164,65 222,30 280,65 222,100" class="k-cross"/><text x="222" y="62" class="b small" text-anchor="middle">Eval gate</text><text x="222" y="77" class="sm" text-anchor="middle">golden set</text><path d="M280 65 L312 65" class="wire" marker-end="url(#ah)"/><text x="296" y="56" class="sm" text-anchor="middle">pass</text><rect x="314" y="40" width="120" height="50" rx="8" class="k-serve"/><text x="374.0" y="61.0" class="b" text-anchor="middle">Canary</text><text x="374.0" y="77.0" class="sm" text-anchor="middle">5% of traffic</text><path d="M434 65 L466 65" class="wire" marker-end="url(#ah)"/><polygon points="468,65 526,30 584,65 526,100" class="k-cross"/><text x="526" y="69" class="b small" text-anchor="middle">Healthy?</text><path d="M584 65 L614 65" class="wire" marker-end="url(#ah)"/><text x="599" y="56" class="sm" text-anchor="middle">yes</text><rect x="616" y="40" width="96" height="50" rx="8" class="k-ingest"/><text x="664.0" y="69.5" class="b" text-anchor="middle">100%</text><path d="M526 100 L526 136" class="wire" marker-end="url(#ah)"/><text x="536" y="122" class="sm">no</text><rect x="466" y="138" width="120" height="40" rx="8" class="k-dlq"/><text x="526.0" y="162.5" class="b small" text-anchor="middle">Auto rollback</text><path d="M222 100 L222 158 L132 158" class="wire" marker-end="url(#ah)"/><text x="230" y="130" class="sm">fail</text><rect x="10" y="138" width="120" height="40" rx="8" class="box"/><text x="70.0" y="162.5" class="b small" text-anchor="middle">Back to author</text><text x="10" y="214" class="sm">Indexes ship blue-green: build the new one beside the old, switch, keep the old for rollback.</text></svg><figcaption>Prompts, models and indexes are versioned artifacts and ship the same way.</figcaption></figure>
+
+      <h3>Pipelines</h3>
+      <ul class="plain">
+        <li>Each stage is idempotent, so any event can be replayed safely.</li>
+        <li>Live updates and backfills run as separate consumer groups with separate quotas.</li>
+        <li>Failures retry with backoff, then land in a dead-letter queue with an alert and a replay tool.</li>
+        <li>Batch jobs such as the nightly reconciliation and index rebuilds run as an orchestrated DAG (Vertex AI Pipelines or Cloud Composer).</li>
+        <li>Index changes ship blue-green: build the new index alongside, evaluate it, then switch.</li>
+      </ul>
+
+      <h3>The assistant</h3>
+      <ul class="plain">
+        <li><strong>Stateless service</strong> on Cloud Run or GKE, autoscaled on concurrency. Chat history lives in a session store such as Firestore or Redis.</li>
+        <li><strong>Streaming</strong> responses so the first words show in under 2 seconds.</li>
+        <li><strong>Model quotas and fallbacks.</strong> Rate-limit per user, and fall back to a smaller model or a "showing top documents" mode when the main model is slow or throttled.</li>
+        <li><strong>Caching.</strong> Cache embeddings of frequent queries and answers to popular, non-personal questions, keyed by the user's permission set.</li>
+        <li><strong>Versioned prompts and models.</strong> A change goes through the eval gate, then a canary at about 5% of traffic, with automatic rollback if quality or latency metrics drop.</li>
+      </ul>
+    </section>
+
+    <section id="observability">
+      <h2>Observability</h2>
+      <ul class="tags"><li>Monitoring, tracing, logging</li></ul>
+      <p class="lead">Every request produces one trace with a span per step, so any single answer can be replayed and explained.</p>
+      <figure class="fig"><svg viewBox="0 0 722 232" class="dg" role="img" aria-label="Trace waterfall of one request, with the LLM taking most of the time"><line x1="170.0" y1="22" x2="170.0" y2="226" class="rule"/><text x="170.0" y="16" class="sm mono" text-anchor="middle">0 ms</text><line x1="290.0" y1="22" x2="290.0" y2="226" class="rule"/><text x="290.0" y="16" class="sm mono" text-anchor="middle">500 ms</text><line x1="410.0" y1="22" x2="410.0" y2="226" class="rule"/><text x="410.0" y="16" class="sm mono" text-anchor="middle">1000 ms</text><line x1="530.0" y1="22" x2="530.0" y2="226" class="rule"/><text x="530.0" y="16" class="sm mono" text-anchor="middle">1500 ms</text><line x1="650.0" y1="22" x2="650.0" y2="226" class="rule"/><text x="650.0" y="16" class="sm mono" text-anchor="middle">2000 ms</text><text x="10" y="43" class="sm b">request</text><rect x="170.0" y="30" width="420.0" height="16" rx="4" class="f-cross"/><text x="10" y="67" class="sm">auth + groups</text><rect x="170.0" y="54" width="12.0" height="16" rx="4" class="f-serve"/><text x="188.0" y="66" class="sm mono">50 ms</text><text x="10" y="91" class="sm">rewrite</text><rect x="182.0" y="78" width="72.0" height="16" rx="4" class="f-serve"/><text x="260.0" y="90" class="sm mono">300 ms</text><text x="10" y="115" class="sm">dense search</text><rect x="254.0" y="102" width="36.0" height="16" rx="4" class="f-kb"/><text x="296.0" y="114" class="sm mono">150 ms</text><text x="10" y="139" class="sm">BM25 search</text><rect x="254.0" y="126" width="28.8" height="16" rx="4" class="f-kb"/><text x="288.8" y="138" class="sm mono">120 ms</text><text x="10" y="163" class="sm">rerank</text><rect x="290.0" y="150" width="48.0" height="16" rx="4" class="f-serve"/><text x="344.0" y="162" class="sm mono">200 ms</text><text x="10" y="187" class="sm">permission recheck</text><rect x="338.0" y="174" width="4.8" height="16" rx="4" class="f-gov"/><text x="348.8" y="186" class="sm mono">20 ms</text><text x="10" y="211" class="sm">LLM first token</text><rect x="342.8" y="198" width="240.0" height="16" rx="4" class="f-model"/><text x="588.8" y="210" class="sm mono">1,000 ms</text></svg><figcaption>One trace per request, one span per step (illustrative timings). Dense and keyword search run in parallel.</figcaption></figure>
+      <h3>What each trace records</h3>
+      <div class="table"><table>
+        <thead><tr><th>Span</th><th>Recorded</th></tr></thead>
+        <tbody>
+          <tr><td>Request</td><td>User ID (pseudonymised), groups hash, session, prompt and model versions</td></tr>
+          <tr><td>Rewrite</td><td>Original and rewritten query, extracted filters</td></tr>
+          <tr><td>Retrieval</td><td>Chunk IDs, doc versions and scores from each search, filters applied</td></tr>
+          <tr><td>Rerank</td><td>Final 8 chunk IDs and scores; anything dropped by the permission recheck</td></tr>
+          <tr><td>Generation</td><td>Full prompt (redacted), answer, citations, tokens in and out, cost, latency</td></tr>
+          <tr><td>Feedback</td><td>Thumbs, comments, and whether the user clicked a citation</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Debugging a bad answer</h3>
+      <p>Suppose someone reports the assistant gave the wrong expense limit yesterday. Find the trace, then ask in order: did retrieval find the right document? If not, it is a retrieval or ingestion problem (stale index, bad chunking, missing permission). If it did, did the model misuse it? Then it is a prompt or model problem. Add the case to the golden set so it never regresses.</p>
+      <h3>Dashboards and alerts</h3>
+      <p>Track p50 and p95 latency per step, error and refusal rates, tokens and cost per question, ingestion lag (time from edit to searchable), dead-letter queue depth, and thumbs-down rate by department and source. Alert on latency, error spikes, ingestion lag and any permission-check failure.</p>
+    </section>
+
+    <section id="evals">
+      <h2>Evals</h2>
+      <ul class="tags"><li>Evals</li></ul>
+      <p class="lead">Measure retrieval and generation separately, because they fail for different reasons and are fixed in different places.</p>
+      <figure class="fig"><svg viewBox="0 0 722 248" class="dg" role="img" aria-label="Two questions place each failure: was the right document retrieved, and was the answer correct"><text x="370" y="16" class="b" text-anchor="middle">Is the answer correct?</text><text x="230" y="36" class="sm" text-anchor="middle">no</text><text x="510" y="36" class="sm" text-anchor="middle">yes</text><text x="20" y="140" class="b" text-anchor="middle" transform="rotate(-90 20 140)">Did retrieval find the right doc?</text><text x="70" y="96" class="sm" text-anchor="end">yes</text><text x="70" y="196" class="sm" text-anchor="end">no</text><rect x="90" y="46" width="272" height="92" rx="8" class="k-model"/><text x="226.0" y="88.0" class="b" text-anchor="middle">Generation problem</text><text x="226.0" y="104.0" class="sm" text-anchor="middle">fix prompt, grounding rules or model</text><rect x="370" y="46" width="272" height="92" rx="8" class="k-ingest"/><text x="506.0" y="88.0" class="b" text-anchor="middle">Working</text><text x="506.0" y="104.0" class="sm" text-anchor="middle">add to the regression set</text><rect x="90" y="146" width="272" height="92" rx="8" class="k-dlq"/><text x="226.0" y="188.0" class="b" text-anchor="middle">Retrieval problem</text><text x="226.0" y="204.0" class="sm" text-anchor="middle">fix chunking, index, filters, freshness</text><rect x="370" y="146" width="272" height="92" rx="8" class="k-cross"/><text x="506.0" y="188.0" class="b" text-anchor="middle">Right by luck</text><text x="506.0" y="204.0" class="sm" text-anchor="middle">answer not grounded: check citations</text></svg><figcaption>Score retrieval and generation separately so each failure points to the part to fix.</figcaption></figure>
+      <h3>Building the golden set</h3>
+      <ul class="plain">
+        <li>Ask each department's subject experts for 30 to 50 real questions with the correct answer and the source document.</li>
+        <li>Mine search logs and help-desk tickets for questions people actually ask.</li>
+        <li>Generate candidate questions from documents with an LLM, then have humans keep only the good ones.</li>
+        <li>Include hard cases: ID lookups, conflicting versions, questions with no answer, and questions about documents the test user cannot access.</li>
+      </ul>
+      <h3>Metrics</h3>
+      <div class="table"><table>
+        <thead><tr><th>Stage</th><th>Metric</th><th>Measured with</th></tr></thead>
+        <tbody>
+          <tr><td>Retrieval</td><td>Recall@k: is the right document in the top k? MRR: how high is it ranked?</td><td>Golden set with labelled source documents</td></tr>
+          <tr><td>Generation</td><td>Groundedness: is every claim supported by a cited chunk? Correctness against the reference answer</td><td>LLM-as-judge, calibrated against human ratings on a sample</td></tr>
+          <tr><td>Safety</td><td>Permission leaks (must be zero), refusal precision on unanswerable questions</td><td>Test users with restricted access</td></tr>
+          <tr><td>Online</td><td>Thumbs-up rate, citation clicks, follow-up searches</td><td>Production traces, sampled weekly for human review</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Using them</h3>
+      <p>Run the full suite in CI as a regression gate on every prompt, model, chunking or index change. Slice results by department and source so a drop in one area is not hidden by the average. Feed every reported bad answer back into the golden set.</p>
+    </section>
+
+    <section id="risks">
+      <h2>Risks and v2</h2>
+      <ul class="tags"><li>Wrap-up</li></ul>
+      <figure class="fig"><svg viewBox="0 0 722 262" class="dg" role="img" aria-label="Risk map placing four failure modes by impact and likelihood"><rect x="80" y="10" width="620" height="220" rx="10" class="box"/><line x1="390" y1="10" x2="390" y2="230" class="rule"/><line x1="80" y1="120" x2="700" y2="120" class="rule"/><text x="390" y="252" class="sm" text-anchor="middle">Likelihood without mitigation  →</text><text x="40" y="120" class="sm" text-anchor="middle" transform="rotate(-90 40 120)">Impact  →</text><circle cx="170" cy="46" r="9" class="k-gov"/><text x="186" y="51" class="b small">Permission leak</text><circle cx="460" cy="64" r="9" class="k-model"/><text x="476" y="69" class="b small">Hallucinated policy answer</text><circle cx="480" cy="158" r="9" class="k-kb"/><text x="496" y="163" class="b small">Stale or conflicting answer</text><circle cx="300" cy="178" r="9" class="k-serve"/><text x="316" y="183" class="b small">Cost or latency spike</text></svg><figcaption>A rough placement to talk through, not a measurement. Mitigate the top row first.</figcaption></figure>
+      <div class="table"><table>
+        <thead><tr><th>Risk</th><th>How you detect it</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Permission leak</td><td>Restricted-user eval suite; audit log review</td><td>Filter inside search, recheck before the prompt, fail closed</td></tr>
+          <tr><td>Stale or conflicting answers</td><td>Ingestion lag metric; conflict cases in the golden set</td><td>Reconciliation crawl, recency boost, show dates in answers</td></tr>
+          <tr><td>Hallucinated answers</td><td>Groundedness score; thumbs-down on policy topics</td><td>Strict grounding prompt, citation check, refuse when unsure</td></tr>
+          <tr><td>Cost or latency blow-up at peak</td><td>p95 per step; cost per question</td><td>Caching, smaller model for rewriting, fallback mode</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>v2 ideas:</strong> actions with approval (file a ticket, request access), personalisation from team and role, more sources such as Slack and email, and proactive answers inside the tools people already use.</p>
+    </section>
+
+    <section id="presenting">
+      <h2>Presenting it in 45 minutes</h2>
+      <ul class="tags"><li>Interview script</li></ul>
+      <p class="lead">Use the same script every time so you never stall. The interviewer will pull you into depth, so the two deep dives flex.</p>
+      <figure class="fig"><svg viewBox="0 0 722 116" class="dg" role="img" aria-label="Forty-five minutes split across the seven steps plus buffer"><rect x="10.0" y="30" width="75.0" height="44" rx="6" class="k-src"/><text x="47.5" y="50" class="b small" text-anchor="middle">Clarify</text><text x="47.5" y="66" class="sm" text-anchor="middle">5 min</text><text x="10" y="20" class="sm mono">0</text><rect x="88.0" y="30" width="28.2" height="44" rx="6" class="k-serve"/><text x="102.1" y="56" class="b small" text-anchor="middle">2</text><text x="102.1" y="94" class="sm" text-anchor="middle">Success</text><text x="88.0" y="20" class="sm mono">5</text><rect x="119.2" y="30" width="28.2" height="44" rx="6" class="k-serve"/><text x="133.3" y="56" class="b small" text-anchor="middle">2</text><text x="133.3" y="108" class="sm" text-anchor="middle">Agentic?</text><text x="119.2" y="20" class="sm mono">7</text><rect x="150.4" y="30" width="121.8" height="44" rx="6" class="k-kb"/><text x="211.3" y="50" class="b small" text-anchor="middle">Draw the system</text><text x="211.3" y="66" class="sm" text-anchor="middle">8 min</text><text x="150.4" y="20" class="sm mono">9</text><rect x="275.2" y="30" width="153.0" height="44" rx="6" class="k-ingest"/><text x="351.7" y="50" class="b small" text-anchor="middle">Deep dive 1</text><text x="351.7" y="66" class="sm" text-anchor="middle">10 min</text><text x="275.2" y="20" class="sm mono">17</text><rect x="431.2" y="30" width="153.0" height="44" rx="6" class="k-model"/><text x="507.7" y="50" class="b small" text-anchor="middle">Deep dive 2</text><text x="507.7" y="66" class="sm" text-anchor="middle">10 min</text><text x="431.2" y="20" class="sm mono">27</text><rect x="587.2" y="30" width="43.8" height="44" rx="6" class="k-gov"/><text x="609.1" y="56" class="b small" text-anchor="middle">3</text><text x="609.1" y="94" class="sm" text-anchor="middle">Risks</text><text x="587.2" y="20" class="sm mono">37</text><rect x="634.0" y="30" width="75.0" height="44" rx="6" class="ghost"/><text x="671.5" y="50" class="b small" text-anchor="middle">Buffer</text><text x="671.5" y="66" class="sm" text-anchor="middle">5 min</text><text x="634.0" y="20" class="sm mono">40</text><text x="712" y="20" class="sm mono" text-anchor="end">45</text></svg><figcaption>Minutes per step. The two deep dives flex with what the interviewer wants.</figcaption></figure>
+      <div class="table"><table>
+        <thead><tr><th>Step</th><th>Time</th><th>What to cover</th></tr></thead>
+        <tbody>
+          <tr><td>1. Clarify</td><td class="num">5 min</td><td>Users, scale, latency, freshness, permissions, actions, cost of a wrong answer</td></tr>
+          <tr><td>2. Define success</td><td class="num">2 min</td><td>One product, one quality and one guardrail metric</td></tr>
+          <tr><td>3. How agentic</td><td class="num">2 min</td><td>Workflow first; the one decision the model makes</td></tr>
+          <tr><td>4. Draw the whole system</td><td class="num">8 min</td><td>Ingestion, index, query service, model, observability, evals, governance, deploy</td></tr>
+          <tr><td>5. Deep dive 1</td><td class="num">10 min</td><td>Usually ingestion or retrieval: unit of work, deletes, chunking, hybrid search, reranking, permissions</td></tr>
+          <tr><td>6. Deep dive 2</td><td class="num">10 min</td><td>Usually production: deploy, trace, evaluate, roll back</td></tr>
+          <tr><td>7. Risks and next steps</td><td class="num">3 min</td><td>Top failure modes, how each is detected, what v2 adds</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note"><p><strong>When unsure, reason out loud.</strong> "I'd guess X because Y, and here is how I'd check" earns credit. Naming a tool without saying what it stores, measures or does does not.</p></div>
+    </section>
+
+    <section id="numbers">
+      <h2>Numbers to remember</h2>
+      <ul class="tags"><li>Cheat sheet</li></ul>
+      <figure class="fig"><svg viewBox="0 0 722 142" class="dg" role="img" aria-label="Latency ranges: retrieval under a second, one LLM call up to 3 seconds, a 5-step agent 10 to 20 seconds"><line x1="200.0" y1="22" x2="200.0" y2="134" class="rule"/><text x="200.0" y="16" class="sm mono" text-anchor="middle">0 s</text><line x1="325.0" y1="22" x2="325.0" y2="134" class="rule"/><text x="325.0" y="16" class="sm mono" text-anchor="middle">5 s</text><line x1="450.0" y1="22" x2="450.0" y2="134" class="rule"/><text x="450.0" y="16" class="sm mono" text-anchor="middle">10 s</text><line x1="575.0" y1="22" x2="575.0" y2="134" class="rule"/><text x="575.0" y="16" class="sm mono" text-anchor="middle">15 s</text><line x1="700.0" y1="22" x2="700.0" y2="134" class="rule"/><text x="700.0" y="16" class="sm mono" text-anchor="middle">20 s</text><text x="10" y="43" class="sm">Retrieval + rerank</text><rect x="207.5" y="30" width="5.0" height="16" rx="4" class="f-kb"/><text x="10" y="69" class="sm">One LLM call</text><rect x="212.5" y="56" width="62.5" height="16" rx="4" class="f-model"/><text x="10" y="95" class="sm">5-step agent</text><rect x="450.0" y="82" width="250.0" height="16" rx="4" class="f-gov"/><text x="10" y="121" class="sm">Full answer budget</text><rect x="200.0" y="108" width="200.0" height="16" rx="4" class="f-serve"/></svg><figcaption>Why this design is a workflow: a multi-step agent would blow the 8-second budget.</figcaption></figure>
+      <div class="table"><table>
+        <tbody>
+          <tr><td>Chunk size</td><td class="num">300 to 800 tokens, 10 to 20% overlap</td></tr>
+          <tr><td>Retrieve, then rerank</td><td class="num">top 20 to 50, down to 5 to 10</td></tr>
+          <tr><td>One LLM call</td><td class="num">0.5 to 3 s</td></tr>
+          <tr><td>A 5-step agent</td><td class="num">10 to 20 s, so stream and parallelise</td></tr>
+          <tr><td>1M chunks, 768-dim float32</td><td class="num">about 3 GB of vectors</td></tr>
+          <tr><td>10M docs at 50 docs/s</td><td class="num">200,000 s, about 2.3 days</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </article>
+</div>
+
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. The animation uses Three.js loaded from a CDN, so it needs a connection. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const LOOP = 10;
+const stage = document.getElementById('stage');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- renderer, scene, lights ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+stage.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.domElement.className = 'labels';
+stage.appendChild(labelRenderer.domElement);
+
+const BG = 0xe6eaee;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(BG);
+scene.fog = new THREE.Fog(BG, 100, 200);
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 400);
+const target = new THREE.Vector3(-0.5, 0, -2.2);
+
+scene.add(new THREE.HemisphereLight(0xf3f6ff, 0x8e98a3, 1.15));
+const sun = new THREE.DirectionalLight(0xfff2df, 2.5);
+sun.position.set(-16, 32, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 26, bottom: -26, near: 1, far: 100 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.03;
+sun.shadow.radius = 6;
+sun.target.position.copy(target);
+scene.add(sun, sun.target);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(240, 240),
+  new THREE.MeshStandardMaterial({ color: 0xdce1e6, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---------- helpers ----------
+function rbox(w, h, d, color, o = {}) {
+  const r = Math.min(o.r ?? 0.18, h / 2 - 0.001, w / 2 - 0.001, d / 2 - 0.001);
+  const geo = new RoundedBoxGeometry(w, h, d, o.seg ?? 4, r);
+  const mat = new THREE.MeshStandardMaterial({
+    color, roughness: o.rough ?? 0.55, metalness: 0,
+    emissive: new THREE.Color(color), emissiveIntensity: o.glow ?? 0,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = o.cast ?? true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+const V = (x, z, y = 0.9) => new THREE.Vector3(x, y, z);
+
+function addLabel(parent, html, cls, pos, center = [0.5, 1]) {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.innerHTML = html;
+  const obj = new CSS2DObject(el);
+  obj.position.copy(pos);
+  obj.center.set(center[0], center[1]);
+  parent.add(obj);
+  return el;
+}
+
+// ---------- colours ----------
+const C = {
+  source: 0x8795a3, ingest: 0x2a9d8f, knowledge: 0x4d5fd8, serve: 0xe3a13b,
+  model: 0xe2674f, gov: 0xb2456e, cross: 0x4a5562, user: 0xf3f4f6, dlq: 0xa9443c,
+};
+
+// ---------- plates (where things run) ----------
+function plate(x0, x1, z0, z1, color, text) {
+  const m = rbox(x1 - x0, 0.14, z1 - z0, color, { r: 0.06, seg: 2, rough: 0.9, cast: false });
+  m.position.set((x0 + x1) / 2, 0.07, (z0 + z1) / 2);
+  scene.add(m);
+  addLabel(scene, text, 'plate-lbl', new THREE.Vector3(x0 + 0.4, 0.2, z1 - 0.25), [0, 1]);
+}
+plate(-14.4, 0.9, -11.9, -3.7, 0xcde3df, 'Ingestion workers · Dataflow or Cloud Run');
+plate(-14.4, 15.6, 0.8, 5.3, 0xefe2c9, 'Query service · Cloud Run, autoscaled, versioned prompts');
+plate(-17.6, 17.6, -15.9, -12.1, 0xd3d9e0, 'Cross-cutting');
+
+// ---------- blocks ----------
+const BLOCKS = [
+  { id: 'drive',   name: 'Google Drive',        sub: 'push notifications',            x: -17,  z: -9,    w: 3,   d: 1.8, h: 0.8, c: C.source },
+  { id: 'conf',    name: 'Confluence',          sub: 'webhooks',                      x: -17,  z: -6,    w: 3,   d: 1.8, h: 0.8, c: C.source },
+  { id: 'jira',    name: 'Jira',                sub: 'webhooks',                      x: -17,  z: -3,    w: 3,   d: 1.8, h: 0.8, c: C.source },
+  { id: 'crawl',   name: 'Reconcile crawl',     sub: 'hourly · catches missed events', x: -12,  z: -10.4, w: 3.2, d: 1.6, h: 0.7, c: C.ingest },
+  { id: 'topic',   name: 'doc-changes topic',   sub: 'Pub/Sub or Kafka · key doc_id', x: -12,  z: -6,    w: 3,   d: 3.4, h: 0.9, c: C.ingest },
+  { id: 'chunk',   name: 'Fetch · parse · chunk', sub: 'latest version, by headings', x: -6.5, z: -6,    w: 3.2, d: 2.4, h: 1.0, c: C.ingest },
+  { id: 'dlq',     name: 'Dead-letter queue',   sub: 'alert + retry',                 x: -6.5, z: -9.9,  w: 2.4, d: 1.4, h: 0.6, c: C.dlq },
+  { id: 'embed',   name: 'Embed',               sub: 'batched · model versioned',     x: -1.6, z: -6,    w: 2.6, d: 2.4, h: 1.0, c: C.ingest },
+  { id: 'index',   name: 'Vector + keyword index', sub: 'ACL, version, source on every chunk', x: 4, z: -6, w: 4, d: 3.6, h: 1.6, c: C.knowledge },
+  { id: 'user',    name: 'Employee',            sub: '50k users · 100 QPS peak',      x: -17,  z: 3,     w: 2.4, d: 2.4, h: 1.1, c: C.user },
+  { id: 'gate',    name: 'Gateway',             sub: 'SSO · load user groups',        x: -12,  z: 3,     w: 2.8, d: 2.2, h: 1.0, c: C.serve },
+  { id: 'rewrite', name: 'Query rewrite',       sub: 'history · filters · IDs',       x: -7,   z: 3,     w: 2.8, d: 2.2, h: 1.0, c: C.serve },
+  { id: 'retr',    name: 'Hybrid retrieve',     sub: 'dense + BM25 · ACL pre-filter', x: -2,   z: 3,     w: 2.8, d: 2.2, h: 1.0, c: C.serve },
+  { id: 'rerank',  name: 'Rerank',              sub: 'top 50 → 8',                    x: 3,    z: 3,     w: 2.6, d: 2.2, h: 1.0, c: C.serve },
+  { id: 'acl',     name: 'Permission recheck',  sub: 'plain code · fail closed',      x: 8,    z: 3,     w: 2.8, d: 2.2, h: 1.0, c: C.gov },
+  { id: 'llm',     name: 'LLM (Gemini)',        sub: 'grounded · cites sources',      x: 13,   z: 3,     w: 3,   d: 2.4, h: 1.3, c: C.model },
+  { id: 'obs',     name: 'Observability',       sub: 'OTel spans · tokens · cost · p95', x: -13, z: -14, w: 7.4, d: 2.4, h: 0.7, c: C.cross },
+  { id: 'evals',   name: 'Evals',               sub: 'golden set · recall@k · grounded', x: -4.4, z: -14, w: 7.4, d: 2.4, h: 0.7, c: C.cross },
+  { id: 'gov',     name: 'Governance',          sub: 'ACLs · PII · injection · audit', x: 4.4, z: -14, w: 7.4, d: 2.4, h: 0.7, c: C.gov },
+  { id: 'deploy',  name: 'Deploy',              sub: 'canary · blue-green index', x: 13, z: -14, w: 7.4, d: 2.4, h: 0.7, c: C.cross },
+];
+const B = {};
+for (const b of BLOCKS) {
+  const mesh = rbox(b.w, b.h, b.d, b.c, { r: 0.22, rough: b.id === 'user' ? 0.7 : 0.5 });
+  mesh.position.set(b.x, 0.14 + b.h / 2, b.z);
+  scene.add(mesh);
+  const el = addLabel(mesh, `<b>${b.name}</b><span>${b.sub}</span>`, 'lbl', new THREE.Vector3(0, b.h / 2 + 0.35, 0));
+  B[b.id] = { ...b, mesh, el, arrivals: [], on: false };
+}
+// the index reads as a stack of slabs
+for (let i = 1; i <= 2; i++) {
+  const s = rbox(3.6 - i * 0.25, 0.06, 3.2 - i * 0.25, 0xb9c1ff, { r: 0.03, seg: 2, cast: false });
+  s.position.set(0, -0.8 + i * 0.53, 0);
+  B.index.mesh.add(s);
+}
+const top = (id, lift = 0.35) => V(B[id].x, B[id].z, 0.14 + B[id].h + lift);
+
+// ---------- lanes ----------
+function lane(pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const m = rbox(len + 0.24, 0.06, 0.24, 0xb4bcc6, { r: 0.03, seg: 2, cast: false, rough: 0.8 });
+    m.position.set((a.x + b.x) / 2, 0.2, (a.z + b.z) / 2);
+    m.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+    scene.add(m);
+  }
+}
+const R = {
+  drive:   [V(-17, -9), V(-14.6, -9), V(-14.6, -6), V(-12, -6)],
+  conf:    [V(-17, -6), V(-12, -6)],
+  jira:    [V(-17, -3), V(-14.6, -3), V(-14.6, -6), V(-12, -6)],
+  crawl:   [V(-12, -10.4), V(-12, -6)],
+  t2c:     [V(-12, -6), V(-6.5, -6)],
+  c2d:     [V(-6.5, -6), V(-6.5, -9.9)],
+  c2e:     [V(-6.5, -6), V(-1.6, -6)],
+  e2i:     [V(-1.6, -6), V(4, -6)],
+  u2g:     [V(-17, 3), V(-12, 3)],
+  g2w:     [V(-12, 3), V(-7, 3)],
+  w2r:     [V(-7, 3), V(-2, 3)],
+  r2i:     [V(-2, 3), V(-2, -1.4), V(4, -1.4), V(4, -6)],
+  r2k:     [V(-2, 3), V(3, 3)],
+  k2a:     [V(3, 3), V(8, 3)],
+  a2l:     [V(8, 3), V(13, 3)],
+  answer:  [V(13, 3), V(13, 7.6), V(-17, 7.6), V(-17, 3)],
+};
+for (const k of Object.keys(R)) lane(R[k]);
+addLabel(scene, 'answer + citations, streamed back', 'lane-lbl', new THREE.Vector3(-2, 0.3, 7.6), [0.5, -0.3]);
+addLabel(scene, 'retrieve over ACL-filtered chunks', 'lane-lbl', new THREE.Vector3(1, 0.3, -1.4), [0.5, -0.3]);
+
+function arc(a, b, h, n = 32) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const s = i / n;
+    const p = new THREE.Vector3().lerpVectors(a, b, s);
+    p.y += h * Math.sin(Math.PI * s);
+    pts.push(p);
+  }
+  return pts;
+}
+const rev = (pts) => pts.slice().reverse();
+
+function poly(pts) {
+  const segs = [];
+  let L = 0;
+  for (let i = 0; i < pts.length - 1; i++) { const l = pts[i].distanceTo(pts[i + 1]); segs.push(l); L += l; }
+  return (f, out) => {
+    let d = f * L;
+    for (let i = 0; i < segs.length; i++) {
+      if (d <= segs[i] || i === segs.length - 1) return out.lerpVectors(pts[i], pts[i + 1], segs[i] ? Math.min(1, d / segs[i]) : 1);
+      d -= segs[i];
+    }
+    return out;
+  };
+}
+
+// ---------- packets on a 10 s timeline ----------
+const P = {
+  doc: 0xffffff, chunk: 0x8fe3d6, vec: 0xa6b0ff, ask: 0xffd27a, hit: 0xa6b0ff,
+  answer: 0xff9f86, bad: 0xe0413a, trace: 0x75859a, policy: 0xe08bb0, ship: 0x46b06a,
+};
+const SPECS = [
+  // ingestion
+  { pts: R.drive, t0: 0.0,  t1: 0.9,  c: P.doc, to: 'topic', from: 'drive' },
+  { pts: R.conf,  t0: 0.15, t1: 0.85, c: P.doc, to: 'topic', from: 'conf' },
+  { pts: R.jira,  t0: 0.3,  t1: 1.1,  c: P.doc, to: 'topic', from: 'jira' },
+  { pts: R.crawl, t0: 0.45, t1: 1.05, c: P.doc, to: 'topic', from: 'crawl' },
+  { pts: R.t2c,   t0: 1.25, t1: 1.9,  c: P.doc, n: 3, st: 0.12, to: 'chunk' },
+  { pts: R.c2d,   t0: 2.2,  t1: 2.8,  c: P.bad, to: 'dlq', s: 0.34 },
+  { pts: R.c2e,   t0: 2.3,  t1: 3.0,  c: P.chunk, n: 5, st: 0.08, to: 'embed', s: 0.3 },
+  { pts: R.e2i,   t0: 3.2,  t1: 3.9,  c: P.vec, n: 5, st: 0.08, to: 'index', s: 0.3 },
+  { pts: arc(top('deploy'), top('index'), 4), t0: 3.3, t1: 4.1, c: P.ship, from: 'deploy', s: 0.3 },
+  { pts: [V(4, -6, 1.9), V(4.6, -7.4, 3.4)], t0: 4.15, t1: 4.75, c: P.bad, s: 0.3 },
+  // query
+  { pts: R.u2g,   t0: 4.45, t1: 5.0,  c: P.ask, to: 'gate', from: 'user' },
+  { pts: arc(top('deploy'), top('llm'), 4), t0: 4.5, t1: 5.3, c: P.ship, from: 'deploy', to: 'llm', s: 0.3 },
+  { pts: R.g2w,   t0: 5.05, t1: 5.45, c: P.ask, to: 'rewrite' },
+  { pts: R.w2r,   t0: 5.55, t1: 5.95, c: P.ask, to: 'retr' },
+  { pts: R.r2i,   t0: 6.05, t1: 6.6,  c: P.ask, to: 'index' },
+  { pts: rev(R.r2i), t0: 6.7, t1: 7.15, c: P.hit, n: 5, st: 0.05, to: 'retr', s: 0.3 },
+  { pts: R.r2k,   t0: 7.35, t1: 7.75, c: P.hit, n: 5, st: 0.05, to: 'rerank', s: 0.3 },
+  { pts: arc(top('gov'), top('acl'), 5), t0: 7.5, t1: 8.25, c: P.policy, from: 'gov', s: 0.3 },
+  { pts: R.k2a,   t0: 8.25, t1: 8.55, c: P.hit, n: 2, st: 0.12, to: 'acl', s: 0.3 },
+  { pts: R.k2a,   t0: 8.31, t1: 8.61, c: P.bad, to: 'acl', s: 0.3 },
+  { pts: [V(8, 3, 1.3), V(9.3, 4.4, 0.9), V(9.9, 5.2, 0.15)], t0: 8.65, t1: 9.1, c: P.bad, s: 0.3 },
+  { pts: R.a2l,   t0: 8.75, t1: 9.05, c: P.hit, n: 2, st: 0.06, to: 'llm', s: 0.3 },
+  { pts: R.answer, t0: 9.1, t1: 9.8, c: P.answer, n: 4, st: 0.06, to: 'user' },
+  { pts: arc(top('obs'), top('evals'), 2.2), t0: 9.2, t1: 9.85, c: P.trace, from: 'obs', to: 'evals', s: 0.26 },
+];
+// every hop emits a span to observability
+for (const [id, t] of [['topic', 1.05], ['chunk', 1.95], ['embed', 3.0], ['index', 3.95], ['gate', 5.0], ['retr', 6.0], ['rerank', 7.8], ['acl', 8.6], ['llm', 9.05]]) {
+  SPECS.push({ pts: arc(top(id, 0.1), top('obs'), 3), t0: t, t1: t + 0.8, c: P.trace, to: 'obs', s: 0.2 });
+}
+
+const packets = [];
+for (const sp of SPECS) {
+  const n = sp.n ?? 1;
+  const at = poly(sp.pts);
+  for (let k = 0; k < n; k++) {
+    const t0 = sp.t0 + k * (sp.st ?? 0), t1 = sp.t1 + k * (sp.st ?? 0);
+    const s = (sp.s ?? 0.42) * 1.2;
+    const mesh = rbox(s, s, s, sp.c, { r: s * 0.3, seg: 3, glow: 0.35, rough: 0.35 });
+    mesh.visible = false;
+    scene.add(mesh);
+    packets.push({ mesh, at, t0, dur: t1 - t0 });
+    if (sp.to && k === n - 1) B[sp.to].arrivals.push(t1);
+    if (sp.to && k === 0 && n > 1) B[sp.to].arrivals.push(t1);
+  }
+  if (sp.from) B[sp.from].arrivals.push(sp.t0 + 0.05);
+}
+B.index.arrivals.push(4.2); // stale chunks deleted
+
+// ---------- captions ----------
+const STEPS = [
+  { t: 0.0, k: ['kb'], text: 'Webhooks and an hourly reconcile crawl publish changed doc IDs to a topic keyed by doc_id. A webhook is only a hint to re-read the doc.' },
+  { t: 1.2, k: ['pipe', 'kb'], text: 'Workers fetch the latest version, parse it and chunk by headings. A doc that fails to parse lands in a dead-letter queue.' },
+  { t: 2.2, k: ['kb', 'obs'], text: 'Each chunk carries title, heading path, version and ACL groups, then is embedded in batches. Every hop emits a trace span.' },
+  { t: 3.2, k: ['kb', 'pipe'], text: 'Upsert into the vector and keyword index and delete the doc’s older chunks. A new embedding model gets a second index, swapped blue-green.' },
+  { t: 4.4, k: ['agent', 'gov'], text: 'An employee asks a question. The gateway runs on autoscaled Cloud Run, checks SSO and loads the user’s groups. New versions ship as canaries.' },
+  { t: 5.5, k: ['rag'], text: 'The query is rewritten with chat history. Filters like “India” and IDs like HR-4512 are pulled out.' },
+  { t: 6.0, k: ['rag', 'gov'], text: 'Hybrid search runs dense and BM25 together, filtered inside the query to chunks this user may read, and keeps the top 50.' },
+  { t: 7.3, k: ['rag'], text: 'A cross-encoder reranks 50 down to 8, boosting fresh and authoritative sources so the 2025 policy beats the 2022 one.' },
+  { t: 8.2, k: ['gov'], text: 'A plain-code permission recheck drops anything revoked since indexing. If the check errors, it fails closed.' },
+  { t: 8.8, k: ['obs', 'evals', 'agent'], text: 'The LLM answers only from those sources, cites each claim and streams back. Sampled traces feed the golden-set and groundedness evals.' },
+];
+const capEl = document.getElementById('caption');
+const stepEl = document.getElementById('stepno');
+const clockEl = document.getElementById('clock');
+const fillEl = document.getElementById('fill');
+const barEl = document.getElementById('bar');
+const chipEls = [...document.querySelectorAll('#chips li')];
+for (const s of STEPS.slice(1)) {
+  const tick = document.createElement('div');
+  tick.className = 'tick';
+  tick.style.left = `${(s.t / LOOP) * 100}%`;
+  barEl.appendChild(tick);
+}
+let curStep = -1;
+function setStep(i) {
+  if (i === curStep) return;
+  curStep = i;
+  const s = STEPS[i];
+  capEl.textContent = s.text;
+  stepEl.textContent = `Step ${i + 1} of ${STEPS.length}`;
+  for (const c of chipEls) c.classList.toggle('on', s.k.includes(c.dataset.k));
+}
+
+// ---------- post-processing ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const gtao = new GTAOPass(scene, camera, 1, 1);
+gtao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.5, thickness: 1.5, scale: 1.2, samples: 16 });
+gtao.blendIntensity = 1;
+composer.addPass(gtao);
+composer.addPass(new OutputPass());
+
+// ---------- camera ----------
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(target);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.46;
+controls.minDistance = 12;
+controls.maxDistance = 140;
+controls.enableZoom = false; // keep the page's own scrolling
+if (window.matchMedia('(pointer: coarse)').matches) {
+  controls.enabled = false;
+  renderer.domElement.style.touchAction = 'auto';
+}
+let userCam = false, baseDist = 50, portrait = false;
+let EL = THREE.MathUtils.degToRad(50);
+const resetBtn = document.getElementById('reset');
+controls.addEventListener('start', () => { userCam = true; resetBtn.hidden = false; });
+resetBtn.addEventListener('click', () => { userCam = false; resetBtn.hidden = true; controls.target.copy(target); });
+
+function placeCamera(t) {
+  // portrait screens look down the long axis so the flow runs top to bottom
+  const az = (portrait ? Math.PI / 2 : 0) + (reduceMotion ? 0 : 0.1 * Math.sin((2 * Math.PI * t) / LOOP));
+  camera.position.set(
+    target.x + Math.sin(az) * Math.cos(EL) * baseDist,
+    target.y + Math.sin(EL) * baseDist,
+    target.z + Math.cos(az) * Math.cos(EL) * baseDist
+  );
+  camera.lookAt(target);
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  const vf = THREE.MathUtils.degToRad(camera.fov);
+  const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+  portrait = camera.aspect < 0.85;
+  target.z = portrait ? -4.4 : -2.2;
+  controls.target.copy(target);
+  EL = THREE.MathUtils.degToRad(portrait ? 64 : 50);
+  baseDist = portrait
+    ? Math.max(15 / Math.tan(hf / 2), 23 / Math.tan(vf / 2))
+    : Math.max(20 / Math.tan(hf / 2), 12 / Math.tan(vf / 2));
+  scene.fog.near = baseDist + 25;
+  scene.fog.far = baseDist + 110;
+  renderer.setSize(w, h);
+  composer.setPixelRatio(renderer.getPixelRatio());
+  composer.setSize(w, h);
+  labelRenderer.setSize(w, h);
+}
+new ResizeObserver(() => resize()).observe(stage);
+resize();
+
+// ---------- playback ----------
+let playing = !reduceMotion;
+let simT = reduceMotion ? 8.4 : 0;
+const playBtn = document.getElementById('play');
+function setPlaying(p) { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; }
+setPlaying(playing);
+playBtn.addEventListener('click', () => setPlaying(!playing));
+function seekFromEvent(e) {
+  const r = barEl.getBoundingClientRect();
+  simT = THREE.MathUtils.clamp((e.clientX - r.left) / r.width, 0, 0.999) * LOOP;
+}
+let scrubbing = false;
+barEl.addEventListener('pointerdown', (e) => { scrubbing = true; barEl.setPointerCapture(e.pointerId); seekFromEvent(e); });
+barEl.addEventListener('pointermove', (e) => { if (scrubbing) seekFromEvent(e); });
+barEl.addEventListener('pointerup', () => { scrubbing = false; });
+barEl.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') simT = (simT + 0.5) % LOOP;
+  if (e.key === 'ArrowLeft') simT = (simT - 0.5 + LOOP) % LOOP;
+});
+
+const mod = (a) => ((a % LOOP) + LOOP) % LOOP;
+const tmp = new THREE.Vector3();
+const clock = new THREE.Clock();
+let onScreen = true;
+new IntersectionObserver((es) => { onScreen = es[0].isIntersecting; }).observe(stage);
+
+function update(t) {
+  for (const p of packets) {
+    const rel = mod(t - p.t0);
+    if (rel <= p.dur) {
+      const f = rel / p.dur;
+      p.at(f, tmp);
+      p.mesh.position.copy(tmp);
+      const s = Math.min(1, f / 0.12, (1 - f) / 0.12);
+      p.mesh.scale.setScalar(Math.max(0.001, s));
+      p.mesh.rotation.y = f * Math.PI;
+      p.mesh.visible = true;
+    } else {
+      p.mesh.visible = false;
+    }
+  }
+  for (const id in B) {
+    const b = B[id];
+    let g = 0;
+    for (const ta of b.arrivals) {
+      const rel = mod(t - ta);
+      if (rel < 1.5) g = Math.max(g, Math.exp(-rel / 0.35));
+    }
+    b.mesh.material.emissiveIntensity = 0.55 * g;
+    b.mesh.scale.y = 1 + 0.08 * g;
+    const on = g > 0.3;
+    if (on !== b.on) { b.on = on; b.el.classList.toggle('on', on); }
+  }
+  let i = 0;
+  while (i + 1 < STEPS.length && t >= STEPS[i + 1].t) i++;
+  setStep(i);
+  fillEl.style.width = `${(t / LOOP) * 100}%`;
+  clockEl.textContent = `${t.toFixed(1)} s / ${LOOP} s`;
+  barEl.setAttribute('aria-valuenow', t.toFixed(1));
+}
+
+function loop() {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  if (playing && !scrubbing) simT = mod(simT + dt);
+  update(simT);
+  if (userCam) controls.update(); else placeCamera(simT);
+  if (onScreen) {
+    composer.render();
+    labelRenderer.render(scene, camera);
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
