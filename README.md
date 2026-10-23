@@ -23,6 +23,16 @@ Follow them in order, or jump to whatever you need.
 Coming next: retrieval, agent memory, production, and the model layer.
 
 Also in this repo: [Python practice](python-practice/), runnable Python lessons and interview practice problems.
+## System design walkthroughs
+
+Worked designs that combine the topics above, in [`system-design/`](system-design/): **https://devlcodes.github.io/agentic-ai-notebook/system-design/**
+
+- [Enterprise Search Assistant](https://devlcodes.github.io/agentic-ai-notebook/system-design/enterprise-search.html): RAG over 10M documents in Drive, Confluence and Jira, with an animated 3D architecture
+- [Fresh Knowledge Base Pipeline](https://devlcodes.github.io/agentic-ai-notebook/system-design/knowledge-freshness.html): keeping an agent's knowledge base fresh within 15 minutes with Kafka, versioned writes and safe re-embedding, with seven interactive 3D scenes
+- Topic deep dives: [knowledge base](https://devlcodes.github.io/agentic-ai-notebook/system-design/knowledge-base.html), [backfills and re-indexing](https://devlcodes.github.io/agentic-ai-notebook/system-design/backfills.html), [embeddings](https://devlcodes.github.io/agentic-ai-notebook/system-design/embeddings.html), [vector databases](https://devlcodes.github.io/agentic-ai-notebook/system-design/vector-databases.html), [search types](https://devlcodes.github.io/agentic-ai-notebook/system-design/search-types.html), [reranking](https://devlcodes.github.io/agentic-ai-notebook/system-design/reranking.html), [access control](https://devlcodes.github.io/agentic-ai-notebook/system-design/access-control.html), [chunking](https://devlcodes.github.io/agentic-ai-notebook/system-design/chunking.html), [routing](https://devlcodes.github.io/agentic-ai-notebook/system-design/routing.html), [evals](https://devlcodes.github.io/agentic-ai-notebook/system-design/evals.html)
+- [Glossary](https://devlcodes.github.io/agentic-ai-notebook/system-design/glossary.html): every term in one line
+
+These pages are also single HTML files with inline CSS. The 3D views (the Enterprise Search and Fresh Knowledge Base animations, and the rotatable figures on the embeddings, vector databases, chunking and routing pages) load Three.js from a CDN, so they need a connection; every page keeps flat diagrams and labs that work offline.
 
 ## How it's built
 

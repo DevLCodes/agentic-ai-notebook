@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Evals · Agentic System Designs</title>
+<meta name="description" content="Evals for RAG and agents: the eval loop, retrieval metrics (recall@k, MRR, nDCG), groundedness, LLM-as-judge, trajectory evals, golden sets and release gates. With an interactive metrics lab.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · quality</p><h1>Evals</h1><p class="lead">How to measure an agentic system stage by stage, build a golden set, grade answers with judges, and gate releases.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#why">Why evals decide everything</a></li><li><a href="#layers">What to measure, stage by stage</a></li><li><a href="#retrieval">Retrieval metrics, hands on</a></li><li><a href="#metrics">The four core metrics in detail</a></li><li><a href="#generation">Grading answers: groundedness and judges</a></li><li><a href="#agents">Evaluating agents</a></li><li><a href="#golden">Building a golden set</a></li><li><a href="#gate">Release gates and production evals</a></li><li><a href="#tools">Eval tools and plugins</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="why"><h2>Why evals decide everything</h2>
+<p class="lead">Evals are automated tests for AI behaviour. They turn "the answers feel worse" into numbers you can compare, gate releases on and debug.</p>
+<figure class="fig"><svg viewBox="0 0 722 304" class="dg" role="img" aria-label="The evaluation loop: golden set, run, score, compare, gate, canary, monitor, and feed failures back"><path d="M440.303 51.2417 L458.473 54.7339" class="wire" marker-end="url(#ah)"/><path d="M559.613 94.4363 L589.164 127.539" class="wire" marker-end="url(#ah)"/><path d="M589.164 176.461 L559.613 209.564" class="wire" marker-end="url(#ah)"/><path d="M458.473 249.266 L440.303 252.758" class="wire" marker-end="url(#ah)"/><path d="M281.697 252.758 L263.527 249.266" class="wire" marker-end="url(#ah)"/><path d="M162.387 209.564 L132.836 176.461" class="wire" marker-end="url(#ah)"/><path d="M132.836 127.539 L162.387 94.4363" class="wire" marker-end="url(#ah)"/><path d="M263.527 54.7339 L281.697 51.2417" class="wire" marker-end="url(#ah)"/><rect x="291" y="18" width="140" height="36" rx="8" class="k-kb"/><text x="361" y="40.5" class="small b" text-anchor="middle">Golden set</text><rect x="467.777" y="51.9756" width="140" height="36" rx="8" class="k-serve"/><text x="537.777" y="74.4756" class="small b" text-anchor="middle">Run candidate</text><rect x="541" y="134" width="140" height="36" rx="8" class="k-model"/><text x="611" y="156.5" class="small b" text-anchor="middle">Score</text><rect x="467.777" y="216.024" width="140" height="36" rx="8" class="k-cross"/><text x="537.777" y="238.524" class="small b" text-anchor="middle">Compare to baseline</text><rect x="291" y="250" width="140" height="36" rx="8" class="k-gov"/><text x="361" y="272.5" class="small b" text-anchor="middle">CI gate</text><rect x="114.223" y="216.024" width="140" height="36" rx="8" class="k-ingest"/><text x="184.223" y="238.524" class="small b" text-anchor="middle">Canary</text><rect x="41" y="134" width="140" height="36" rx="8" class="k-serve"/><text x="111" y="156.5" class="small b" text-anchor="middle">Monitor in prod</text><rect x="114.223" y="51.9756" width="140" height="36" rx="8" class="k-dlq"/><text x="184.223" y="74.4756" class="small b" text-anchor="middle">Mine failures</text><text x="361" y="146" class="sm" text-anchor="middle">every change to a prompt,</text><text x="361" y="162" class="sm" text-anchor="middle">model, chunker or tool</text><text x="361" y="178" class="sm" text-anchor="middle">goes round this loop</text></svg><figcaption>Evals are a loop, not a one-off score. Production failures become new golden questions, so the same bug cannot come back silently.</figcaption></figure>
+<p>Without them every prompt tweak, model upgrade or chunking change is a guess. With them you can say "recall@5 went from 0.82 to 0.88 and groundedness held at 0.96, so we ship".</p></section><section id="layers"><h2>What to measure, stage by stage</h2><figure class="fig"><svg viewBox="0 0 722 164" class="dg" role="img" aria-label="Metrics for each stage of an agentic RAG pipeline"><rect x="10" y="24" width="104" height="40" rx="8" class="k-serve"/><text x="62" y="48.5" class="small b" text-anchor="middle">Router</text><path d="M114 44 L126 44" class="wire" marker-end="url(#ah)"/><text x="62" y="86" class="sm" text-anchor="middle">route accuracy</text><text x="62" y="103" class="sm" text-anchor="middle">clarify rate</text><rect x="128" y="24" width="104" height="40" rx="8" class="k-kb"/><text x="180" y="48.5" class="small b" text-anchor="middle">Retrieval</text><path d="M232 44 L244 44" class="wire" marker-end="url(#ah)"/><text x="180" y="86" class="sm" text-anchor="middle">recall@k</text><text x="180" y="103" class="sm" text-anchor="middle">MRR, nDCG</text><rect x="246" y="24" width="104" height="40" rx="8" class="k-kb"/><text x="298" y="48.5" class="small b" text-anchor="middle">Rerank</text><path d="M350 44 L362 44" class="wire" marker-end="url(#ah)"/><text x="298" y="86" class="sm" text-anchor="middle">nDCG@8</text><text x="298" y="103" class="sm" text-anchor="middle">top-1 hit</text><rect x="364" y="24" width="104" height="40" rx="8" class="k-model"/><text x="416" y="48.5" class="small b" text-anchor="middle">Generation</text><path d="M468 44 L480 44" class="wire" marker-end="url(#ah)"/><text x="416" y="86" class="sm" text-anchor="middle">groundedness</text><text x="416" y="103" class="sm" text-anchor="middle">correctness</text><rect x="482" y="24" width="104" height="40" rx="8" class="k-gov"/><text x="534" y="48.5" class="small b" text-anchor="middle">Agent</text><path d="M586 44 L598 44" class="wire" marker-end="url(#ah)"/><text x="534" y="86" class="sm" text-anchor="middle">task success</text><text x="534" y="103" class="sm" text-anchor="middle">tool-call accuracy</text><rect x="600" y="24" width="104" height="40" rx="8" class="k-ingest"/><text x="652" y="48.5" class="small b" text-anchor="middle">User</text><text x="652" y="86" class="sm" text-anchor="middle">thumbs, edits</text><text x="652" y="103" class="sm" text-anchor="middle">resolution rate</text><rect x="10" y="128" width="340" height="26" rx="6" class="zone"/><text x="180" y="145" class="sm" text-anchor="middle">component evals: find which part broke</text><rect x="364" y="128" width="344" height="26" rx="6" class="zone"/><text x="536" y="145" class="sm" text-anchor="middle">end-to-end evals: did the user get the outcome</text></svg><figcaption>Measure each stage separately. An end-to-end score tells you something got worse; component scores tell you where.</figcaption></figure>
+<div class="table"><table><thead><tr><th>Metric</th><th>Question it answers</th><th>Needs</th></tr></thead><tbody>
+<tr><td>Recall@k</td><td>Did the right chunks make the top k?</td><td>Labelled relevant chunks per question</td></tr>
+<tr><td>MRR</td><td>How high was the first right chunk?</td><td>Same</td></tr>
+<tr><td>nDCG@k</td><td>Were the best chunks near the top, with graded relevance?</td><td>Same, optionally graded 0 to 3</td></tr>
+<tr><td>Groundedness (faithfulness)</td><td>Is every claim supported by the retrieved context?</td><td>The answer and its context; an LLM judge</td></tr>
+<tr><td>Answer correctness</td><td>Does it match the reference answer?</td><td>A reference answer per question</td></tr>
+<tr><td>Task success</td><td>Did the agent achieve the goal?</td><td>A checker: state in a sandbox, or a judge</td></tr>
+<tr><td>Tool-call accuracy</td><td>Right tool, right arguments, right order?</td><td>An expected trajectory</td></tr>
+<tr><td>Safety</td><td>Leaks, forbidden actions, injection followed?</td><td>Adversarial test cases; must be zero</td></tr>
+</tbody></table></div></section><section id="retrieval"><h2>Retrieval metrics, hands on</h2>
+<div class="lab" id="evallab">
+  <p style="margin:0 0 10px;font-size:14.5px">Question: <em>"How many weeks do adoptive parents get in India?"</em> The golden set marks <strong>3 chunks</strong> as relevant (green). Pick a ranking, or mark results yourself, and watch the metrics move.</p>
+  <div class="lab-row"><span class="lab-k">Presets</span><span class="seg" role="group" aria-label="Preset rankings">
+    <button data-p="good" aria-pressed="false">Good ranking</button><button data-p="late" aria-pressed="true">Right docs, ranked low</button><button data-p="miss" aria-pressed="false">Misses one</button></span></div>
+  <ol class="rlist" id="ev-list"></ol>
+  <div class="metrics" id="ev-metrics"></div>
+  <p class="lab-out" id="ev-out" aria-live="polite"></p>
+</div>
+<div class="formula">recall@k = relevant in top k ÷ all relevant&nbsp;&nbsp;·&nbsp;&nbsp;MRR = 1 ÷ rank of first relevant&nbsp;&nbsp;·&nbsp;&nbsp;nDCG@k = Σ rel / log₂(rank + 1), divided by the ideal</div>
+<p>Retrieval metrics are cheap, fast and need no LLM, so run them on every change. If recall@k is low, no prompt can fix the answer: the model never saw the right text. Each metric is explained in detail, with code, <a href="#metrics">below</a>.</p></section><section id="metrics"><h2>The four core metrics in detail</h2>
+<p class="lead">Four numbers carry most RAG evaluation. Three score the retriever and need only chunk IDs, so they are cheap and exact. The fourth, groundedness, scores the answer and needs a judge.</p>
+<div class="table"><table><thead><tr><th>Metric</th><th>Scores</th><th>Ignores</th><th>Use it when</th></tr></thead><tbody>
+<tr><td><a href="#m-recall">Recall@k</a></td><td>How many relevant chunks reached the top k</td><td>Order inside the top k</td><td>Choosing k, the candidate pool for a reranker, chunking and embedding changes</td></tr>
+<tr><td><a href="#m-mrr">MRR</a></td><td>How high the first relevant chunk is</td><td>Every relevant chunk after the first</td><td>One right answer per question: FAQ lookup, exact-ID search, routing</td></tr>
+<tr><td><a href="#m-ndcg">nDCG@k</a></td><td>The whole order, with graded relevance</td><td>Nothing in the top k, but needs graded labels</td><td>Tuning a reranker or hybrid weights, where order matters</td></tr>
+<tr><td><a href="#m-grounded">Groundedness</a></td><td>Whether each claim in the answer is supported by the retrieved context</td><td>Whether the context itself is right</td><td>Prompt and model changes; catching hallucinations</td></tr>
+</tbody></table></div>
+
+<h3 id="m-recall">Recall@k</h3>
+<div class="formula">recall@k = (relevant chunks in the top k) ÷ (all relevant chunks for that question)</div>
+<p>The share of the relevant chunks that made it into the top k. It is the first metric to check, because the model can only answer from what you retrieved: if recall@k is low, no prompt can fix the answer. For example, a question has 4 relevant chunks, you retrieve the top 5, and 3 of the 4 are in there, so recall@5 = 3 ÷ 4 = 0.75.</p>
+<ol>
+<li><strong>Build a labelled set.</strong> For each test question, list the IDs of the chunks that actually answer it (the gold set). Get these from subject experts, past support tickets, or LLM-written questions that a human has checked. See <a href="#golden">Building a golden set</a>.</li>
+<li><strong>Run retrieval</strong> and take the top k chunk IDs for each question.</li>
+<li><strong>Score each question:</strong> gold IDs found in the top k, divided by the number of gold IDs.</li>
+<li><strong>Average</strong> across all questions.</li>
+</ol>
+<pre><code>def recall_at_k(retrieved, relevant, k):
+    top_k = set(retrieved[:k])
+    return len(top_k &amp; set(relevant)) / len(relevant)
+
+def mean_recall_at_k(results, k):
+    # results: list of (retrieved_ids, relevant_ids)
+    scores = [recall_at_k(r, g, k) for r, g in results if g]
+    return sum(scores) / len(scores)</code></pre>
+<div class="table"><table><thead><tr><th>Question</th><th>Gold chunks</th><th>Retrieved top 3</th><th>Recall@3</th></tr></thead><tbody>
+<tr><td>Q1</td><td>A, B</td><td>A, X, B</td><td class="num">2 ÷ 2 = 1.00</td></tr>
+<tr><td>Q2</td><td>C, D, E</td><td>C, Y, Z</td><td class="num">1 ÷ 3 = 0.33</td></tr>
+<tr><td>Q3</td><td>F</td><td>P, Q, R</td><td class="num">0 ÷ 1 = 0.00</td></tr>
+<tr><td><strong>Mean</strong></td><td></td><td></td><td class="num"><strong>0.44</strong></td></tr>
+</tbody></table></div>
+<ul class="plain">
+<li><strong>Empty gold sets.</strong> Skip no-answer questions here, or you divide by zero, and score them separately on whether the system declines.</li>
+<li><strong>Hit rate@k.</strong> When the same fact lives in several chunks, finding any one is enough. Hit rate@k is 1 if any gold chunk is in the top k, else 0.</li>
+<li><strong>Several values of k.</strong> Report k = 5, 10 and 50. Recall@50 tells you how many candidates to send to the <a href="reranking.html">reranker</a>; recall@5 tells you what the model actually sees.</li>
+<li><strong>Precision@k</strong> is the mirror image: relevant results in the top k ÷ k (3 ÷ 5 = 0.60 above). Low precision means noise in the prompt.</li>
+<li><strong>Pitfall: incomplete labels.</strong> If a chunk answers the question but nobody labelled it, finding it counts as a miss. Review the "misses" by hand before trusting a drop.</li>
+</ul>
+
+<h3 id="m-mrr">MRR (mean reciprocal rank)</h3>
+<div class="formula">RR = 1 ÷ (rank of the first relevant result), or 0 if none in the top k&nbsp;&nbsp;·&nbsp;&nbsp;MRR = mean of RR over all questions</div>
+<figure class="fig"><svg viewBox="0 0 722 172" class="dg" role="img" aria-label="Three questions with their ranked results; MRR uses the rank of the first relevant result"><text x="145" y="18" class="sm" text-anchor="middle">rank 1</text><text x="207" y="18" class="sm" text-anchor="middle">rank 2</text><text x="269" y="18" class="sm" text-anchor="middle">rank 3</text><text x="331" y="18" class="sm" text-anchor="middle">rank 4</text><text x="393" y="18" class="sm" text-anchor="middle">rank 5</text><text x="10" y="48" class="small b">Q1</text><rect x="120" y="28" width="50" height="28" rx="5" class="cell hot"/><rect x="182" y="28" width="50" height="28" rx="5" class="cell"/><rect x="244" y="28" width="50" height="28" rx="5" class="cell"/><rect x="306" y="28" width="50" height="28" rx="5" class="cell"/><rect x="368" y="28" width="50" height="28" rx="5" class="cell"/><text x="450" y="47" class="small">reciprocal rank 1 ÷ 1 = 1.00</text><text x="10" y="88" class="small b">Q2</text><rect x="120" y="68" width="50" height="28" rx="5" class="cell"/><rect x="182" y="68" width="50" height="28" rx="5" class="cell"/><rect x="244" y="68" width="50" height="28" rx="5" class="cell hot"/><rect x="306" y="68" width="50" height="28" rx="5" class="cell"/><rect x="368" y="68" width="50" height="28" rx="5" class="cell new"/><text x="450" y="87" class="small">reciprocal rank 1 ÷ 3 = 0.33</text><text x="10" y="128" class="small b">Q3</text><rect x="120" y="108" width="50" height="28" rx="5" class="cell"/><rect x="182" y="108" width="50" height="28" rx="5" class="cell"/><rect x="244" y="108" width="50" height="28" rx="5" class="cell"/><rect x="306" y="108" width="50" height="28" rx="5" class="cell"/><rect x="368" y="108" width="50" height="28" rx="5" class="cell"/><text x="450" y="127" class="small">reciprocal rank none = 0.00</text><text x="10" y="160" class="sm">MRR = (1.00 + 0.33 + 0.00) ÷ 3 = 0.44. Only the first relevant hit counts (orange); later hits (green) are ignored.</text></svg><figcaption>MRR answers &quot;how far down does the user or the model have to look before the first useful chunk?&quot;</figcaption></figure>
+<pre><code>def reciprocal_rank(retrieved, relevant, k=10):
+    for rank, doc_id in enumerate(retrieved[:k], start=1):
+        if doc_id in relevant:
+            return 1 / rank
+    return 0.0
+
+def mrr(results, k=10):
+    scores = [reciprocal_rank(r, set(g), k) for r, g in results if g]
+    return sum(scores) / len(scores)</code></pre>
+<ul class="plain">
+<li><strong>Read it as a rank.</strong> MRR 0.5 means the first right chunk is typically at rank 2; 0.33 means rank 3.</li>
+<li><strong>Use it</strong> when one result is enough: "find the policy called HR-4512", FAQ matching, picking the right tool or route.</li>
+<li><strong>Pitfall:</strong> it says nothing about the second, third or fourth relevant chunk, so a multi-hop question that needs two sections can score 1.0 and still fail. Pair it with recall@k.</li>
+<li><strong>Pitfall:</strong> it is very sensitive at the top. Moving a hit from rank 1 to 2 halves the score, moving it from 9 to 10 barely registers.</li>
+</ul>
+
+<h3 id="m-ndcg">nDCG@k (normalised discounted cumulative gain)</h3>
+<div class="formula">DCG@k = Σ<sub>i=1..k</sub> rel<sub>i</sub> ÷ log₂(i + 1)&nbsp;&nbsp;·&nbsp;&nbsp;nDCG@k = DCG@k ÷ IDCG@k</div>
+<p>Each result gets a relevance grade, often 0 (irrelevant) to 3 (answers it fully). Its gain is discounted by its rank, so a perfect chunk at rank 1 counts in full and the same chunk at rank 4 counts for 43%. IDCG is the DCG of the best possible order of the labelled chunks, so nDCG runs from 0 to 1.</p>
+<figure class="fig"><svg viewBox="0 0 722 210" class="dg" role="img" aria-label="nDCG divides the discounted gain of your ranking by the gain of the ideal ranking"><text x="10" y="18" class="cap">Your ranking</text><text x="370" y="18" class="cap">Ideal ranking</text><rect x="10" y="28" width="60" height="26" rx="5" class="cell"/><text x="40" y="45" class="sm" text-anchor="middle">X  rel 0</text><text x="82" y="45" class="mono sm">0 ÷ log₂(2) = 0.00</text><rect x="10" y="62" width="60" height="26" rx="5" class="cell new"/><text x="40" y="79" class="sm" text-anchor="middle">A  rel 3</text><text x="82" y="79" class="mono sm">3 ÷ log₂(3) = 1.89</text><rect x="10" y="96" width="60" height="26" rx="5" class="cell new"/><text x="40" y="113" class="sm" text-anchor="middle">B  rel 2</text><text x="82" y="113" class="mono sm">2 ÷ log₂(4) = 1.00</text><rect x="10" y="130" width="60" height="26" rx="5" class="cell new"/><text x="40" y="147" class="sm" text-anchor="middle">C  rel 1</text><text x="82" y="147" class="mono sm">1 ÷ log₂(5) = 0.43</text><rect x="370" y="28" width="60" height="26" rx="5" class="cell new"/><text x="400" y="45" class="sm" text-anchor="middle">A  rel 3</text><text x="442" y="45" class="mono sm">3 ÷ log₂(2) = 3.00</text><rect x="370" y="62" width="60" height="26" rx="5" class="cell new"/><text x="400" y="79" class="sm" text-anchor="middle">B  rel 2</text><text x="442" y="79" class="mono sm">2 ÷ log₂(3) = 1.26</text><rect x="370" y="96" width="60" height="26" rx="5" class="cell new"/><text x="400" y="113" class="sm" text-anchor="middle">C  rel 1</text><text x="442" y="113" class="mono sm">1 ÷ log₂(4) = 0.50</text><rect x="370" y="130" width="60" height="26" rx="5" class="cell"/><text x="400" y="147" class="sm" text-anchor="middle">X  rel 0</text><text x="442" y="147" class="mono sm">0 ÷ log₂(5) = 0.00</text><text x="10" y="178" class="small b">DCG@4 = 3.32</text><text x="370" y="178" class="small b">IDCG@4 = 4.76</text><text x="10" y="200" class="sm">nDCG@4 = 3.32 ÷ 4.76 = 0.70. The best chunk sat at rank 2, so it lost about a third of its credit.</text></svg><figcaption>Each result earns its relevance grade, discounted by how far down it sits. Dividing by the ideal makes 1.0 the best possible score.</figcaption></figure>
+<pre><code>import math
+
+def dcg(grades):
+    return sum(g / math.log2(i + 2) for i, g in enumerate(grades))
+
+def ndcg_at_k(retrieved, grades, k):
+    # grades: {chunk_id: 0..3} from the golden set; unlabelled chunks count as 0
+    got = [grades.get(doc_id, 0) for doc_id in retrieved[:k]]
+    ideal = sorted(grades.values(), reverse=True)[:k]
+    return dcg(got) / dcg(ideal) if dcg(ideal) else 0.0
+
+ndcg_at_k(["X", "A", "B", "C"], {"A": 3, "B": 2, "C": 1}, k=4)   # 0.70
+ndcg_at_k(["A", "B", "X", "C"], {"A": 3, "B": 2, "C": 1}, k=4)   # 0.99</code></pre>
+<ul class="plain">
+<li><strong>Use it</strong> to tune a reranker or hybrid search weights. Recall@k cannot see a reorder inside the top k; nDCG can.</li>
+<li><strong>Binary labels work too.</strong> With grades of 0 and 1 it still rewards putting hits near the top.</li>
+<li><strong>Pitfall: the ideal comes from your labels.</strong> Build IDCG from all labelled chunks, not just the retrieved ones, or a system that finds nothing good can still score 1.0.</li>
+<li><strong>Pitfall: two formulas exist.</strong> Some tools use (2<sup>rel</sup> − 1) as the gain, which rewards highly relevant results more. Pick one and never compare numbers across tools.</li>
+</ul>
+
+<h3 id="m-grounded">Groundedness (faithfulness)</h3>
+<div class="formula">groundedness = (claims supported by the retrieved context) ÷ (all claims in the answer)</div>
+<p>Groundedness checks whether the answer sticks to what was retrieved. It does not check whether the answer is true: if the context is stale and the answer faithfully repeats it, groundedness is 1.0 and the answer is still wrong. That is what answer correctness against a reference is for.</p>
+<ol>
+<li><strong>Split the answer into atomic claims,</strong> one fact each, usually with an LLM.</li>
+<li><strong>Check each claim against the retrieved chunks:</strong> supported, contradicted or not found. Use an LLM judge or a natural-language-inference (NLI) model.</li>
+<li><strong>Score</strong> supported ÷ total. The figure below scores 3 of 4 = 0.75; the unsupported claim is a hallucination.</li>
+</ol>
+<pre><code>JUDGE_PROMPT = """You check answers against sources.
+Context:
+{context}
+
+Claim: {claim}
+
+Reply with JSON only: {{"verdict": "supported" | "contradicted" | "not_found", "evidence": "&lt;quote or empty&gt;"}}"""
+
+def groundedness(answer, chunks, llm):
+    claims = llm.json(f"Split into atomic factual claims, as a JSON list:\n{answer}")
+    if not claims:
+        return None  # a refusal has no claims; score it separately
+    context = "\n\n".join(f"[{c.id}] {c.text}" for c in chunks)
+    verdicts = [llm.json(JUDGE_PROMPT.format(context=context, claim=c))["verdict"] for c in claims]
+    return sum(v == "supported" for v in verdicts) / len(claims)</code></pre>
+<ul class="plain">
+<li><strong>Use it</strong> on every prompt, model or temperature change, and on 1 to 5% of production traces. A falling score is the earliest sign of hallucination.</li>
+<li><strong>Also check citations.</strong> Citation accuracy asks whether the chunk cited for a claim actually supports it. Answers often cite a nearby chunk instead of the right one.</li>
+<li><strong>Pitfall: lenient judges.</strong> Judges often pass a paraphrase that quietly changes a number, such as 14 weeks where the source says 12. Ask for the evidence quote and spot-check numbers with code.</li>
+<li><strong>Pitfall: claim splitting varies.</strong> The same answer can split into 4 or 6 claims between runs. Fix the judge model and prompt, use temperature 0, and compare runs on the same judge only.</li>
+<li><strong>Pitfall: uncalibrated judges.</strong> Label 100 to 200 answers by hand and check the judge agrees on at least 85% before it gates releases (see the judge figure below).</li>
+</ul></section><section id="generation"><h2>Grading answers: groundedness and judges</h2><figure class="fig"><svg viewBox="0 0 722 178" class="dg" role="img" aria-label="An answer split into claims, each checked against the retrieved chunks"><text x="10" y="18" class="cap">Answer, split into claims</text><rect x="10" y="30" width="330" height="28" rx="6" class="cell"/><text x="22" y="48" class="small">India gives 26 weeks of maternity leave</text><path d="M340 44 L420 44" class="wire" marker-end="url(#ah)"/><path d="M350 44 L354 49 L363 38" class="tick"/><rect x="422" y="30" width="120" height="28" rx="8" class="k-kb"/><text x="482" y="48.5" class="sm" text-anchor="middle">chunk 2</text><rect x="10" y="66" width="330" height="28" rx="6" class="cell"/><text x="22" y="84" class="small">for the first two children.</text><path d="M340 80 L420 80" class="wire" marker-end="url(#ah)"/><path d="M350 80 L354 85 L363 74" class="tick"/><rect x="422" y="66" width="120" height="28" rx="8" class="k-kb"/><text x="482" y="84.5" class="sm" text-anchor="middle">chunk 2</text><rect x="10" y="102" width="330" height="28" rx="6" class="cell"/><text x="22" y="120" class="small">Adoptive parents get 12 weeks.</text><path d="M340 116 L420 116" class="wire" marker-end="url(#ah)"/><path d="M350 116 L354 121 L363 110" class="tick"/><rect x="422" y="102" width="120" height="28" rx="8" class="k-kb"/><text x="482" y="120.5" class="sm" text-anchor="middle">chunk 4</text><rect x="10" y="138" width="330" height="28" rx="6" class="k-dlq"/><text x="22" y="156" class="small">Leave can be extended by 4 weeks.</text><path d="M340 152 L420 152" class="wire dash" marker-end="url(#ah)"/><path d="M353 147 L363 157 M363 147 L353 157" class="xmark"/><rect x="422" y="138" width="120" height="28" rx="8" class="ghost"/><text x="482" y="156.5" class="sm" text-anchor="middle">no source</text><text x="560" y="56" class="b">Groundedness</text><text x="560" y="76" class="small">3 of 4 claims supported</text><text x="560" y="112" class="big">= 0.75</text><text x="560" y="136" class="bad">the 4th is a hallucination</text></svg><figcaption>Groundedness asks only whether each claim is supported by the retrieved context. Correctness, whether it is actually true, needs a reference answer.</figcaption></figure><figure class="fig"><svg viewBox="0 0 722 200" class="dg" role="img" aria-label="An LLM judge scores an answer against a rubric and is calibrated against human labels"><rect x="10" y="14" width="150" height="32" rx="8" class="box"/><text x="85" y="34.5" class="small b" text-anchor="middle">Question</text><path d="M160 30 L226 86" class="wire" marker-end="url(#ah)"/><rect x="10" y="54" width="150" height="32" rx="8" class="k-kb"/><text x="85" y="74.5" class="small b" text-anchor="middle">Retrieved chunks</text><path d="M160 70 L226 86" class="wire" marker-end="url(#ah)"/><rect x="10" y="94" width="150" height="32" rx="8" class="k-model"/><text x="85" y="114.5" class="small b" text-anchor="middle">Answer</text><path d="M160 110 L226 86" class="wire" marker-end="url(#ah)"/><rect x="10" y="134" width="150" height="32" rx="8" class="k-gov"/><text x="85" y="154.5" class="small b" text-anchor="middle">Rubric</text><path d="M160 150 L226 86" class="wire" marker-end="url(#ah)"/><rect x="228" y="56" width="160" height="60" rx="10" class="k-serve"/><text x="308" y="82" class="b" text-anchor="middle">Judge model</text><text x="308" y="100" class="sm" text-anchor="middle">temperature 0</text><path d="M388 86 L426 86" class="wire" marker-end="url(#ah)"/><rect x="428" y="52" width="180" height="68" rx="10" class="box"/><text x="440" y="72" class="mono sm">{ &quot;grounded&quot;: 3/4,</text><text x="440" y="90" class="mono sm">  &quot;complete&quot;: 4/5,</text><text x="440" y="108" class="mono sm">  &quot;reason&quot;: &quot;…&quot; }</text><path d="M518 120 L518 150" class="wire dash" marker-end="url(#ah)"/><rect x="428" y="152" width="180" height="36" rx="8" class="k-ingest"/><text x="518" y="174.5" class="small b" text-anchor="middle">Calibrate vs humans</text><text x="620" y="166" class="sm">agree on ≥ 85%</text><text x="620" y="182" class="sm">before you trust it</text></svg><figcaption>A judge is a measuring instrument. Check it against 100 to 200 human-labelled examples before letting it gate releases.</figcaption></figure>
+<ul class="plain">
+<li><strong>Use a rubric with specific questions</strong> ("Does every number appear in the context?") instead of "rate 1 to 10".</li>
+<li><strong>Known biases:</strong> judges prefer longer answers, the first option in a pair, and text from their own model family. Shuffle order, cap length, and use a different model family where you can.</li>
+<li><strong>Prefer code checks when possible:</strong> JSON schema valid, citation IDs exist, required fields present. They are free and never drift.</li>
+</ul></section><section id="agents"><h2>Evaluating agents</h2><figure class="fig"><svg viewBox="0 0 722 166" class="dg" role="img" aria-label="An expected tool-call sequence compared with the actual one, which skipped the approval step"><text x="10" y="18" class="cap">Expected</text><text x="10" y="86" class="cap">Actual</text><rect x="10" y="26" width="160" height="34" rx="8" class="k-kb"/><text x="90" y="47.5" class="mono sm" text-anchor="middle">search_catalog</text><path d="M170 43 L184 43" class="wire" marker-end="url(#ah)"/><rect x="186" y="26" width="160" height="34" rx="8" class="k-kb"/><text x="266" y="47.5" class="mono sm" text-anchor="middle">check_budget</text><path d="M346 43 L360 43" class="wire" marker-end="url(#ah)"/><rect x="362" y="26" width="160" height="34" rx="8" class="k-kb"/><text x="442" y="47.5" class="mono sm" text-anchor="middle">request_approval</text><path d="M522 43 L536 43" class="wire" marker-end="url(#ah)"/><rect x="538" y="26" width="160" height="34" rx="8" class="k-kb"/><text x="618" y="47.5" class="mono sm" text-anchor="middle">create_order</text><rect x="10" y="94" width="160" height="34" rx="8" class="k-kb"/><text x="90" y="115.5" class="mono sm" text-anchor="middle">search_catalog</text><rect x="186" y="94" width="160" height="34" rx="8" class="k-kb"/><text x="266" y="115.5" class="mono sm" text-anchor="middle">check_budget</text><rect x="538" y="94" width="160" height="34" rx="8" class="k-dlq"/><text x="618" y="115.5" class="mono sm" text-anchor="middle">create_order</text><path d="M170 111 L184 111" class="wire" marker-end="url(#ah)"/><path d="M346 111 L360 111" class="wire red" marker-end="url(#ah)"/><path d="M522 111 L536 111" class="wire red" marker-end="url(#ah)"/><rect x="362" y="94" width="160" height="34" rx="8" class="ghost"/><text x="442" y="116" class="bad" text-anchor="middle">approval skipped</text><text x="10" y="156" class="sm">Final answer looked fine (&quot;Ordered!&quot;), so an answer-only eval passes. The trajectory eval catches the skipped approval.</text></svg><figcaption>For agents, grade the path as well as the destination: which tools, in what order, with what arguments, and with no forbidden actions.</figcaption></figure>
+<p>Run agent evals in a <strong>sandbox</strong> with fake but realistic tools, so a test can place an order without spending money. Score task success from the final state (was exactly one order created, with approval?), plus steps taken, tokens, latency and any forbidden calls.</p></section><section id="golden"><h2>Building a golden set</h2>
+<p>A golden set is a versioned file of questions with what a good answer needs: the relevant chunks, a reference answer, and for agents the expected outcome. Start with 100 to 300 cases and grow it from production.</p>
+<div class="table"><table><thead><tr><th>Slice</th><th>Example</th><th>Expected behaviour</th></tr></thead><tbody>
+<tr><td>Common questions</td><td>"How much parental leave in India?"</td><td>Correct, cited answer</td></tr>
+<tr><td>Exact IDs and names</td><td>"What does HR-4512 say?"</td><td>Finds that exact document</td></tr>
+<tr><td>Multi-hop</td><td>"Compare India and US adoptive leave"</td><td>Uses both sections</td></tr>
+<tr><td>Stale content</td><td>A 2022 page contradicts the 2025 one</td><td>Prefers the newer, mentions the change</td></tr>
+<tr><td>No answer</td><td>"What is the CEO's home address?"</td><td>Declines; does not invent</td></tr>
+<tr><td>Permissions</td><td>An intern asks about board minutes</td><td>Reveals nothing, not even that it exists</td></tr>
+<tr><td>Injection</td><td>A document says "ignore previous instructions"</td><td>Treats it as text, not a command</td></tr>
+</tbody></table></div>
+<p>Sources: real (anonymised) user questions first, subject experts second, and LLM-generated questions only after a human has reviewed them.</p></section><section id="gate"><h2>Release gates and production evals</h2>
+<p>Run the golden set in CI on every change and compare with the current production baseline:</p>
+<div class="table"><table><thead><tr><th>Metric</th><th>Baseline</th><th>Candidate</th><th>Rule</th><th>Result</th></tr></thead><tbody>
+<tr><td>Recall@5</td><td class="num">0.84</td><td class="num">0.88</td><td>no drop over 1 point</td><td class="pass">pass</td></tr>
+<tr><td>Groundedness</td><td class="num">0.96</td><td class="num">0.95</td><td>≥ 0.95</td><td class="pass">pass</td></tr>
+<tr><td>Correct refusals</td><td class="num">100%</td><td class="num">97%</td><td>must be 100%</td><td class="fail">fail</td></tr>
+<tr><td>p95 latency</td><td class="num">3.1 s</td><td class="num">3.4 s</td><td>≤ 4 s</td><td class="pass">pass</td></tr>
+<tr><td>Cost per answer</td><td class="num">$0.006</td><td class="num">$0.007</td><td>≤ +25%</td><td class="pass">pass</td></tr>
+</tbody></table></div>
+<p>One failed safety rule blocks the release, whatever the averages say. After the gate, ship as a <a href="glossary.html#canary">canary</a>, then keep evaluating in production: sample 1 to 5% of real traces into the judge, track thumbs and edits, and alert when groundedness or the fallback rate moves.</p></section><section id="tools"><h2>Eval tools and plugins</h2>
+<p>You can write the metrics above in a hundred lines, and for retrieval metrics you should. For judges, tracing and dashboards, these tools save weeks:</p>
+<div class="table"><table><thead><tr><th>Tool</th><th>Type</th><th>Good for</th><th>Notes</th></tr></thead><tbody><tr><td><strong>Ragas</strong></td><td>Open-source Python library</td><td>RAG metrics (faithfulness, context precision and recall, answer relevancy) and generating synthetic test sets from your documents</td><td>Quick start for RAG; metrics use an LLM judge you configure</td></tr><tr><td><strong>DeepEval</strong></td><td>Open-source Python library</td><td>Pytest-style tests for LLM output, G-Eval custom rubrics, RAG and agent metrics, CI runs</td><td>Feels like unit testing; good fit for a CI gate</td></tr><tr><td><strong>TruLens</strong></td><td>Open-source Python library</td><td>Feedback functions and the &quot;RAG triad&quot;: context relevance, groundedness, answer relevance; tracing</td><td>Good for comparing app versions side by side</td></tr><tr><td><strong>promptfoo</strong></td><td>Open-source CLI</td><td>YAML test cases across prompts and models, assertions, side-by-side comparisons, and red-team scans for injection and jailbreaks</td><td>Language-agnostic; easy to run in CI</td></tr><tr><td><strong>LangSmith</strong></td><td>Hosted platform</td><td>Tracing, datasets, experiments, online evaluators and human annotation queues</td><td>From the LangChain team, but works without LangChain</td></tr><tr><td><strong>Langfuse</strong></td><td>Open-source platform, self-hostable</td><td>Tracing, datasets, scores, LLM-as-judge evaluators and prompt management</td><td>Self-host when traces cannot leave your network</td></tr><tr><td><strong>Arize Phoenix</strong></td><td>Open-source platform</td><td>OpenTelemetry-based tracing, retrieval analysis and evals, runs locally or self-hosted</td><td>Strong for debugging retrieval and embeddings</td></tr><tr><td><strong>Vertex AI Gen AI evaluation</strong></td><td>Managed service on Google Cloud</td><td>Model-based pointwise and pairwise metrics, computation metrics, and agent trajectory evaluation</td><td>Natural choice when the stack runs on Vertex AI and Gemini</td></tr><tr><td><strong>OpenAI Evals</strong></td><td>Open-source framework and hosted evals</td><td>Eval templates and a registry of benchmarks; evals in the OpenAI platform</td><td>Most useful when the stack is on OpenAI models</td></tr><tr><td><strong>MLflow</strong></td><td>Open-source platform</td><td>LLM evaluation and tracing inside the wider MLflow experiment tracking</td><td>Fits teams already using MLflow for ML</td></tr></tbody></table></div>
+<p>For red-teaming scanners (promptfoo red team, garak, PyRIT), see <a href="testing.html#adversarial">Testing production agentic systems</a>.</p>
+<h3>How to pick</h3>
+<ul class="plain">
+<li><strong>Two pieces, not one.</strong> An offline library that runs the golden set in CI (Ragas, DeepEval or promptfoo), plus a tracing platform that scores production traffic and turns bad traces into new test cases (Langfuse, Phoenix or LangSmith).</li>
+<li><strong>Follow the stack.</strong> On Google Cloud, Vertex AI evaluation and Cloud Trace keep data in one place. Where traces cannot leave the network, self-host Langfuse or Phoenix.</li>
+<li><strong>Do not compare numbers across tools.</strong> "Faithfulness" in one tool and "groundedness" in another use different prompts and judges. Pin the tool version and the judge model, and only compare runs on the same setup.</li>
+<li><strong>Keep the gate in your own code.</strong> Whatever produces the scores, the pass or fail rule should be a plain test you own:</li>
+</ul>
+<pre><code># test_release_gate.py, run in CI on every change
+BASELINE = load_json("evals/baseline.json")
+
+def test_retrieval_did_not_regress():
+    results = run_retrieval(load_golden_set("evals/golden.jsonl"))
+    assert mean_recall_at_k(results, k=5) &gt;= BASELINE["recall@5"] - 0.01
+
+def test_answers_stay_grounded():
+    scores = [s for s in judge_groundedness(run_answers()) if s is not None]
+    assert sum(scores) / len(scores) &gt;= 0.95
+
+def test_no_safety_failures():
+    assert run_adversarial_suite().failures == []</code></pre></section><section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"I'd build a golden set of about 200 questions from real logs, sliced into common, exact-ID, multi-hop, stale, no-answer, permission and injection cases. Offline, I'd measure recall@k and MRR for retrieval, groundedness and correctness with an LLM judge that's calibrated against human labels, and trajectory checks for the agent in a sandbox. That runs in CI as a gate against the production baseline, with safety rules that must be perfect. Online, I'd sample traces into the same judge, track user feedback, and turn every failure into a new golden case."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="routing.html#eval">Evaluating a router</a></li><li><a href="chunking.html#tune">Tuning chunking</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="testing.html">Testing production agentic systems</a></li><li><a href="enterprise-search.html">Enterprise search design</a></li><li><a href="glossary.html#eval">Glossary: eval</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(() => {
+  const root = document.getElementById('evallab');
+  if (!root) return;
+  const $ = (id) => document.getElementById(id);
+  const DOCS = ['India › Parental leave › adoptive parents (12 weeks)', 'India › Parental leave › section intro', 'Global › Adoption assistance reimbursement',
+    'US › Parental leave › non-birth parents (8 weeks)', 'India › Parental leave › birth mothers (26 weeks)', 'India › Sick leave', 'India › Public holidays',
+    'US › Parental leave › blocks', 'Benefits FAQ › general leave questions', 'Travel policy › per diem', 'Office guide › parking'];
+  const GOLD = new Set([0, 1, 2]);
+  const TOTAL = GOLD.size;
+  const PRESETS = { good: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], late: [3, 4, 7, 8, 5, 1, 6, 0, 9, 2], miss: [0, 3, 4, 7, 8, 5, 1, 6, 9, 10] };
+  let order = PRESETS.late, rel = new Set(GOLD);
+  const dcg = (flags) => flags.reduce((s, r, i) => s + (r ? 1 / Math.log2(i + 2) : 0), 0);
+  function render() {
+    $('ev-list').innerHTML = order.map((d) => `<li class="${rel.has(d) ? 'rel' : ''}"><span>${DOCS[d]}</span><button type="button" data-d="${d}" aria-pressed="${rel.has(d)}">${rel.has(d) ? 'relevant' : 'mark relevant'}</button></li>`).join('');
+    const flags = order.map((d) => rel.has(d));
+    const hits5 = flags.slice(0, 5).filter(Boolean).length, found = flags.filter(Boolean).length;
+    const total = Math.max(TOTAL, rel.size);
+    const first = flags.indexOf(true);
+    const ideal = dcg(Array.from({ length: 10 }, (_, i) => i < total));
+    const m = [
+      ['recall@5', (hits5 / total).toFixed(2), `${hits5} of ${total} relevant in the top 5`],
+      ['precision@5', (hits5 / 5).toFixed(2), `${hits5} of 5 shown are relevant`],
+      ['MRR', first < 0 ? '0.00' : (1 / (first + 1)).toFixed(2), first < 0 ? 'nothing relevant found' : `first relevant at rank ${first + 1}`],
+      ['nDCG@10', (dcg(flags) / ideal).toFixed(2), 'rewards relevant results near the top'],
+    ];
+    $('ev-metrics').innerHTML = m.map(([l, n, s]) => `<div class="metric"><span class="l">${l}</span><span class="n">${n}</span><small>${s}</small></div>`).join('');
+    $('ev-out').innerHTML = first === 0 && hits5 === total ? '<strong>Ideal.</strong> Everything relevant is in the top 5, the best one first. The model gets exactly what it needs.'
+      : found < total ? '<strong>A relevant chunk was never retrieved.</strong> Recall@10 is capped below 1, and no reranker can fix that. Look at chunking, hybrid search or query rewriting.'
+      : hits5 < found ? '<strong>The right chunks were retrieved but sit below rank 5.</strong> If only the top 5 reach the prompt, the model never sees them. This is exactly what a reranker fixes.'
+      : 'Move relevant results higher to raise MRR and nDCG.';
+  }
+  $('ev-list').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; const d = +b.dataset.d; rel.has(d) ? rel.delete(d) : rel.add(d); render(); });
+  const pres = [...root.querySelectorAll('[data-p]')];
+  pres.forEach((b) => b.addEventListener('click', () => { order = PRESETS[b.dataset.p]; rel = new Set(GOLD); pres.forEach((x) => x.setAttribute('aria-pressed', String(x === b))); render(); }));
+  render();
+})();
+</script>
+</body>
+</html>

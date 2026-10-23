@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chunking · Agentic System Designs</title>
+<meta name="description" content="Chunking for RAG: fixed, recursive, by-heading and semantic strategies, size and overlap, keeping context, tables, and tuning with recall@k. With an interactive chunking lab and a 3D view.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+</style><style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · data loading</p><h1>Chunking</h1><p class="lead">How to cut documents into passages that search well, cite cleanly and still make sense on their own.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#what">What chunking is</a></li><li><a href="#lab">Try it: chunk a real policy</a></li><li><a href="#strategies">Strategies compared</a></li><li><a href="#size">Size and overlap</a></li><li><a href="#context">Keep context with every chunk</a></li><li><a href="#metadata">Metadata to attach, by source</a></li><li><a href="#special">Tables, code and slides</a></li><li><a href="#tune">How to choose, with numbers</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="what"><h2>What chunking is</h2>
+<p class="lead">Chunking cuts each document into passages small enough to search precisely and cheap enough to put in a prompt, while keeping enough context that each passage still makes sense on its own.</p>
+<figure class="fig"><svg viewBox="0 0 722 196" class="dg" role="img" aria-label="A document is parsed, cut into chunks, embedded and indexed; at question time only the top chunks reach the model"><rect x="10" y="30" width="120" height="60" rx="8" class="k-src"/><text x="70" y="56" class="b" text-anchor="middle">Policy PDF</text><text x="70" y="72" class="sm" text-anchor="middle">40 pages</text><path d="M130 60 L166 60" class="wire" marker-end="url(#ah)"/><rect x="168" y="30" width="120" height="60" rx="8" class="k-ingest"/><text x="228" y="56" class="b" text-anchor="middle">Parse</text><text x="228" y="72" class="sm" text-anchor="middle">text, headings, tables</text><path d="M288 60 L324 60" class="wire" marker-end="url(#ah)"/><rect x="326" y="18" width="150" height="84" rx="10" class="k-ingest"/><text x="401" y="36" class="b" text-anchor="middle">Chunk</text><rect x="338" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="371" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="404" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="437" y="44" width="28" height="13" rx="3" class="cell hot"/><rect x="338" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="371" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="404" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="437" y="62" width="28" height="13" rx="3" class="cell hot"/><rect x="338" y="80" width="28" height="13" rx="3" class="cell hot"/><rect x="371" y="80" width="28" height="13" rx="3" class="cell hot"/><rect x="404" y="80" width="28" height="13" rx="3" class="cell hot"/><rect x="437" y="80" width="28" height="13" rx="3" class="cell hot"/><path d="M476 60 L512 60" class="wire" marker-end="url(#ah)"/><rect x="514" y="30" width="90" height="60" rx="8" class="k-model"/><text x="559" y="56" class="b" text-anchor="middle">Embed</text><text x="559" y="72" class="sm" text-anchor="middle">one vector each</text><path d="M604 60 L632 60" class="wire" marker-end="url(#ah)"/><rect x="634" y="30" width="82" height="60" rx="8" class="k-kb"/><text x="675" y="56" class="b" text-anchor="middle">Index</text><text x="675" y="72" class="sm" text-anchor="middle">120 chunks</text><text x="10" y="132" class="small">At question time only the best few chunks reach the model:</text><rect x="10" y="144" width="150" height="40" rx="8" class="k-user"/><text x="85" y="168.5" class="small b" text-anchor="middle">Question</text><path d="M160 164 L196 164" class="wire" marker-end="url(#ah)"/><rect x="198" y="144" width="170" height="40" rx="8" class="k-serve"/><text x="283" y="168.5" class="small b" text-anchor="middle">Retrieve top 8 of 120</text><path d="M368 164 L404 164" class="wire" marker-end="url(#ah)"/><rect x="406" y="144" width="180" height="40" rx="8" class="k-model"/><text x="496" y="168.5" class="small b" text-anchor="middle">LLM reads ~4,000 tokens</text><text x="600" y="160" class="sm">not the whole</text><text x="600" y="175" class="sm">40 pages</text></svg><figcaption>A chunk is the unit you search, cite and send to the model. Get it wrong and nothing later in the pipeline can recover.</figcaption></figure>
+<p>Every later step works on chunks: the <a href="embeddings.html">embedding</a> is computed per chunk, search returns chunks, citations point at chunks and the model reads chunks. So chunking quietly sets the ceiling for retrieval quality.</p></section><section id="lab"><h2>Try it: chunk a real policy</h2>
+<p>Below is a short leave policy with two countries, a table and repeated words like "adoptive parents". Change the strategy, size and overlap, and watch three things: chunks cut mid-sentence, the holiday table split in half, and whether the chunk holding the answer to <em>"How many weeks do adoptive parents get in India?"</em> still says it is about India.</p>
+<div class="lab" id="chunklab">
+  <div class="lab-row"><span class="lab-k">Strategy</span><span class="seg" role="group" aria-label="Strategy">
+    <button data-s="fixed" aria-pressed="true">Fixed size</button><button data-s="recursive" aria-pressed="false">Recursive</button><button data-s="heading" aria-pressed="false">By heading</button></span></div>
+  <div class="lab-row">
+    <label for="ck-size">Size <input type="range" id="ck-size" min="30" max="160" step="5" value="45"><output id="ck-size-o"></output></label>
+    <label for="ck-ov">Overlap <input type="range" id="ck-ov" min="0" max="30" step="5" value="0"><output id="ck-ov-o"></output></label>
+    <label for="ck-hdr"><input type="checkbox" id="ck-hdr"> Add title and heading path to each chunk</label>
+  </div>
+  <div class="chunks" id="ck-list" aria-live="polite"></div>
+  <p class="lab-out" id="ck-out"></p>
+</div>
+<p>Two lessons usually jump out. Fixed-size cuts ignore the document's seams. And without a heading path, the India and US "adoptive parents" chunks look almost the same to search, so the system can confidently cite the wrong country.</p></section><section id="strategies"><h2>Strategies compared</h2><figure class="fig"><svg viewBox="0 0 722 270" class="dg" role="img" aria-label="Fixed, recursive, by-heading and semantic chunking applied to the same document"><text x="10" y="18" class="cap">Same document, four ways to cut it</text><text x="10" y="45" class="small b">The document</text><rect x="162" y="28" width="65.4169" height="26" rx="5" class="k-kb"/><text x="196.208" y="45" class="sm" text-anchor="middle">Parental l…</text><rect x="233.527" y="28" width="85.631" height="26" rx="5" class="box"/><text x="277.842" y="45" class="sm" text-anchor="middle">Birth mothers…</text><rect x="325.268" y="28" width="63.862" height="26" rx="5" class="box"/><text x="358.699" y="45" class="sm" text-anchor="middle">Fathers g…</text><rect x="395.239" y="28" width="49.8676" height="26" rx="5" class="k-kb"/><text x="421.673" y="45" class="sm" text-anchor="middle">Sick le…</text><rect x="451.217" y="28" width="66.9718" height="26" rx="5" class="box"/><text x="486.203" y="45" class="sm" text-anchor="middle">12 days a …</text><rect x="524.299" y="28" width="90.2958" height="26" rx="5" class="k-serve"/><text x="570.946" y="45" class="sm" text-anchor="middle">Holiday table</text><rect x="620.704" y="28" width="90.2958" height="26" rx="5" class="box"/><text x="667.352" y="45" class="sm" text-anchor="middle">Adoptive paren…</text><text x="10" y="86" class="small b">Fixed size</text><text x="10" y="101" class="sm">equal word counts</text><rect x="162" y="74" width="129.169" height="26" rx="5" class="cell old"/><rect x="294.169" y="74" width="129.169" height="26" rx="5" class="cell new"/><rect x="426.338" y="74" width="129.169" height="26" rx="5" class="cell old"/><rect x="558.507" y="74" width="152.493" height="26" rx="5" class="cell new"/><path d="M288.169 82.5 L297.169 91.5 M297.169 82.5 L288.169 91.5" class="xmark"/><path d="M420.338 82.5 L429.338 91.5 M429.338 82.5 L420.338 91.5" class="xmark"/><path d="M552.507 82.5 L561.507 91.5 M561.507 82.5 L552.507 91.5" class="xmark"/><text x="10" y="130" class="small b">Recursive</text><text x="10" y="145" class="sm">paragraphs, then sentences</text><rect x="162" y="118" width="230.239" height="26" rx="5" class="cell old"/><rect x="395.239" y="118" width="126.059" height="26" rx="5" class="cell new"/><rect x="524.299" y="118" width="186.701" height="26" rx="5" class="cell old"/><text x="10" y="174" class="small b">By heading</text><text x="10" y="189" class="sm">one section each</text><rect x="162" y="162" width="230.239" height="26" rx="5" class="cell old"/><rect x="395.239" y="162" width="126.059" height="26" rx="5" class="cell new"/><rect x="524.299" y="162" width="90.2958" height="26" rx="5" class="cell old"/><rect x="617.594" y="162" width="93.4056" height="26" rx="5" class="cell new"/><text x="10" y="218" class="small b">Semantic</text><text x="10" y="233" class="sm">split where topic shifts</text><rect x="162" y="206" width="160.268" height="26" rx="5" class="cell old"/><rect x="325.268" y="206" width="196.031" height="26" rx="5" class="cell new"/><rect x="524.299" y="206" width="90.2958" height="26" rx="5" class="cell old"/><rect x="617.594" y="206" width="93.4056" height="26" rx="5" class="cell new"/><text x="10" y="260" class="sm">Red crosses: fixed-size cuts land mid-sentence and split the holiday table.</text></svg><figcaption>Structure-aware strategies cut where the document already has seams: headings, paragraphs, table edges.</figcaption></figure>
+<div class="table"><table><thead><tr><th>Strategy</th><th>How it cuts</th><th>Use it for</th><th>Watch out for</th></tr></thead><tbody>
+<tr><td>Fixed size</td><td>Every N tokens, optional overlap</td><td>Plain text with no structure, quick baselines</td><td>Cuts sentences, tables and code in half</td></tr>
+<tr><td>Recursive</td><td>Paragraphs, then sentences, then words, until it fits</td><td>A good general default</td><td>Still blind to headings unless you add them</td></tr>
+<tr><td>By heading / structure</td><td>One section per chunk, split further if too long</td><td>Wikis, policies, runbooks, docs with headings</td><td>Very long or very short sections; merge tiny ones</td></tr>
+<tr><td>Semantic</td><td>Embeds sentences and cuts where the topic shifts</td><td>Long unstructured text such as transcripts</td><td>Slower ingestion; boundaries change when the model changes</td></tr>
+<tr><td>Format-aware</td><td>Keeps tables, code blocks and slides whole</td><td>Spreadsheets, code, decks</td><td>Large tables need row groups with the header repeated</td></tr>
+</tbody></table></div></section><section id="size"><h2>Size and overlap</h2><figure class="fig"><svg viewBox="0 0 722 214" class="dg" role="img" aria-label="Answer quality rises then falls as chunk size grows"><line x1="60" y1="190" x2="660" y2="190" class="axis"/><line x1="60" y1="190" x2="60" y2="40" class="axis"/><text x="660" y="212" class="sm" text-anchor="end">chunk size →</text><text x="52" y="34" class="sm">answer quality</text><rect x="210" y="40" width="156" height="150" rx="0" class="zone"/><path d="M60 127.053 L70 118.187 L80 109.495 L90 100.977 L100 92.6315 L110 84.4595 L120 76.4608 L130 73.6355 L140 70.9835 L150 68.5048 L160 66.1995 L170 64.0675 L180 62.1088 L190 60.3235 L200 58.7115 L210 57.2728 L220 56.0075 L230 54.9155 L240 53.9968 L250 53.2515 L260 52.6795 L270 52.2808 L280 52.0555 L290 52.0035 L300 52.1248 L310 52.4195 L320 52.8875 L330 53.5288 L340 54.3435 L350 55.3315 L360 56.4928 L370 57.8275 L380 59.3355 L390 61.0168 L400 62.8715 L410 64.8995 L420 67.1008 L430 69.4755 L440 72.0235 L450 74.7448 L460 77.6395 L470 80.7075 L480 83.9488 L490 87.3635 L500 90.9515 L510 94.7128 L520 98.6475 L530 102.755 L540 107.037 L550 111.491 L560 116.119 L570 120.921 L580 125.895 L590 131.043 L600 136.365 L610 141.859 L620 147.527 L630 153.369 L640 159.383 L650 165.571 L660 171.933" class="wire hot"/><text x="288" y="140" class="small b" text-anchor="middle">sweet spot</text><text x="288" y="156" class="sm" text-anchor="middle">~300–800 tokens</text><text x="70" y="160" class="small b">too small:</text><text x="70" y="176" class="sm">loses context</text><text x="650" y="54" class="small b" text-anchor="end">too big:</text><text x="650" y="70" class="sm" text-anchor="end">blurry match, wasted</text><text x="650" y="86" class="sm" text-anchor="end">prompt tokens</text></svg><figcaption>Illustrative shape, not a measurement. Find your own peak with a recall@k sweep on your golden questions.</figcaption></figure>
+<p>Small chunks give sharp matches but lose the words that say what they are about. Large chunks keep context but their embedding becomes an average of several ideas, so they match everything a little and nothing well. The 3D view shows why.</p>
+<figure class="fig3d" id="chunk3d">
+<div class="stage3d" role="img" aria-label="The same document embedded as sentences, sections or one whole-document vector, with the query linked to its nearest chunk"><p class="hint3">3D · drag to turn</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The flat figure above shows the same idea.</p></div>
+<div class="ctl3"><span class="k">Chunk size</span><button data-m="0" aria-pressed="true">One sentence</button><button data-m="1" aria-pressed="false">One section</button><button data-m="2" aria-pressed="false">Whole document</button></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>Illustrative: one handbook with three sections. Bigger chunks are averages of their sentences, so the whole-document vector drifts to the middle and matches every question weakly.</figcaption>
+</figure>
+<figure class="fig"><svg viewBox="0 0 722 172" class="dg" role="img" aria-label="Overlap repeats the end of one chunk at the start of the next"><text x="10" y="18" class="small b">Without overlap</text><rect x="10" y="28" width="330" height="30" rx="6" class="cell old"/><rect x="344" y="28" width="330" height="30" rx="6" class="cell new"/><text x="175" y="47" class="sm" text-anchor="middle">…mothers get 26 weeks. Fathers get</text><text x="509" y="47" class="sm" text-anchor="middle">2 weeks, within 6 months of the birth…</text><path d="M337 38 L347 48 M347 38 L337 48" class="xmark"/><text x="10" y="86" class="small b">With 15% overlap</text><rect x="10" y="96" width="380" height="30" rx="6" class="cell old"/><rect x="300" y="132" width="374" height="30" rx="6" class="cell new"/><rect x="300" y="96" width="90" height="66" rx="6" class="ghost"/><text x="175" y="115" class="sm" text-anchor="middle">…mothers get 26 weeks. Fathers get 2 weeks,</text><text x="487" y="151" class="sm" text-anchor="middle">Fathers get 2 weeks, within 6 months…</text><text x="400" y="116" class="sm">shared text</text></svg><figcaption>Overlap keeps a sentence that straddles a boundary whole in at least one chunk. It costs 10 to 20% more storage.</figcaption></figure>
+<p>Defaults that hold up: <strong>300 to 800 tokens</strong>, <strong>10 to 20% overlap</strong> for fixed or recursive splitting, never bigger than the <a href="embeddings.html#choosing">embedding model's input limit</a>. Then measure.</p></section><section id="context"><h2>Keep context with every chunk</h2><figure class="fig"><svg viewBox="0 0 722 142" class="dg" role="img" aria-label="Two ways to keep context with a chunk: a heading-path header, and searching small chunks while sending their parent section"><text x="10" y="18" class="cap">Contextual header</text><rect x="10" y="28" width="330" height="92" rx="8" class="box"/><text x="22" y="48" class="mono sm">Leave policy › India › Parental leave</text><line x1="22" y1="56" x2="328" y2="56" class="rule"/><text x="22" y="76" class="small">Adoptive parents get 12 weeks of</text><text x="22" y="94" class="small">paid leave from the date of placement.</text><text x="22" y="112" class="sm">Now &quot;India&quot; is part of what gets embedded.</text><text x="380" y="18" class="cap">Small-to-big (parent-child)</text><rect x="380" y="28" width="330" height="104" rx="8" class="k-kb"/><text x="392" y="46" class="small b">Parent: the whole Parental leave section</text><rect x="392" y="60" width="70" height="24" rx="5" class="cell"/><text x="427" y="76" class="sm" text-anchor="middle">child 1</text><rect x="470" y="60" width="70" height="24" rx="5" class="cell"/><text x="505" y="76" class="sm" text-anchor="middle">child 2</text><rect x="548" y="60" width="70" height="24" rx="5" class="cell"/><text x="583" y="76" class="sm" text-anchor="middle">child 3</text><rect x="626" y="60" width="70" height="24" rx="5" class="cell hot"/><text x="661" y="76" class="sm" text-anchor="middle">child 4</text><text x="392" y="106" class="sm">Search the small children, send the parent</text><text x="392" y="122" class="sm">to the model.</text></svg><figcaption>Both fix the same problem: a precise chunk that no longer says what it is about.</figcaption></figure>
+<ul class="plain">
+<li><strong>Heading path header.</strong> Prefix each chunk with the document title and heading path before embedding. Cheap, and the biggest single win on structured documents.</li>
+<li><strong>Small-to-big.</strong> Index small child chunks for precise matching, and return their parent section to the model for context.</li>
+<li><strong>Contextual summaries.</strong> Ask a small model to write one sentence on where the chunk sits in the document, and prepend it. Costs one LLM call per chunk at ingestion.</li>
+<li><strong>Metadata, not just text.</strong> Store region, version and date as fields too, so a filter like <code>region = India</code> can do exact work that embeddings do loosely. <a href="#metadata">Which fields, per source</a>.</li>
+</ul></section><section id="metadata"><h2>Metadata to attach, by source</h2>
+<p class="lead">Decide the metadata before you chunk, not after. The parser reads it from the source once per document, and every chunk of that document inherits it. Adding a field later means re-parsing everything.</p>
+<p>Each field should earn its place by doing one of five jobs:</p>
+<div class="table"><table><thead><tr><th>Job</th><th>Question it answers</th><th>Typical fields</th></tr></thead><tbody>
+<tr><td>Filtering</td><td>Which chunks are even eligible for this question?</td><td><code>region</code>, <code>doc_type</code>, <code>product</code>, <code>language</code>, <code>status</code></td></tr>
+<tr><td>Freshness</td><td>Is this the current version, and did it change?</td><td><code>version</code>, <code>content_hash</code>, <code>updated_at</code>, <code>effective_from</code></td></tr>
+<tr><td>Deletes</td><td>Which chunks go when the source item goes?</td><td><code>doc_id</code>, <code>source</code>, child IDs such as <code>comment_ids</code></td></tr>
+<tr><td>Citations</td><td>Where exactly did this answer come from?</td><td><code>url</code> with anchor, <code>section_path</code>, <code>page_start</code>, line range</td></tr>
+<tr><td>Permissions</td><td>Who is allowed to see this chunk?</td><td><code>acl_groups</code>, channel membership, <code>audience</code></td></tr>
+</tbody></table></div>
+<p>Three fields belong on every chunk whatever the source: a stable <code>chunk_id</code> built from <code>doc_id</code> plus version and position (so re-ingesting the same document overwrites instead of duplicating), the <code>doc_id</code> itself (so deletes are one call), and the ACL (so permissions are enforced in the query). The <code>text</code> field below is what gets embedded, with its heading-path header already added. The other fields are stored next to the vector and filtered on.</p>
+<h3 id="meta-policy">Policy and wiki pages</h3>
+<p>Chunk by heading. Most fields come from the page itself and are copied onto every chunk of it.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;wiki:leave-policy:v7:s3:c1&quot;,
+  &quot;doc_id&quot;: &quot;wiki:leave-policy&quot;,
+  &quot;source&quot;: &quot;confluence&quot;,
+  &quot;url&quot;: &quot;https://wiki.example.com/hr/leave-policy#parental-leave&quot;,
+  &quot;title&quot;: &quot;Leave policy&quot;,
+  &quot;section_path&quot;: [&quot;Leave policy&quot;, &quot;India&quot;, &quot;Parental leave&quot;],
+  &quot;chunk_index&quot;: 1,
+  &quot;text&quot;: &quot;Leave policy › India › Parental leave\nAdoptive parents get 12 weeks of paid leave from the date the child is placed with them.&quot;,
+  &quot;version&quot;: 7,
+  &quot;content_hash&quot;: &quot;sha256:9f2c…e41a&quot;,
+  &quot;updated_at&quot;: &quot;2026-09-14T08:12:00Z&quot;,
+  &quot;effective_from&quot;: &quot;2026-10-01&quot;,
+  &quot;region&quot;: &quot;IN&quot;,
+  &quot;language&quot;: &quot;en&quot;,
+  &quot;doc_type&quot;: &quot;policy&quot;,
+  &quot;status&quot;: &quot;published&quot;,
+  &quot;acl_groups&quot;: [&quot;grp:all-employees-in&quot;, &quot;grp:hr&quot;],
+  &quot;owner_team&quot;: &quot;people-ops&quot;
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>region, doc_type, language</code></td><td>Filtering. <code>region = IN</code> removes the near-identical US chunk before ranking, which embeddings alone do badly.</td></tr><tr><td><code>version, content_hash, updated_at</code></td><td>Freshness. Skip re-embedding when the hash is unchanged, reject an older version arriving late, and prefer the newest page when two disagree.</td></tr><tr><td><code>effective_from, status</code></td><td>Freshness. A policy published today may not apply until next month; drafts and archived pages should never be retrieved.</td></tr><tr><td><code>doc_id</code></td><td>Deletes. When the page is deleted or moved, remove every chunk with <code>doc_id = wiki:leave-policy</code> in one call.</td></tr><tr><td><code>url with anchor, section_path</code></td><td>Citations. Link straight to the section, and show the heading path so the reader can check it.</td></tr><tr><td><code>acl_groups</code></td><td>Permissions. Filter on the user's groups inside the search query, before the top k are chosen. See <a href="access-control.html">Access control</a>.</td></tr></tbody></table></div><h3 id="meta-tickets">Tickets with comments</h3>
+<p>A ticket is a description plus a thread. Chunk the description on its own, then group comments in time order, so a chunk never mixes the problem with an unrelated reply. Keep people as IDs, not names.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;jira:PAY-4821:comments:2&quot;,
+  &quot;doc_id&quot;: &quot;jira:PAY-4821&quot;,
+  &quot;source&quot;: &quot;jira&quot;,
+  &quot;url&quot;: &quot;https://tickets.example.com/browse/PAY-4821?focusedCommentId=88213&quot;,
+  &quot;chunk_kind&quot;: &quot;comment_group&quot;,
+  &quot;comment_ids&quot;: [88207, 88213],
+  &quot;text&quot;: &quot;PAY-4821 · Refunds fail for cards issued in EU · Comments\n[2026-10-02] Root cause: the refund call sends the amount in cents, the EU gateway expects decimal units.\n[2026-10-03] Fixed in release 4.18.2. Retried refunds now succeed.&quot;,
+  &quot;project&quot;: &quot;PAY&quot;,
+  &quot;issue_type&quot;: &quot;bug&quot;,
+  &quot;status&quot;: &quot;resolved&quot;,
+  &quot;resolution&quot;: &quot;fixed&quot;,
+  &quot;priority&quot;: &quot;P1&quot;,
+  &quot;components&quot;: [&quot;refunds&quot;, &quot;eu-gateway&quot;],
+  &quot;labels&quot;: [&quot;incident&quot;],
+  &quot;fix_version&quot;: &quot;4.18.2&quot;,
+  &quot;linked_issues&quot;: [&quot;INC-311&quot;],
+  &quot;author_ids&quot;: [&quot;u_1842&quot;, &quot;u_0977&quot;],
+  &quot;created_at&quot;: &quot;2026-10-01T10:40:00Z&quot;,
+  &quot;last_comment_at&quot;: &quot;2026-10-03T16:05:00Z&quot;,
+  &quot;updated_at&quot;: &quot;2026-10-03T16:05:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;proj:PAY:browse&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>status, resolution</code></td><td>Filtering. "How was this fixed?" should rank resolved tickets first; an open ticket only describes the problem.</td></tr><tr><td><code>project, components, issue_type, fix_version</code></td><td>Filtering. Narrow to one team or one release without trusting the embedding to notice the ticket key.</td></tr><tr><td><code>comment_ids, chunk_kind</code></td><td>Deletes and edits. A deleted or edited comment rebuilds only its group, not the whole ticket.</td></tr><tr><td><code>updated_at, last_comment_at</code></td><td>Freshness. A ticket reopened yesterday beats the same ticket's month-old resolution.</td></tr><tr><td><code>url with comment anchor</code></td><td>Citations. The answer can point to the exact comment that holds the fix.</td></tr><tr><td><code>acl_groups, author_ids</code></td><td>Permissions and privacy. Mirror project permissions; store author IDs so names stay out of the index and can be resolved at display time.</td></tr></tbody></table></div><h3 id="meta-code">Code and API reference</h3>
+<p>Split on functions, classes and endpoints, never on line counts. The file path and symbol name do most of the work.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;git:payments-svc@3a9f1c2:src/refunds/client.py#RefundClient.create&quot;,
+  &quot;doc_id&quot;: &quot;git:payments-svc:src/refunds/client.py&quot;,
+  &quot;source&quot;: &quot;github&quot;,
+  &quot;repo&quot;: &quot;payments-svc&quot;,
+  &quot;branch&quot;: &quot;main&quot;,
+  &quot;commit_sha&quot;: &quot;3a9f1c2&quot;,
+  &quot;path&quot;: &quot;src/refunds/client.py&quot;,
+  &quot;language&quot;: &quot;python&quot;,
+  &quot;symbol&quot;: &quot;RefundClient.create&quot;,
+  &quot;symbol_kind&quot;: &quot;method&quot;,
+  &quot;signature&quot;: &quot;def create(self, payment_id: str, amount: Decimal, reason: str | None = None) -&gt; Refund&quot;,
+  &quot;start_line&quot;: 48,
+  &quot;end_line&quot;: 91,
+  &quot;url&quot;: &quot;https://git.example.com/payments-svc/blob/3a9f1c2/src/refunds/client.py#L48-L91&quot;,
+  &quot;text&quot;: &quot;payments-svc · src/refunds/client.py · RefundClient.create\ndef create(self, payment_id: str, amount: Decimal, reason: str | None = None) -&gt; Refund:\n    \&quot;\&quot;\&quot;Create a refund. amount is in major units (e.g. 12.50), not cents.\&quot;\&quot;\&quot;\n    ...&quot;,
+  &quot;imports&quot;: [&quot;decimal.Decimal&quot;, &quot;refunds.models.Refund&quot;],
+  &quot;api_version&quot;: &quot;v2&quot;,
+  &quot;deprecated&quot;: false,
+  &quot;updated_at&quot;: &quot;2026-10-03T15:20:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;repo:payments-svc:read&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>repo, path, language, symbol</code></td><td>Filtering and exact match. Keyword search on <code>RefundClient.create</code> finds what embeddings blur; see <a href="search-types.html">Search types</a>.</td></tr><tr><td><code>commit_sha, branch</code></td><td>Freshness. Index the default branch at a known commit; when it moves, re-embed only files whose hash changed.</td></tr><tr><td><code>api_version, deprecated</code></td><td>Filtering. Stop the model recommending a v1 endpoint that was removed last quarter.</td></tr><tr><td><code>doc_id = file path</code></td><td>Deletes. A deleted or renamed file removes all its symbol chunks in one call.</td></tr><tr><td><code>start_line, end_line, url</code></td><td>Citations. Link to the exact line range at that commit, which never changes underneath the link.</td></tr><tr><td><code>acl_groups</code></td><td>Permissions. Private repos must not leak into answers for people who cannot read them.</td></tr></tbody></table></div><h3 id="meta-pdf">PDFs and manuals</h3>
+<p>Parse with a layout-aware parser, chunk by heading inside the PDF, and keep page numbers. People quote manuals by page.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;pdf:ac-x200-service-manual:r3:p42:c2&quot;,
+  &quot;doc_id&quot;: &quot;pdf:ac-x200-service-manual&quot;,
+  &quot;source&quot;: &quot;sharepoint&quot;,
+  &quot;file_name&quot;: &quot;AC-X200_Service_Manual_rev3.pdf&quot;,
+  &quot;url&quot;: &quot;https://files.example.com/manuals/AC-X200_Service_Manual_rev3.pdf#page=42&quot;,
+  &quot;title&quot;: &quot;AC-X200 Service Manual&quot;,
+  &quot;revision&quot;: &quot;rev3&quot;,
+  &quot;section_path&quot;: [&quot;6 Troubleshooting&quot;, &quot;6.4 Error codes&quot;],
+  &quot;page_start&quot;: 42,
+  &quot;page_end&quot;: 43,
+  &quot;text&quot;: &quot;AC-X200 Service Manual › 6 Troubleshooting › 6.4 Error codes\nE4: outdoor fan stalled. Switch off at the isolator, check the fan for obstruction, then measure the capacitor (expected 2.5 µF ±5%).&quot;,
+  &quot;contains_table&quot;: true,
+  &quot;figure_refs&quot;: [&quot;Fig 6-3&quot;],
+  &quot;product_models&quot;: [&quot;AC-X200&quot;, &quot;AC-X200P&quot;],
+  &quot;language&quot;: &quot;en&quot;,
+  &quot;ocr&quot;: false,
+  &quot;parser_confidence&quot;: 0.97,
+  &quot;published_at&quot;: &quot;2025-11-30&quot;,
+  &quot;updated_at&quot;: &quot;2026-02-11T09:00:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;grp:field-service&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>product_models, revision, language</code></td><td>Filtering. A technician on an AC-X200 must not get the AC-X100 fix, and rev2 instructions may be unsafe after rev3.</td></tr><tr><td><code>page_start, page_end, url with #page</code></td><td>Citations. "Page 42 of rev3" opens the PDF at the right page.</td></tr><tr><td><code>ocr, parser_confidence</code></td><td>Quality. Down-rank or flag chunks from poor scans instead of trusting garbled text.</td></tr><tr><td><code>contains_table, figure_refs</code></td><td>Answering. Tell the model a table or figure exists, so it says "see Fig 6-3" instead of inventing values.</td></tr><tr><td><code>doc_id, revision</code></td><td>Deletes and freshness. Uploading rev4 replaces every rev3 chunk under the same doc_id.</td></tr></tbody></table></div><h3 id="meta-chat">Chat and call transcripts</h3>
+<p>Chunk by thread or by time window (say 10 to 20 messages, or a few minutes of a call), with a small overlap. A single message is too short to mean anything on its own.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;slack:C04ONCALL:1727951412.0931:w1&quot;,
+  &quot;doc_id&quot;: &quot;slack:C04ONCALL:1727951412.0931&quot;,
+  &quot;source&quot;: &quot;slack&quot;,
+  &quot;url&quot;: &quot;https://chat.example.com/archives/C04ONCALL/p1727951412093100&quot;,
+  &quot;channel_id&quot;: &quot;C04ONCALL&quot;,
+  &quot;channel_name&quot;: &quot;payments-oncall&quot;,
+  &quot;channel_type&quot;: &quot;private&quot;,
+  &quot;thread_ts&quot;: &quot;1727951412.0931&quot;,
+  &quot;message_ids&quot;: [&quot;1727951412.0931&quot;, &quot;1727951466.1022&quot;, &quot;1727951530.4410&quot;, &quot;1727951702.0087&quot;],
+  &quot;window_start&quot;: &quot;2026-10-03T10:30:12Z&quot;,
+  &quot;window_end&quot;: &quot;2026-10-03T10:35:02Z&quot;,
+  &quot;text&quot;: &quot;#payments-oncall · thread · 3 Oct 10:30–10:35 UTC\nu_1842: EU refunds failing again after deploy?\nu_0977: yes, same amount-format error as PAY-4821\nu_1842: rolling back to 4.18.1\nu_0977: rollback done, refunds recovering&quot;,
+  &quot;participant_ids&quot;: [&quot;u_1842&quot;, &quot;u_0977&quot;],
+  &quot;mentions&quot;: [&quot;PAY-4821&quot;],
+  &quot;thread_resolved&quot;: true,
+  &quot;pii_redacted&quot;: true,
+  &quot;retention_expires_at&quot;: &quot;2027-10-03T00:00:00Z&quot;,
+  &quot;acl_members_of&quot;: &quot;C04ONCALL&quot;
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>channel_type, acl_members_of</code></td><td>Permissions. Private channel and DM content is visible only to members; check membership at query time.</td></tr><tr><td><code>window_start, window_end</code></td><td>Freshness and filtering. "What happened during Tuesday's outage?" becomes a time-range filter.</td></tr><tr><td><code>message_ids</code></td><td>Deletes. When a message is deleted or edited, rebuild the windows that contain it. Chat platforms send these events and you must honour them.</td></tr><tr><td><code>retention_expires_at, pii_redacted</code></td><td>Compliance. A nightly job removes chunks past retention; redact before embedding, since vectors can leak the text they came from.</td></tr><tr><td><code>mentions, thread_resolved</code></td><td>Linking. Joins the chat to the ticket, and lets you prefer threads that reached an answer.</td></tr></tbody></table></div><h3 id="meta-tables">Tables and FAQs</h3>
+<p>Keep a small table whole. Split a big one into row groups and repeat the header in every chunk. For an FAQ, one question with its answer is one chunk, and you can embed the question on its own.</p>
+<pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;sheet:shipping-rates:2026Q4:rows-11-20&quot;,
+  &quot;doc_id&quot;: &quot;sheet:shipping-rates&quot;,
+  &quot;source&quot;: &quot;google-sheets&quot;,
+  &quot;sheet&quot;: &quot;Rates Q4 2026&quot;,
+  &quot;table_id&quot;: &quot;standard-rates&quot;,
+  &quot;columns&quot;: [&quot;Destination&quot;, &quot;Weight band&quot;, &quot;Standard&quot;, &quot;Express&quot;],
+  &quot;row_start&quot;: 11,
+  &quot;row_end&quot;: 20,
+  &quot;text&quot;: &quot;Shipping rates Q4 2026 · Standard rates (rows 11–20)\nDestination | Weight band | Standard | Express\nGermany | 0–2 kg | €6.90 | €14.50\nGermany | 2–5 kg | €9.40 | €19.00\n…&quot;,
+  &quot;currency&quot;: &quot;EUR&quot;,
+  &quot;valid_from&quot;: &quot;2026-10-01&quot;,
+  &quot;valid_to&quot;: &quot;2026-12-31&quot;,
+  &quot;updated_at&quot;: &quot;2026-09-28T12:00:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;grp:support&quot;, &quot;grp:sales&quot;]
+}</code></pre><pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>{
+  &quot;chunk_id&quot;: &quot;faq:billing:q-017&quot;,
+  &quot;doc_id&quot;: &quot;faq:billing&quot;,
+  &quot;source&quot;: &quot;help-center&quot;,
+  &quot;url&quot;: &quot;https://help.example.com/billing#q-017&quot;,
+  &quot;faq_id&quot;: &quot;q-017&quot;,
+  &quot;question&quot;: &quot;Can I change my billing date?&quot;,
+  &quot;alt_questions&quot;: [&quot;move payment date&quot;, &quot;switch billing cycle day&quot;],
+  &quot;text&quot;: &quot;Q: Can I change my billing date?\nA: Yes, once per billing cycle, from Settings › Billing. The next invoice is pro-rated.&quot;,
+  &quot;category&quot;: &quot;billing&quot;,
+  &quot;product&quot;: &quot;all-plans&quot;,
+  &quot;audience&quot;: &quot;customers&quot;,
+  &quot;updated_at&quot;: &quot;2026-07-19T08:30:00Z&quot;,
+  &quot;acl_groups&quot;: [&quot;public&quot;]
+}</code></pre>
+<div class="table"><table><thead><tr><th>Fields</th><th>Why they matter</th></tr></thead><tbody><tr><td><code>columns, row_start, row_end</code></td><td>Answering and citations. The header travels with every row group, and the citation names the rows used.</td></tr><tr><td><code>valid_from, valid_to, currency</code></td><td>Freshness. Last quarter's rates are still in the sheet history; filter on today's date to avoid quoting them.</td></tr><tr><td><code>question, alt_questions</code></td><td>Matching. Embed the question and its paraphrases separately and point them at one answer, since users ask questions, not answers.</td></tr><tr><td><code>audience, acl_groups</code></td><td>Permissions. An internal-only answer must never reach a public help bot.</td></tr><tr><td><code>faq_id, doc_id</code></td><td>Deletes. Retiring one FAQ entry removes one chunk; deleting the sheet removes all its row groups.</td></tr></tbody></table></div>
+<h3 id="meta-mistakes">Common mistakes</h3>
+<ul class="plain">
+<li><strong>Putting filters only in the text.</strong> "Region: India" in the text helps the embedding a little; a <code>region</code> field filters exactly. Do both.</li>
+<li><strong>No <code>doc_id</code> on chunks.</strong> Then a deleted source document leaves orphan chunks that keep getting cited. Reconcile by comparing the source's ID list with the index's (a set difference) on a schedule.</li>
+<li><strong>ACLs checked after retrieval.</strong> If you take the top 8 and then drop the ones the user cannot see, they may get 1 result or none. Filter inside the search.</li>
+<li><strong>Too many unindexed fields.</strong> Only fields you filter on need a filter index in the <a href="vector-databases.html">vector database</a>. Keep the rest as plain stored payload.</li>
+<li><strong>Names and secrets in metadata.</strong> Store user IDs and resolve names at display time; redact PII before it is embedded.</li>
+</ul></section><section id="special"><h2>Tables, code and slides</h2>
+<ul class="plain">
+<li><strong>Tables:</strong> keep small tables whole. Split big ones into row groups and repeat the header row in every group, or turn each row into a sentence ("Diwali: date varies").</li>
+<li><strong>Code:</strong> split on functions and classes, not on lines, and keep the file path in the header.</li>
+<li><strong>Slides:</strong> one slide per chunk, with the deck title and slide title as the header and speaker notes included.</li>
+<li><strong>Scanned PDFs:</strong> run layout-aware OCR first. Chunking cannot fix text that came out of the parser scrambled.</li>
+</ul></section><section id="tune"><h2>How to choose, with numbers</h2>
+<p>Do not guess. Build 100 to 200 golden questions with the chunk that answers each (see <a href="evals.html#golden">golden sets</a>), then sweep a few settings and compare <strong>recall@k</strong>.</p>
+<div class="table"><table><thead><tr><th>Setting (illustrative run)</th><th>Chunks</th><th>Recall@5</th><th>Avg prompt tokens</th></tr></thead><tbody>
+<tr><td>Fixed 256, no overlap</td><td class="num">412k</td><td class="num">0.71</td><td class="num">1,400</td></tr>
+<tr><td>Fixed 512, 15% overlap</td><td class="num">240k</td><td class="num">0.78</td><td class="num">2,900</td></tr>
+<tr><td>By heading, max 800, with heading path</td><td class="num">205k</td><td class="num">0.86</td><td class="num">3,300</td></tr>
+<tr><td>Small-to-big (128 child, section parent)</td><td class="num">830k</td><td class="num">0.88</td><td class="num">4,100</td></tr>
+</tbody></table></div>
+<p>Illustrative numbers that show the usual pattern. Pick the cheapest setting within a point or two of the best recall, since prompt tokens are paid on every question.</p></section><section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"I'd chunk by structure: one section per chunk, split recursively if a section passes about 800 tokens, keep tables whole with their header, and prefix every chunk with the title and heading path. I'd store region, version and ACLs as metadata for filtering. Then I'd tune size and overlap with a recall@k sweep on a golden set, and re-chunk from the stored parsed text, so it never needs another crawl of the sources."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="knowledge-base.html#chunking">Knowledge base</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="search-types.html">Search types</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#chunk">Glossary: chunk</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarse = window.matchMedia('(pointer: coarse)').matches;
+const BG = 0xe6eaee;
+const COL = { hr: 0xb2456e, it: 0x4d5fd8, eng: 0x2a9d8f, q: 0xe3a13b, kb: 0x4d5fd8, wire: 0x9aa5b1, dlq: 0xc0392b, off: 0xc3cad2 };
+const UP = new THREE.Vector3(0, 1, 0);
+const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+
+// ---------- building blocks ----------
+function rbox(w, h, d, color, o = {}) {
+  const r = Math.min(o.r ?? 0.12, h / 2 - 0.001, w / 2 - 0.001, d / 2 - 0.001);
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.5, metalness: 0,
+    emissive: new THREE.Color(color), emissiveIntensity: o.glow ?? 0,
+    transparent: o.opacity !== undefined, opacity: o.opacity ?? 1, depthWrite: o.opacity === undefined });
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, o.seg ?? 3, r), mat);
+  m.castShadow = o.cast ?? true; m.receiveShadow = true;
+  return m;
+}
+const SPHERE = new THREE.SphereGeometry(1, 24, 16);
+function ball(r, color, o = {}) {
+  const m = new THREE.Mesh(SPHERE, new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.38, metalness: 0,
+    emissive: new THREE.Color(color), emissiveIntensity: o.glow ?? 0 }));
+  m.scale.setScalar(r); m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 12);
+function rod(r, color, o = {}) {
+  const m = new THREE.Mesh(CYL, new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0,
+    emissive: new THREE.Color(color), emissiveIntensity: o.glow ?? 0,
+    transparent: o.opacity !== undefined, opacity: o.opacity ?? 1, depthWrite: o.opacity === undefined }));
+  m.userData.r = r; m.castShadow = o.cast ?? false;
+  return m;
+}
+const _d = new THREE.Vector3();
+function place(m, a, b) {
+  _d.subVectors(b, a);
+  const len = Math.max(_d.length(), 0.0001);
+  m.position.copy(a).addScaledVector(_d, 0.5);
+  m.scale.set(m.userData.r, len, m.userData.r);
+  m.quaternion.setFromUnitVectors(UP, _d.normalize());
+  return m;
+}
+function label(parent, html, cls, pos, center = [0.5, 1]) {
+  const el = document.createElement('div');
+  el.className = 'l3 ' + cls; el.innerHTML = html;
+  const o = new CSS2DObject(el); o.position.copy(pos); o.center.set(center[0], center[1]);
+  parent.add(o);
+  return o;
+}
+function rng(seed) {
+  return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const ease = (f) => f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+
+// ---------- one stage per figure ----------
+function stage(fig, { target, dist, elev, az, shadow = 16 }) {
+  const host = fig.querySelector('.stage3d');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.appendChild(renderer.domElement);
+  const labels = new CSS2DRenderer();
+  labels.domElement.className = 'labels3';
+  host.appendChild(labels.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(BG);
+  scene.fog = new THREE.Fog(BG, dist + 8, dist + 45);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 300);
+  scene.add(new THREE.HemisphereLight(0xf3f6ff, 0x8e98a3, 1.15));
+  const sun = new THREE.DirectionalLight(0xfff2df, 2.4);
+  sun.position.set(target.x - 10, 24, target.z + 14);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1536, 1536);
+  Object.assign(sun.shadow.camera, { left: -shadow, right: shadow, top: shadow, bottom: -shadow, near: 1, far: 80 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; sun.shadow.radius = 5;
+  sun.target.position.copy(target);
+  scene.add(sun, sun.target);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xdce1e6, roughness: 0.95 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+  scene.add(ground);
+
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const gtao = new GTAOPass(scene, camera, 1, 1);
+  gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.2, scale: 1.1, samples: 16 });
+  composer.addPass(gtao);
+  composer.addPass(new OutputPass());
+
+  camera.position.set(target.x + Math.sin(az) * Math.cos(elev) * dist, target.y + Math.sin(elev) * dist, target.z + Math.cos(az) * Math.cos(elev) * dist);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(target);
+  controls.enableDamping = true;
+  controls.enableZoom = false; // keep the page's own scrolling
+  controls.enablePan = false;
+  controls.maxPolarAngle = Math.PI * 0.48;
+  controls.autoRotate = !reduceMotion;
+  controls.autoRotateSpeed = 0.5;
+  if (coarse) { controls.enabled = false; renderer.domElement.style.touchAction = 'auto'; }
+  controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+  let dirty = true, visible = false;
+  const S = { scene, camera, controls, ticks: [], invalidate: () => { dirty = true; } };
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    // narrow screens step back so the whole model stays in frame
+    camera.zoom = Math.min(1, 0.25 + camera.aspect / 1.6);
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); labels.setSize(w, h);
+    dirty = true;
+  }
+  new ResizeObserver(resize).observe(host);
+  new IntersectionObserver((es) => { visible = es[0].isIntersecting; if (visible) dirty = true; }).observe(host);
+  resize();
+  const clock = new THREE.Clock();
+  (function loop() {
+    requestAnimationFrame(loop);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    if (!visible) return;
+    let anim = false;
+    for (const f of S.ticks) anim = f(dt) || anim;
+    const moved = controls.update();
+    if (anim || moved || dirty || controls.autoRotate) {
+      composer.render(); labels.render(scene, camera); dirty = false;
+    }
+  })();
+  host.classList.add('ready');
+  return S;
+}
+
+function pressGroup(btns, cur) { btns.forEach((b) => b.setAttribute('aria-pressed', String(b === cur))); }
+
+// =====================================================================
+// Embeddings: meaning as position, similarity as angle
+// =====================================================================
+function embeddings(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(3, 2.8, 3), dist: 23, elev: 0.36, az: 0.78, shadow: 12 });
+  const out = fig.querySelector('.out3');
+  const O = new THREE.Vector3(0, 0, 0);
+  const AX = [['dim 1', [8.5, 0, 0]], ['dim 2', [0, 8, 0]], ['dim 3', [0, 0, 8.5]]];
+  for (const [n, p] of AX) {
+    S.scene.add(place(rod(0.05, 0x7d8996, { cast: true }), O, V(p)));
+    label(S.scene, n, 'cap', V(p).add(new THREE.Vector3(0, 0.25, 0)), [0.5, 1]);
+  }
+  const origin = rbox(0.4, 0.4, 0.4, 0x4a5562, { r: 0.1 }); origin.position.set(0, 0.2, 0); S.scene.add(origin);
+
+  const DOCS = [
+    ['hr', 'Parental leave policy', [5.4, 2.6, 1.0]], ['hr', 'Maternity benefits', [5.6, 1.6, 2.0]],
+    ['hr', 'Holiday calendar', [3.9, 3.9, 0.4]], ['hr', 'Sick leave rules', [5.2, 0.7, 0.5]],
+    ['it', 'VPN setup guide', [1.4, 2.4, 5.5]], ['it', 'Reset your password', [0.5, 3.9, 4.6]],
+    ['it', 'Laptop request', [2.6, 1.4, 5.4]], ['it', 'Office Wi-Fi', [0.6, 1.2, 4.9]],
+    ['eng', 'Deploy runbook', [2.2, 5.6, 2.0]], ['eng', 'On-call rotation', [0.6, 5.6, 1.0]],
+    ['eng', 'Incident review', [2.9, 5.9, 0.5]], ['eng', 'Release checklist', [1.0, 4.6, 2.8]],
+  ];
+  const QUERIES = [
+    { text: 'how much baby leave do I get?', p: [4.9, 2.5, 2.4],
+      note: 'None of these shares a word with the question, so keyword search would miss them. The embedding finds them by meaning.' },
+    { text: "can't connect from home", p: [1.6, 3.2, 5.6],
+      note: '"VPN" never appears in the question, yet the VPN guide ranks first.' },
+    { text: 'who is on call this weekend?', p: [0.3, 5.2, 2.0],
+      note: 'Here the words overlap too ("on-call"), so keyword search would also find it. Hybrid search covers both cases.' },
+  ];
+  const docs = DOCS.map(([c, name, p]) => {
+    const pos = V(p);
+    const m = ball(0.3, COL[c]); m.position.copy(pos); S.scene.add(m);
+    const drop = place(rod(0.018, 0x9aa5b1, { opacity: 0.55 }), new THREE.Vector3(pos.x, 0, pos.z), pos); S.scene.add(drop);
+    const arrow = place(rod(0.04, COL[c], { opacity: 0.6 }), O, pos); arrow.visible = false; S.scene.add(arrow);
+    label(m, name, '', new THREE.Vector3(1.3, 0, 0), [0, 0.5]);
+    return { name, pos, arrow, drop };
+  });
+
+  const qm = rbox(0.62, 0.62, 0.62, COL.q, { r: 0.16, glow: 0.3 });
+  S.scene.add(qm);
+  const qLabel = label(qm, '', 'q', new THREE.Vector3(0, 1.3, 0));
+  const qDrop = rod(0.022, COL.q, { opacity: 0.7 }); S.scene.add(qDrop);
+  const qArrow = rod(0.07, COL.q, { glow: 0.2 }); qArrow.visible = false; S.scene.add(qArrow);
+  const links = [0, 1, 2].map(() => {
+    const r = rod(0.05, COL.q, { glow: 0.25 }); S.scene.add(r);
+    const holder = new THREE.Object3D(); S.scene.add(holder);
+    const l = label(holder, '', 'sc', new THREE.Vector3(), [0.5, 0.5]);
+    return { r, holder, l };
+  });
+
+  let arrows = false, qi = 0, from = V(QUERIES[0].p), to = from.clone(), t = 1;
+  const cos = (a, b) => a.dot(b) / (a.length() * b.length());
+  function ranked(p) { return docs.map((d) => ({ d, s: cos(p, d.pos) })).sort((a, b) => b.s - a.s).slice(0, 3); }
+  function setQueryPos(p, showLinks) {
+    qm.position.copy(p);
+    place(qDrop, new THREE.Vector3(p.x, 0, p.z), p);
+    place(qArrow, O, p);
+    const top = ranked(p);
+    links.forEach((L, i) => {
+      L.r.visible = showLinks && !arrows; L.l.visible = showLinks;
+      place(L.r, p, top[i].d.pos);
+      L.holder.position.copy(arrows ? top[i].d.pos.clone().add(new THREE.Vector3(0, 0.75, 0)) : p.clone().lerp(top[i].d.pos, 0.5));
+      L.l.element.textContent = (arrows ? 'cos ' : '') + top[i].s.toFixed(2);
+    });
+    return top;
+  }
+  function describe() {
+    const q = QUERIES[qi], top = ranked(V(q.p));
+    const far = docs.map((d) => cos(V(q.p), d.pos)).sort((a, b) => a - b)[0];
+    out.innerHTML = `<strong>Nearest to "${q.text}":</strong> ${top.map((x) => `${x.d.name} (${x.s.toFixed(2)})`).join(', ')}. ` +
+      `The least similar document scores ${far.toFixed(2)}. ${q.note}`;
+    qLabel.element.innerHTML = `query: "${q.text}"`;
+  }
+  function setArrows(on) {
+    arrows = on;
+    docs.forEach((d) => { d.arrow.visible = on; d.drop.visible = !on; });
+    qArrow.visible = on; qDrop.visible = !on;
+    setQueryPos(qm.position, t >= 1);
+    S.invalidate();
+  }
+  S.ticks.push((dt) => {
+    if (t >= 1) return false;
+    t = Math.min(1, t + dt / 0.7);
+    setQueryPos(from.clone().lerp(to, ease(t)), t >= 1);
+    return true;
+  });
+  const qBtns = [...fig.querySelectorAll('[data-q]')];
+  qBtns.forEach((b) => b.addEventListener('click', () => {
+    qi = +b.dataset.q; pressGroup(qBtns, b);
+    from = qm.position.clone(); to = V(QUERIES[qi].p);
+    t = reduceMotion ? 1 : 0;
+    if (reduceMotion) setQueryPos(to, true);
+    describe(); S.invalidate();
+  }));
+  const aBtn = fig.querySelector('[data-arrows]');
+  aBtn.addEventListener('click', () => { setArrows(!arrows); aBtn.setAttribute('aria-pressed', String(arrows)); });
+  setQueryPos(to, true); describe();
+}
+
+// =====================================================================
+// HNSW: a layered graph, searched top-down
+// =====================================================================
+function hnsw(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(0, 2.6, 0), dist: 28, elev: 0.36, az: 0.5, shadow: 14 });
+  const out = fig.querySelector('.out3');
+  const LY = [0.5, 3.1, 5.7];
+  const R = rng(11);
+  const nodes = [];
+  while (nodes.length < 40) {
+    const x = -6.3 + R() * 12.6, z = -4.2 + R() * 8.4;
+    if (nodes.every((n) => Math.hypot(n.x - x, n.z - z) > 1.15)) nodes.push({ x, z });
+  }
+  // the first nodes reach the upper layers, as if their random level came up high
+  nodes.forEach((n, i) => { n.top = i < 3 ? 2 : i < 11 ? 1 : 0; });
+  const at = (n, l) => new THREE.Vector3(n.x, LY[l] + 0.24, n.z);
+  const M = [4, 3, 2];
+  const adj = [0, 1, 2].map(() => new Map());
+  for (let l = 0; l < 3; l++) {
+    const ids = nodes.map((n, i) => i).filter((i) => nodes[i].top >= l);
+    for (const i of ids) {
+      const near = ids.filter((j) => j !== i).sort((a, b) =>
+        Math.hypot(nodes[a].x - nodes[i].x, nodes[a].z - nodes[i].z) - Math.hypot(nodes[b].x - nodes[i].x, nodes[b].z - nodes[i].z)).slice(0, M[l]);
+      for (const j of near) {
+        if (!adj[l].has(i)) adj[l].set(i, new Set());
+        if (!adj[l].has(j)) adj[l].set(j, new Set());
+        adj[l].get(i).add(j); adj[l].get(j).add(i);
+      }
+    }
+  }
+  const CAP = ['Layer 0 · all 40 vectors · short links', 'Layer 1 · 11 vectors', 'Layer 2 · 3 vectors · long jumps'];
+  const PLATE = [0xdfe3fa, 0xe3e8fb, 0xe9ecfc];
+  for (let l = 0; l < 3; l++) {
+    const p = rbox(14.8, 0.16, 10.6, PLATE[l], { r: 0.08, cast: false, rough: 0.9, opacity: l ? 0.62 : undefined });
+    p.position.set(0, LY[l] + 0.0, 0); S.scene.add(p);
+    label(S.scene, CAP[l], 'cap', new THREE.Vector3(-7.7, LY[l] + 0.1, 0), [1, 0.5]);
+    const seen = new Set();
+    for (const [i, set] of adj[l]) for (const j of set) {
+      const k = i < j ? `${i}-${j}` : `${j}-${i}`;
+      if (seen.has(k)) continue; seen.add(k);
+      S.scene.add(place(rod(l ? 0.045 : 0.03, 0x8f9bb0, { opacity: 0.85 }), at(nodes[i], l), at(nodes[j], l)));
+    }
+  }
+  const balls = nodes.map((n) => {
+    const per = [];
+    for (let l = 0; l <= n.top; l++) {
+      const b = ball(l ? 0.27 : 0.2, COL.kb); b.position.copy(at(n, l)); S.scene.add(b); per.push(b);
+      if (l) S.scene.add(place(rod(0.025, 0x9aa5b1, { opacity: 0.5 }), at(n, l - 1), at(n, l)));
+    }
+    return per;
+  });
+
+  // query: a pillar through every layer, with a marker on each
+  const qPillar = rod(0.035, COL.q, { opacity: 0.55 }); S.scene.add(qPillar);
+  const qMarks = LY.map(() => { const m = rbox(0.42, 0.42, 0.42, COL.q, { r: 0.1, glow: 0.3 }); m.rotation.set(Math.PI / 4, 0, Math.PI / 4); S.scene.add(m); return m; });
+  const qHolder = new THREE.Object3D(); S.scene.add(qHolder);
+  label(qHolder, 'query', 'q', new THREE.Vector3());
+  const packet = rbox(0.5, 0.5, 0.5, COL.q, { r: 0.14, glow: 0.45, rough: 0.35 }); packet.visible = false; S.scene.add(packet);
+  const pathRods = [];
+  const far = nodes.reduce((f, n) => Math.hypot(n.x - nodes[0].x, n.z - nodes[0].z) > Math.hypot(f.x - nodes[0].x, f.z - nodes[0].z) ? n : f, nodes[0]);
+  let q = { x: far.x * 0.92 + 0.3, z: far.z * 0.92 - 0.3 }, plan = null, prog = 0, playing = false;
+
+  const dist = (i) => Math.hypot(nodes[i].x - q.x, nodes[i].z - q.z);
+  function search() {
+    const segs = [], hops = [0, 0, 0], checked = new Set();
+    let cur = 0; checked.add(cur);
+    for (let l = 2; l >= 0; l--) {
+      for (;;) {
+        let best = cur;
+        for (const j of adj[l].get(cur) || []) { checked.add(j); if (dist(j) < dist(best)) best = j; }
+        if (best === cur) break;
+        segs.push({ a: at(nodes[cur], l), b: at(nodes[best], l), node: [best, l], checks: checked.size });
+        hops[l]++; cur = best;
+      }
+      if (l) segs.push({ a: at(nodes[cur], l), b: at(nodes[cur], l - 1), node: [cur, l - 1], drop: true, checks: checked.size });
+    }
+    let exact = 0; nodes.forEach((n, i) => { if (dist(i) < dist(exact)) exact = i; });
+    return { segs, hops, checks: checked.size, found: cur, exact };
+  }
+  function resetLook() {
+    balls.forEach((per) => per.forEach((b) => { b.material.color.setHex(COL.kb); b.material.emissive.setHex(COL.kb); b.material.emissiveIntensity = 0; }));
+    pathRods.forEach((r) => S.scene.remove(r)); pathRods.length = 0;
+    const lit = balls[0][2]; lit.material.color.setHex(COL.q); lit.material.emissive.setHex(COL.q); lit.material.emissiveIntensity = 0.35;
+  }
+  function light([i, l], final) {
+    const b = balls[i][l];
+    const c = final ? 0x2f8f5b : COL.q;
+    b.material.color.setHex(c); b.material.emissive.setHex(c); b.material.emissiveIntensity = 0.4;
+  }
+  function addSeg(s) {
+    const r = place(rod(s.drop ? 0.06 : 0.075, COL.q, { glow: 0.3 }), s.a, s.b); S.scene.add(r); pathRods.push(r);
+  }
+  function setQuery() {
+    place(qPillar, new THREE.Vector3(q.x, 0, q.z), new THREE.Vector3(q.x, LY[2] + 1.4, q.z));
+    qMarks.forEach((m, l) => m.position.set(q.x, LY[l] + 0.42, q.z));
+    qHolder.position.set(q.x, LY[2] + 1.6, q.z);
+  }
+  function report() {
+    const { hops, checks, found, exact } = plan;
+    out.innerHTML = `<strong>Hops:</strong> layer 2: ${hops[2]} · layer 1: ${hops[1]} · layer 0: ${hops[0]}. ` +
+      `<strong>${checks} distance checks</strong> instead of 40 for brute force. ` +
+      (found === exact ? 'It reached the true nearest neighbour (green).'
+                       : 'It stopped one step short of the true nearest neighbour. That is the "approximate" in ANN; a larger candidate list (efSearch) makes it rare.');
+  }
+  function finish() {
+    plan.segs.forEach((s, k) => { addSeg(s); light(s.node, k === plan.segs.length - 1); });
+    if (!plan.segs.length) light([0, 0], true);
+    packet.visible = false; playing = false; report(); S.invalidate();
+  }
+  function start(animate) {
+    setQuery(); resetLook(); plan = search();
+    if (!animate || reduceMotion) { finish(); return; }
+    prog = 0; playing = true; packet.visible = true;
+    out.innerHTML = 'Searching: start at the single entry point on the top layer…';
+  }
+  S.ticks.push((dt) => {
+    if (!playing) return false;
+    const before = Math.floor(prog);
+    prog += dt / 0.55;
+    const k = Math.floor(prog);
+    if (k > before && before < plan.segs.length) {
+      const s = plan.segs[before]; addSeg(s); light(s.node, false);
+      out.innerHTML = `${s.drop ? 'No closer neighbour on this layer, so drop down one layer.' : 'Hop to the neighbour closest to the query.'} Distance checks so far: ${s.checks}.`;
+    }
+    if (k >= plan.segs.length) { resetLook(); finish(); return true; }
+    const s = plan.segs[k];
+    packet.position.copy(s.a).lerp(s.b, ease(prog - k)).add(new THREE.Vector3(0, 0.35, 0));
+    packet.rotation.y += dt * 3;
+    return true;
+  });
+  fig.querySelector('[data-run]').addEventListener('click', () => start(true));
+  const R2 = rng(97);
+  fig.querySelector('[data-new]').addEventListener('click', () => {
+    // keep new queries away from the entry point so the walk has somewhere to go
+    do { q = { x: -6 + R2() * 12, z: -4 + R2() * 8 }; } while (Math.hypot(q.x - nodes[0].x, q.z - nodes[0].z) < 5);
+    start(true);
+  });
+  start(false);
+}
+
+// =====================================================================
+// IVF: cluster, then probe only the nearest clusters
+// =====================================================================
+function ivf(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(0, 3.4, 0), dist: 26, elev: 0.34, az: 0.6, shadow: 14 });
+  const out = fig.querySelector('.out3');
+  const CENT = [[-1.6, 3.4, -0.4], [1.9, 3.0, 0.6], [-5.2, 2.2, 2.2], [5.4, 4.4, -2.4], [-3.8, 5.6, -3.4], [0.8, 6.4, 3.6], [4.6, 1.8, 3.4]];
+  const CC = [0x4d5fd8, 0x2a9d8f, 0xe3a13b, 0xe2674f, 0xb2456e, 0x2f8f5b, 0x6b7f99];
+  const R = rng(5);
+  const gauss = () => { const u = Math.max(R(), 1e-9), v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const pts = [];
+  CENT.forEach((c) => { for (let k = 0; k < 21; k++) pts.push(new THREE.Vector3(c[0] + gauss() * 1.05, Math.max(0.5, c[1] + gauss() * 0.9), c[2] + gauss() * 1.05)); });
+  const cents = CENT.map(V);
+  const owner = pts.map((p) => { let b = 0; cents.forEach((c, i) => { if (p.distanceTo(c) < p.distanceTo(cents[b])) b = i; }); return b; });
+  const q = new THREE.Vector3(0.15, 3.3, 0.05);
+  const order = cents.map((c, i) => i).sort((a, b) => q.distanceTo(cents[a]) - q.distanceTo(cents[b]));
+  const truth = new Set(pts.map((p, i) => i).sort((a, b) => q.distanceTo(pts[a]) - q.distanceTo(pts[b])).slice(0, 10));
+
+  cents.forEach((c, i) => { const k = rbox(0.55, 0.55, 0.55, CC[i], { r: 0.13 }); k.position.copy(c); S.scene.add(k); });
+  // a spoke from every vector to the centroid it belongs to
+  const spokes = pts.map((p, i) => { const r = rod(0.018, COL.off, { opacity: 0.6 }); place(r, p, cents[owner[i]]); S.scene.add(r); return r; });
+  const dots = pts.map((p) => { const b = ball(0.17, COL.off); b.position.copy(p); S.scene.add(b); return b; });
+  const qm = rbox(0.6, 0.6, 0.6, COL.q, { r: 0.16, glow: 0.35 }); qm.position.copy(q); S.scene.add(qm);
+  label(qm, 'query', 'q', new THREE.Vector3(0, 0.7, 0));
+  const qDrop = place(rod(0.022, COL.q, { opacity: 0.7 }), new THREE.Vector3(q.x, 0, q.z), q); S.scene.add(qDrop);
+  const probes = order.map((i) => { const r = rod(0.035, COL.q, { opacity: 0.8 }); place(r, q, cents[i]); S.scene.add(r); return r; });
+  const missHolder = new THREE.Object3D(); S.scene.add(missHolder);
+  const missLabel = label(missHolder, 'missed neighbours', 'miss', new THREE.Vector3(), [0.5, 0]);
+
+  function setN(n) {
+    const probed = new Set(order.slice(0, n));
+    let searched = 0, hit = 0; const missed = [];
+    pts.forEach((p, i) => {
+      const on = probed.has(owner[i]); if (on) searched++;
+      const isTrue = truth.has(i), found = isTrue && on;
+      if (found) hit++; if (isTrue && !on) missed.push(p);
+      const c = isTrue && !on ? COL.dlq : on ? CC[owner[i]] : COL.off;
+      const d = dots[i];
+      d.material.color.setHex(c); d.material.emissive.setHex(c);
+      d.material.emissiveIntensity = isTrue ? 0.35 : 0;
+      d.scale.setScalar(isTrue ? 0.27 : on ? 0.19 : 0.15);
+    });
+    spokes.forEach((r, i) => { const on = probed.has(owner[i]); r.material.color.setHex(on ? CC[owner[i]] : COL.off); r.material.opacity = on ? 0.75 : 0.35; });
+    probes.forEach((r, k) => { r.visible = k < n; });
+    missLabel.visible = missed.length > 0;
+    if (missed.length) { const m = missed.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / missed.length); missHolder.position.copy(m).add(new THREE.Vector3(0, -0.8, 0)); }
+    out.innerHTML = `<strong>nprobe = ${n}:</strong> searched ${searched} of ${pts.length} vectors (${Math.round(100 * searched / pts.length)}%). ` +
+      `<strong>recall@10 = ${hit}/10.</strong> ` +
+      (hit < 10 ? `The ${10 - hit} red point${10 - hit > 1 ? 's are' : ' is'} true neighbours in clusters that were never opened, because the query sits near a cluster border.`
+                : n < 7 ? 'Every true neighbour found while still skipping most of the data.' : 'Probing every cluster is just brute force with extra steps.');
+    S.invalidate();
+  }
+  const btns = [...fig.querySelectorAll('[data-n]')];
+  btns.forEach((b) => b.addEventListener('click', () => { pressGroup(btns, b); setN(+b.dataset.n); }));
+  setN(1);
+}
+
+// =====================================================================
+// Semantic routing: routes are clusters of example requests
+// =====================================================================
+function routes(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(1.2, 2.8, 1.2), dist: 26, elev: 0.34, az: 0.72, shadow: 12 });
+  const out = fig.querySelector('.out3');
+  const O = new THREE.Vector3(0, 0, 0);
+  const ROUTES = [
+    { name: 'HR agent', c: COL.hr, ex: [[5.6, 1.9, 1.0], [5.0, 2.4, 1.6], [6.0, 1.3, 1.4], [5.3, 1.1, 0.6], [4.8, 1.8, 0.4]] },
+    { name: 'IT agent', c: COL.it, ex: [[1.3, 5.6, 1.6], [0.8, 5.0, 1.0], [1.9, 5.3, 0.8], [1.2, 6.0, 1.9], [0.6, 5.5, 2.1]] },
+    { name: 'Procurement agent', c: COL.eng, ex: [[1.2, 1.8, 5.6], [0.7, 1.4, 5.0], [1.8, 1.0, 5.3], [1.4, 2.4, 5.9], [0.9, 2.0, 4.8]] },
+  ];
+  const Q = [
+    { text: 'my VPN drops every hour', p: [0.2, 5.0, 2.4] },
+    { text: 'order me a 27-inch monitor', p: [1.0, 1.7, 5.3] },
+    { text: 'can I expense a standing desk?', p: [3.9, 1.6, 3.8] },
+    { text: 'will it rain tomorrow?', p: [-3.2, 2.6, -2.8] },
+  ];
+  const TH = 0.9, MARGIN = 0.08, FLOOR = 0.7;
+  for (const [n, p] of [['dim 1', [7.5, 0, 0]], ['dim 2', [0, 7.5, 0]], ['dim 3', [0, 0, 7.5]]]) {
+    S.scene.add(place(rod(0.04, 0x7d8996, { cast: true }), O, V(p)));
+    label(S.scene, n, 'cap', V(p).add(new THREE.Vector3(0, 0.25, 0)));
+  }
+  const hubs = ROUTES.map((r) => {
+    const pts = r.ex.map(V);
+    const c = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+    pts.forEach((p) => {
+      const b = ball(0.2, r.c); b.position.copy(p); S.scene.add(b);
+      S.scene.add(place(rod(0.02, r.c, { opacity: 0.6 }), p, c));
+    });
+    const hub = rbox(0.7, 0.7, 0.7, r.c, { r: 0.16 }); hub.position.copy(c); S.scene.add(hub);
+    label(hub, r.name, '', new THREE.Vector3(0, -0.55, 0), [0.5, 0]);
+    return { ...r, c3: c, hub };
+  });
+  const qm = rbox(0.6, 0.6, 0.6, COL.q, { r: 0.15, glow: 0.3 }); S.scene.add(qm);
+  const qLabel = label(qm, '', 'q', new THREE.Vector3(0, 0.8, 0));
+  const qDrop = rod(0.022, COL.q, { opacity: 0.7 }); S.scene.add(qDrop);
+  const links = hubs.map(() => {
+    const r = rod(0.04, COL.q, { opacity: 0.85 }); S.scene.add(r);
+    const h = new THREE.Object3D(); S.scene.add(h);
+    return { r, h, l: label(h, '', 'sc', new THREE.Vector3(), [0.5, 0.5]) };
+  });
+  const cos = (a, b) => a.dot(b) / (a.length() * b.length());
+  let qi = 0, from = V(Q[0].p), to = from.clone(), t = 1;
+  function set(p, final) {
+    qm.position.copy(p);
+    place(qDrop, new THREE.Vector3(p.x, 0, p.z), p);
+    const sc = hubs.map((h) => cos(p, h.c3));
+    const best = sc.indexOf(Math.max(...sc));
+    links.forEach((L, i) => {
+      place(L.r, p, hubs[i].c3);
+      L.r.scale.x = L.r.scale.z = 0.015 + 0.06 * Math.max(0, sc[i] - 0.3);
+      L.r.visible = final; L.l.visible = final;
+      L.h.position.copy(p.clone().lerp(hubs[i].c3, 0.55));
+      L.l.element.textContent = sc[i].toFixed(2);
+    });
+    hubs.forEach((h, i) => { h.hub.material.emissiveIntensity = final && i === best ? 0.45 : 0; });
+    return { sc, best };
+  }
+  function describe() {
+    const q = Q[qi], { sc, best } = set(V(q.p), true);
+    const sorted = [...sc].sort((a, b) => b - a), margin = sorted[0] - sorted[1];
+    let verdict;
+    if (sorted[0] < FLOOR) verdict = `<strong>Fallback.</strong> Nothing is close (best ${sorted[0].toFixed(2)} &lt; ${FLOOR}). Say it is out of scope, or hand it to a general assistant.`;
+    else if (sorted[0] < TH || margin < MARGIN) verdict = `<strong>Ask a clarifying question</strong>, or escalate to an LLM classifier. Best ${sorted[0].toFixed(2)}, but the runner-up is only ${margin.toFixed(2)} behind.`;
+    else verdict = `<strong>Route to the ${hubs[best].name}.</strong> Similarity ${sorted[0].toFixed(2)} clears the ${TH} threshold with a ${margin.toFixed(2)} margin.`;
+    out.innerHTML = `"${q.text}": ` + hubs.map((h, i) => `${h.name} ${sc[i].toFixed(2)}`).join(' · ') + '. ' + verdict;
+    qLabel.element.textContent = `"${q.text}"`;
+  }
+  S.ticks.push((dt) => {
+    if (t >= 1) return false;
+    t = Math.min(1, t + dt / 0.7);
+    set(from.clone().lerp(to, ease(t)), t >= 1);
+    if (t >= 1) describe();
+    return true;
+  });
+  const btns = [...fig.querySelectorAll('[data-q]')];
+  btns.forEach((b) => b.addEventListener('click', () => {
+    qi = +b.dataset.q; pressGroup(btns, b);
+    from = qm.position.clone(); to = V(Q[qi].p);
+    if (reduceMotion) { t = 1; describe(); } else { t = 0; out.textContent = 'Embedding the request and comparing it with each route…'; }
+    S.invalidate();
+  }));
+  describe();
+}
+
+// =====================================================================
+// Chunk size in vector space: bigger chunks are averages
+// =====================================================================
+function chunkSpace(fig) {
+  const S = stage(fig, { target: new THREE.Vector3(3, 2.8, 3), dist: 24, elev: 0.36, az: 0.78, shadow: 12 });
+  const out = fig.querySelector('.out3');
+  const O = new THREE.Vector3(0, 0, 0);
+  const SEC = [
+    { name: 'Parental leave', c: COL.hr, s: [
+      ['Birth mothers in India get 26 weeks of paid leave.', [5.6, 1.6, 1.1]], ['It applies to the first two children.', [5.0, 2.3, 1.7]],
+      ['Fathers get 2 weeks of paid paternity leave.', [5.9, 1.0, 1.5]], ['Adoptive parents get 12 weeks.', [5.3, 1.9, 0.6]]] },
+    { name: 'Expense claims', c: COL.eng, s: [
+      ['Submit claims within 30 days.', [1.4, 5.6, 1.5]], ['Meals are capped at $50 a day when travelling.', [0.8, 5.1, 2.0]],
+      ['Receipts are needed for anything over $25.', [1.9, 5.4, 0.9]], ['Managers approve claims over $500.', [1.1, 6.0, 1.2]]] },
+    { name: 'Laptop security', c: COL.it, s: [
+      ['Laptops must use full-disk encryption.', [1.3, 1.7, 5.6]], ['Lock your screen when you step away.', [0.7, 2.3, 5.1]],
+      ['Report a lost laptop within 24 hours.', [1.9, 1.2, 5.4]], ['Only install software from the company portal.', [1.0, 1.9, 6.0]]] },
+  ];
+  const query = new THREE.Vector3(5.3, 2.6, 0.2);
+  for (const [n, p] of [['dim 1', [7.5, 0, 0]], ['dim 2', [0, 7.5, 0]], ['dim 3', [0, 0, 7.5]]]) {
+    S.scene.add(place(rod(0.04, 0x7d8996, { cast: true }), O, V(p)));
+    label(S.scene, n, 'cap', V(p).add(new THREE.Vector3(0, 0.25, 0)));
+  }
+  const all = [];
+  SEC.forEach((sec, si) => sec.s.forEach(([text, p]) => all.push({ text, si, p: V(p), c: sec.c })));
+  const secMean = SEC.map((_, si) => { const ps = all.filter((a) => a.si === si); return ps.reduce((a, x) => a.add(x.p), new THREE.Vector3()).multiplyScalar(1 / ps.length); });
+  const docMean = all.reduce((a, x) => a.add(x.p), new THREE.Vector3()).multiplyScalar(1 / all.length);
+  const balls = all.map((a) => { const b = ball(0.24, a.c); b.position.copy(a.p); S.scene.add(b); return b; });
+  const qm = rbox(0.58, 0.58, 0.58, COL.q, { r: 0.15, glow: 0.3 }); qm.position.copy(query); S.scene.add(qm);
+  label(qm, 'query: "How many weeks do adoptive parents get?"', 'q', new THREE.Vector3(0, 0.8, 0));
+  S.scene.add(place(rod(0.022, COL.q, { opacity: 0.7 }), new THREE.Vector3(query.x, 0, query.z), query));
+  const link = rod(0.05, COL.q, { glow: 0.25 }); S.scene.add(link);
+  const lh = new THREE.Object3D(); S.scene.add(lh);
+  const ll = label(lh, '', 'sc', new THREE.Vector3(), [0.5, 0.5]);
+  const tags = SEC.map((sec) => { const h = new THREE.Object3D(); S.scene.add(h); return label(h, sec.name, '', new THREE.Vector3(1.0, 0, 0), [0, 0.5]); });
+  const docTag = (() => { const h = new THREE.Object3D(); h.position.copy(docMean); S.scene.add(h); return label(h, 'whole handbook', '', new THREE.Vector3(0, -0.75, 0), [0.5, 0]); })();
+  const cos = (a, b) => a.dot(b) / (a.length() * b.length());
+  const targetOf = (m, a) => m === 0 ? a.p : m === 1 ? secMean[a.si] : docMean;
+  const sizeOf = [0.24, 0.42, 0.62];
+  let mode = 0, prevMode = 0, t = 1;
+  function apply(f) {
+    all.forEach((a, i) => {
+      balls[i].position.copy(targetOf(prevMode, a)).lerp(targetOf(mode, a), ease(f));
+      balls[i].scale.setScalar(sizeOf[prevMode] + (sizeOf[mode] - sizeOf[prevMode]) * ease(f));
+    });
+    tags.forEach((tg, si) => { tg.visible = f >= 1 && mode === 1; tg.parent.position.copy(secMean[si]); });
+    docTag.visible = f >= 1 && mode === 2;
+    const chunks = mode === 0 ? all.map((a) => ({ p: a.p, text: `"${a.text}"` }))
+      : mode === 1 ? SEC.map((s, si) => ({ p: secMean[si], text: `the ${s.name} section` })) : [{ p: docMean, text: 'the whole handbook' }];
+    const best = chunks.map((c) => ({ ...c, s: cos(query, c.p) })).sort((a, b) => b.s - a.s)[0];
+    link.visible = ll.visible = f >= 1;
+    place(link, query, best.p); lh.position.copy(query.clone().lerp(best.p, 0.5)); ll.element.textContent = best.s.toFixed(2);
+    return { best, n: chunks.length };
+  }
+  function describe() {
+    const { best, n } = apply(1);
+    const note = [
+      'A sharp match, and this sentence happens to hold the answer. But one sentence often loses its context: "It applies to the first two children" never says what "it" is.',
+      'Still a strong match, and the chunk carries the surrounding context. Sections of a few hundred tokens are the usual sweet spot.',
+      'The handbook vector is the average of three unrelated topics. It sits between them and matches every question only weakly, so a better chunk elsewhere would beat it.',
+    ][mode];
+    out.innerHTML = `<strong>${n} chunk${n > 1 ? 's' : ''}.</strong> Nearest: ${best.text} (cosine ${best.s.toFixed(2)}). ${note}`;
+  }
+  S.ticks.push((dt) => {
+    if (t >= 1) return false;
+    t = Math.min(1, t + dt / 0.8);
+    apply(t);
+    if (t >= 1) { prevMode = mode; describe(); }
+    return true;
+  });
+  const btns = [...fig.querySelectorAll('[data-m]')];
+  btns.forEach((b) => b.addEventListener('click', () => {
+    pressGroup(btns, b);
+    prevMode = mode === +b.dataset.m ? prevMode : mode;
+    mode = +b.dataset.m;
+    if (reduceMotion) { prevMode = mode; t = 1; describe(); } else t = 0;
+    S.invalidate();
+  }));
+  describe();
+}
+
+const run = (id, f) => { const el = document.getElementById(id); if (el) { try { f(el); } catch (e) { console.error(e); } } };
+run('emb3d', embeddings);
+run('hnsw3d', hnsw);
+run('ivf3d', ivf);
+run('route3d', routes);
+run('chunk3d', chunkSpace);
+</script><script>
+(() => {
+  const root = document.getElementById('chunklab');
+  if (!root) return;
+  // the sample document: headings, paragraphs (as sentences) and one table
+  const DOC = [
+    ['h', 1, 'Leave policy'],
+    ['h', 2, 'India'],
+    ['h', 3, 'Parental leave'],
+    ['p', ['Birth mothers in India get 26 weeks of paid maternity leave for the first two children.', 'For a third child the entitlement is 12 weeks.', 'Fathers and partners get 2 weeks of paid paternity leave, to be taken within 6 months of the birth.', 'Adoptive parents get 12 weeks of paid leave from the date the child is placed with them.']],
+    ['h', 3, 'Sick leave'],
+    ['p', ['Employees get 12 days of paid sick leave each calendar year.', "A doctor's note is needed for absences longer than 3 consecutive days.", 'Unused sick leave does not carry over.']],
+    ['h', 3, 'Public holidays'],
+    ['t', [['Holiday', 'Date'], ['Republic Day', '26 January'], ['Independence Day', '15 August'], ['Gandhi Jayanti', '2 October'], ['Diwali', 'varies each year']]],
+    ['h', 2, 'United States'],
+    ['h', 3, 'Parental leave'],
+    ['p', ['Birth parents in the United States get 16 weeks of paid parental leave.', 'Non-birth parents, including adoptive parents, get 8 weeks.', 'Leave can be taken in up to two blocks within the first year.']],
+  ];
+  const ANSWER = 'Adoptive parents get 12 weeks';
+  // flatten into atoms (a heading, a sentence or a table row), each with its heading path
+  const atoms = [];
+  const path = [];
+  DOC.forEach((b, bi) => {
+    if (b[0] === 'h') { path.length = b[1] - 1; path.push(b[2]); atoms.push({ kind: 'h', level: b[1], text: b[2], block: bi, path: path.slice() }); }
+    else if (b[0] === 'p') b[1].forEach((s) => atoms.push({ kind: 's', text: s, block: bi, path: path.slice() }));
+    else b[1].forEach((r, ri) => atoms.push({ kind: 'r', cells: r, text: r.join(' — '), head: ri === 0, block: bi, path: path.slice() }));
+  });
+  atoms.forEach((a) => { a.words = a.text.split(/\s+/); a.n = a.words.length; });
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const $ = (id) => document.getElementById(id);
+  let strat = 'fixed';
+
+  // a chunk is a list of pieces: {a: atom index, from, to} word ranges inside atoms
+  function fixed(size, ov) {
+    const words = [];
+    atoms.forEach((a, ai) => a.words.forEach((w, wi) => words.push({ ai, wi })));
+    const out = [], step = Math.max(5, size - ov);
+    for (let i = 0; i < words.length; i += step) {
+      const slice = words.slice(i, i + size), pieces = [];
+      slice.forEach((w, k) => {
+        const last = pieces[pieces.length - 1];
+        if (last && last.a === w.ai) last.to = w.wi + 1; else pieces.push({ a: w.ai, from: w.wi, to: w.wi + 1, ov: i > 0 && k < ov });
+      });
+      out.push(pieces);
+      if (i + size >= words.length) break;
+    }
+    return out;
+  }
+  function pack(list, size) {
+    const out = []; let cur = [], n = 0;
+    list.forEach((ai, k) => {
+      const a = atoms[ai];
+      if (cur.length && n + a.n > size) {
+        // never leave a heading dangling at the end of a chunk
+        const tail = [];
+        while (cur.length && atoms[cur[cur.length - 1].a].kind === 'h') tail.unshift(cur.pop());
+        if (cur.length) out.push(cur);
+        cur = tail; n = tail.reduce((s, p) => s + atoms[p.a].n, 0);
+      }
+      cur.push({ a: ai, from: 0, to: a.n }); n += a.n;
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  }
+  function recursive(size) { return pack(atoms.map((a, i) => i), size); }
+  function byHeading(size) {
+    const groups = [];
+    atoms.forEach((a, i) => {
+      if (a.kind === 'h') return;
+      const key = a.path.join('>');
+      if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, ids: [] });
+      groups[groups.length - 1].ids.push(i);
+    });
+    return groups.flatMap((g) => pack(g.ids, size));
+  }
+  function render() {
+    const size = +$('ck-size').value, ov = strat === 'fixed' ? +$('ck-ov').value : 0, hdr = $('ck-hdr').checked || strat === 'heading';
+    $('ck-ov').disabled = strat !== 'fixed';
+    $('ck-size-o').textContent = `${size} words`;
+    $('ck-ov-o').textContent = strat === 'fixed' ? `${ov} words` : 'n/a';
+    const chunks = strat === 'fixed' ? fixed(size, ov) : strat === 'recursive' ? recursive(size) : byHeading(size);
+    let cuts = 0, tableChunks = new Set(), ansIdx = -1, ansCountry = false;
+    const html = chunks.map((pieces, ci) => {
+      const first = atoms[pieces[0].a], last = pieces[pieces.length - 1];
+      const midStart = pieces[0].from > 0 && first.kind !== 'h';
+      const midEnd = last.to < atoms[last.a].n;
+      if (midEnd) cuts++;
+      let body = '', inTable = false, words = 0, text = '';
+      pieces.forEach((p) => {
+        const a = atoms[p.a], part = a.words.slice(p.from, p.to).join(' ');
+        words += p.to - p.from; text += ' ' + part;
+        if (a.kind === 'r') {
+          tableChunks.add(ci);
+          if (!inTable) { body += '<table><tbody>'; inTable = true; }
+          const cells = p.from === 0 && p.to === a.n ? a.cells.map(esc).map((c) => `<td>${c}</td>`).join('') : `<td colspan="2">${esc(part)}</td>`;
+          body += `<tr>${cells}</tr>`;
+          return;
+        }
+        if (inTable) { body += '</tbody></table>'; inTable = false; }
+        const t = esc(part);
+        const marked = a.text.startsWith(ANSWER) && a.path.includes('India') ? `<mark>${t}</mark>` : t;
+        body += a.kind === 'h' ? ` <strong>${t}</strong> ` : ` <span${p.ov ? ' class="ov"' : ''}>${marked}</span>`;
+      });
+      if (inTable) body += '</tbody></table>';
+      const hasAns = pieces.some((p) => atoms[p.a].text.startsWith(ANSWER) && atoms[p.a].path.includes('India') && p.to - p.from > 4);
+      const pfx = hdr ? first.path.join(' › ') : '';
+      const country = /India/.test(text) || (hdr && /India/.test(pfx));
+      if (hasAns && ansIdx < 0) { ansIdx = ci; ansCountry = country; }
+      const badges = [];
+      if (midStart || midEnd) badges.push(`<span class="badge bad">${midStart && midEnd ? 'starts and ends mid-sentence' : midEnd ? 'ends mid-sentence' : 'starts mid-sentence'}</span>`);
+      if (hasAns) badges.push(`<span class="badge ${country ? 'ok' : 'bad'}">${country ? 'answer · says India' : 'answer · never says India'}</span>`);
+      return `<div class="chunk${hasAns ? ' ans' : ''}"><div class="ch">chunk ${ci + 1} · ${words} words ${badges.join(' ')}</div>${pfx ? `<span class="pfx">${esc(pfx)}</span>` : ''}${body}</div>`;
+    }).join('');
+    $('ck-list').innerHTML = html;
+    const tableSplit = tableChunks.size > 1;
+    const ok = (b) => b ? '<span class="badge ok">yes</span>' : '<span class="badge bad">no</span>';
+    $('ck-out').innerHTML = `<strong>${chunks.length} chunks.</strong> Cut mid-sentence: <strong>${cuts}</strong> · Holiday table kept whole: ${ok(!tableSplit)} · ` +
+      `Answer chunk still says it is about India: ${ok(ansCountry)}` +
+      (!ansCountry ? '. The US section also mentions adoptive parents, so search may return the wrong country. Try adding the heading path.' :
+        cuts || tableSplit ? '. Now try a structure-aware strategy to stop the bad cuts.' : '. Clean cuts and self-describing chunks.');
+  }
+  const btns = [...root.querySelectorAll('[data-s]')];
+  btns.forEach((b) => b.addEventListener('click', () => { strat = b.dataset.s; btns.forEach((x) => x.setAttribute('aria-pressed', String(x === b))); render(); }));
+  ['ck-size', 'ck-ov', 'ck-hdr'].forEach((id) => $(id).addEventListener('input', render));
+  render();
+})();
+</script>
+</body>
+</html>

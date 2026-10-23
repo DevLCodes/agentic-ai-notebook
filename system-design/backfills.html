@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backfills and Re-indexing · Agentic System Designs</title>
+<meta name="description" content="How to run a backfill for a RAG knowledge base: throughput math, separate lanes, checkpoints, version races, monitoring and re-embedding.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · pipeline deployment</p><h1>Backfills and Re-indexing</h1><p class="lead">Loading millions of existing documents, and rebuilding the index later, without starving live updates or losing edits.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#what">What a backfill is</a></li><li><a href="#lanes">Running it beside live traffic</a></li><li><a href="#checkpoint">Checkpoints and restarts</a></li><li><a href="#race">Backfill vs live edits</a></li><li><a href="#plan">Planning and monitoring</a></li><li><a href="#reembed">Re-indexing and re-embedding</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="what"><h2>What a backfill is</h2>
+<p class="lead">A backfill loads everything that already exists, as opposed to the live stream of new changes. You run one at launch, when you add a source, after a bug corrupts data, and whenever you change parsing, chunking or the embedding model.</p>
+<figure class="fig"><svg viewBox="0 0 722 96" class="dg" role="img" aria-label="Backfill time is documents divided by sustained throughput"><rect x="10" y="14" width="162" height="70" rx="10" class="box"/><text x="24" y="46" class="b mono">10,000,000</text><text x="24" y="68" class="sm">documents</text><rect x="188" y="14" width="162" height="70" rx="10" class="box"/><text x="202" y="46" class="b mono">÷ 50 docs/s</text><text x="202" y="68" class="sm">per connector quota</text><rect x="366" y="14" width="162" height="70" rx="10" class="box"/><text x="380" y="46" class="b mono">= 200,000 s</text><text x="380" y="68" class="sm">one connector</text><rect x="544" y="14" width="162" height="70" rx="10" class="k-kb"/><text x="558" y="46" class="b mono">≈ 2.3 days</text><text x="558" y="68" class="sm">&lt; 1 day, 3 in parallel</text></svg><figcaption>Do this arithmetic out loud. It decides whether you ask for more quota or simply let it run.</figcaption></figure>
+<div class="formula">time = documents ÷ (per-connector rate × parallel connectors) &nbsp;·&nbsp; 10M ÷ (50/s × 3) ≈ 18.5 h</div>
+<p>The 3-source figure assumes documents are evenly split. In practice the largest source finishes last, so plan per source.</p></section><section id="lanes"><h2>Running it beside live traffic</h2><figure class="fig"><svg viewBox="0 0 722 196" class="dg" role="img" aria-label="Live changes and the backfill flow through separate lanes sharing one rate limiter"><rect x="10" y="20" width="150" height="46" rx="8" class="k-src"/><text x="85" y="39" class="b" text-anchor="middle">Webhooks + crawl</text><text x="85" y="55" class="sm" text-anchor="middle">live changes</text><rect x="10" y="110" width="150" height="46" rx="8" class="k-cross"/><text x="85" y="129" class="b" text-anchor="middle">Backfill lister</text><text x="85" y="145" class="sm" text-anchor="middle">pages through sources</text><path d="M160 43 L200 43" class="wire" marker-end="url(#ah)"/><path d="M160 133 L200 133" class="wire" marker-end="url(#ah)"/><rect x="202" y="20" width="150" height="46" rx="8" class="k-ingest"/><text x="277" y="39" class="b" text-anchor="middle">live topic</text><text x="277" y="55" class="sm" text-anchor="middle">high priority</text><rect x="202" y="110" width="150" height="46" rx="8" class="k-cross"/><text x="277" y="129" class="b" text-anchor="middle">backfill topic</text><text x="277" y="145" class="sm" text-anchor="middle">low priority</text><path d="M352 43 L420 76" class="wire" marker-end="url(#ah)"/><path d="M352 133 L420 100" class="wire" marker-end="url(#ah)"/><rect x="422" y="52" width="140" height="72" rx="10" class="k-gov"/><text x="492" y="78" class="b small" text-anchor="middle">Rate limiter</text><text x="492" y="96" class="sm" text-anchor="middle">live: reserved 30%</text><text x="492" y="112" class="sm" text-anchor="middle">backfill: the rest</text><path d="M562 88 L600 88" class="wire" marker-end="url(#ah)"/><rect x="602" y="62" width="110" height="52" rx="8" class="k-src"/><text x="657" y="84" class="b" text-anchor="middle">Source API</text><text x="657" y="100" class="sm" text-anchor="middle">quota</text><text x="202" y="186" class="sm">Separate topics and consumer groups: a 2-day backfill never delays a live edit.</text></svg><figcaption>One quota, two lanes. Live updates always keep headroom; the backfill soaks up the rest.</figcaption></figure>
+<ul class="plain">
+<li><strong>Separate lanes.</strong> Live changes and backfill go to different topics and consumer groups, so you can scale, pause or throttle the backfill alone.</li>
+<li><strong>One shared rate limiter.</strong> A token bucket per source API keeps total calls under quota, with a reserved share for live updates.</li>
+<li><strong>Backpressure.</strong> If the embedding service or index slows down, the backfill consumers slow down rather than piling up retries.</li>
+</ul></section><section id="checkpoint"><h2>Checkpoints and restarts</h2>
+<p>A multi-day job will crash at some point. Make it resumable:</p>
+<ul class="plain">
+<li><strong>Two phases.</strong> First list every document ID into the backfill topic (cheap API calls), then process them. The listing cursor (page token) is saved after each page.</li>
+<li><strong>Idempotent processing.</strong> Each document is "fetch latest, compare version, write if newer", so reprocessing after a crash is harmless.</li>
+<li><strong>Committed offsets.</strong> Consumers commit their position only after the index write succeeds.</li>
+<li><strong>Dead-letter queue.</strong> Documents that keep failing are parked with the error, not retried forever, and replayed after a fix.</li>
+</ul></section><section id="race"><h2>Backfill vs live edits</h2><figure class="fig"><svg viewBox="0 0 722 180" class="dg" role="img" aria-label="A slow backfill write of an old version is rejected because a newer version is already indexed"><line x1="140" y1="150" x2="700" y2="150" class="axis"/><text x="140" y="168" class="sm mono" text-anchor="middle">t0</text><text x="252" y="168" class="sm mono" text-anchor="middle">t2</text><text x="364" y="168" class="sm mono" text-anchor="middle">t4</text><text x="476" y="168" class="sm mono" text-anchor="middle">t6</text><text x="588" y="168" class="sm mono" text-anchor="middle">t8</text><text x="700" y="168" class="sm mono" text-anchor="middle">t10</text><text x="10" y="50" class="small b">Backfill worker</text><text x="10" y="110" class="small b">Live worker</text><rect x="196" y="36" width="392" height="22" rx="6" class="k-cross"/><text x="204" y="51" class="sm">reads v3 ... slow parse ... tries to write v3</text><rect x="308" y="96" width="112" height="22" rx="6" class="k-ingest"/><text x="316" y="111" class="sm">writes v4</text><path d="M596 41 L608 53 M608 41 L596 53" class="xmark"/><text x="614" y="51" class="bad small">rejected:</text><text x="614" y="67" class="sm mono">3 &lt; 4</text></svg><figcaption>Without a version check, the slow backfill would overwrite the newer edit. Writes are conditional: only if version is newer.</figcaption></figure>
+<p>The backfill and live workers can touch the same document at the same time. Make every index write conditional on version: write only if the incoming version is newer than what is stored. Partitioning both topics by <code>doc_id</code> helps within a lane, but only the version check is safe across lanes.</p></section><section id="plan"><h2>Planning and monitoring</h2><figure class="fig"><svg viewBox="0 0 722 160" class="dg" role="img" aria-label="Backfill plan by source over three days"><line x1="140" y1="20" x2="140" y2="150" class="rule"/><text x="140" y="14" class="sm mono" text-anchor="middle">day 0</text><line x1="326.667" y1="20" x2="326.667" y2="150" class="rule"/><text x="326.667" y="14" class="sm mono" text-anchor="middle">day 1</text><line x1="513.333" y1="20" x2="513.333" y2="150" class="rule"/><text x="513.333" y="14" class="sm mono" text-anchor="middle">day 2</text><line x1="700" y1="20" x2="700" y2="150" class="rule"/><text x="700" y="14" class="sm mono" text-anchor="middle">day 3</text><text x="10" y="41" class="small">Drive (5M)</text><rect x="140" y="28" width="429.333" height="16" rx="4" class="f-serve"/><text x="10" y="65" class="small">Confluence (3M)</text><rect x="140" y="52" width="261.333" height="16" rx="4" class="f-kb"/><text x="10" y="89" class="small">Jira (2M)</text><rect x="140" y="76" width="177.333" height="16" rx="4" class="f-ingest"/><text x="10" y="113" class="small">Verify counts</text><rect x="569.333" y="100" width="56" height="16" rx="4" class="f-cross"/><text x="10" y="137" class="small">Switch on</text><rect x="625.333" y="124" width="18.6667" height="16" rx="4" class="f-ok"/></svg><figcaption>Illustrative split of 10M documents. The largest source sets the finish line, so it is the one to ask extra quota for.</figcaption></figure>
+<div class="table"><table><thead><tr><th>Watch</th><th>Why</th></tr></thead><tbody>
+<tr><td>Docs per second, per source</td><td>Projected finish time; is the quota really the bottleneck?</td></tr>
+<tr><td>Live ingestion lag</td><td>Must stay flat while the backfill runs</td></tr>
+<tr><td>Error rate and DLQ depth</td><td>Parsing problems show up early in a backfill</td></tr>
+<tr><td>Coverage</td><td>Documents in the source vs in the catalog vs in the index</td></tr>
+</tbody></table></div>
+<p>When it finishes, reconcile counts per source and per space, spot-check a sample of documents end to end, run the golden-set evals, and only then open the assistant to users.</p></section><section id="reembed"><h2>Re-indexing and re-embedding</h2>
+<p>Changing the embedding model, chunk size or parser means rebuilding the index. Never do it in place:</p>
+<ol class="plain">
+<li>Create a new index next to the live one.</li>
+<li>Rebuild from the stored parsed documents, not the source APIs, so quotas don't matter.</li>
+<li>Dual-write live changes to both indexes while the rebuild runs.</li>
+<li>Run the golden-set evals on both indexes and compare.</li>
+<li>Switch reads to the new index (blue-green), keep the old one for quick rollback, then delete it.</li>
+</ol>
+<div class="formula">re-embed cost ≈ chunks × average tokens per chunk × price per token &nbsp;·&nbsp; 50M × 400 = 20B tokens</div>
+<p>Price the tokens before promising a model upgrade, and batch the work so you use the embedding API's highest throughput tier.</p></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="enterprise-search.html#ingestion">Enterprise search: ingestion</a></li><li><a href="knowledge-base.html">Knowledge base</a></li><li><a href="embeddings.html#versioning">Embedding versioning</a></li><li><a href="glossary.html#backfill">Glossary: backfill</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+</body>
+</html>
