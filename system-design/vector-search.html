@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vector Search · Agentic System Designs</title>
+<meta name="description" content="What happens when a vector search query runs: embedding the query, exact and approximate nearest neighbours, how an HNSW search walks, recall and latency knobs, quantization, top-k, thresholds, MMR and failure modes, with two hands-on labs.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 4ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .lab-out ol { margin: 6px 0 0; padding-left: 22px; }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+  .plane { background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .plane svg { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; }
+  .plane .pick { fill: none; stroke: var(--accent); stroke-width: 2.2; }
+  .mmr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .mmr h4 { margin: 0 0 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .mmr ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; counter-reset: pick; }
+  .mmr li { counter-increment: pick; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 7px 10px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.4; }
+  .mmr li::before { content: counter(pick); font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+  .mmr li.dup { border-left-color: var(--c-dlq); }
+  .mmr li .s { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  @media (max-width: 640px) { .mmr { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · retrieval</p><h1>Vector Search</h1><p class="lead">What actually happens between a question and its nearest chunks: embedding the query, exact and approximate neighbours, the knobs that trade recall for speed, and the ways it quietly fails.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#what">What vector search is</a></li><li><a href="#path">A query, step by step</a></li><li><a href="#exact">Exact k-NN, worked by hand</a></li><li><a href="#lab">Nearest neighbours, hands on</a></li><li><a href="#walk">How an HNSW search walks</a></li><li><a href="#knobs">Recall, latency and the knobs</a></li><li><a href="#recalls">Two different recalls</a></li><li><a href="#compress">Making vectors smaller</a></li><li><a href="#results">k, thresholds and diversity</a></li><li><a href="#failures">Where vector search fails</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="what"><h2>What vector search is</h2>
+<p class="lead">Vector search finds the stored items whose <a href="embeddings.html">embeddings</a> point in nearly the same direction as the query's embedding. It matches on meaning, not on shared words.</p>
+<figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Question, embed, index search with filters, top-k candidates, then rerank or the LLM"><rect x="10" y="40" width="106" height="52" rx="8" class="k-user"/><text x="63" y="62" class="small b" text-anchor="middle">Question</text><text x="63" y="80" class="sm" text-anchor="middle">plain text</text><path d="M116 66 L134 66" class="wire" marker-end="url(#ah)"/><rect x="136" y="40" width="106" height="52" rx="8" class="k-model"/><text x="189" y="62" class="small b" text-anchor="middle">Embed</text><text x="189" y="80" class="sm" text-anchor="middle">same model</text><path d="M242 66 L260 66" class="wire" marker-end="url(#ah)"/><rect x="262" y="28" width="196" height="76" rx="8" class="k-kb"/><text x="360" y="52" class="small b" text-anchor="middle">Index search</text><text x="360" y="70" class="sm" text-anchor="middle">nearest vectors (ANN)</text><text x="360" y="88" class="sm" text-anchor="middle">+ metadata filters</text><path d="M458 66 L476 66" class="wire" marker-end="url(#ah)"/><rect x="478" y="40" width="106" height="52" rx="8" class="k-serve"/><text x="531" y="62" class="small b" text-anchor="middle">Top-k</text><text x="531" y="80" class="sm" text-anchor="middle">ids + scores</text><path d="M584 66 L602 66" class="wire" marker-end="url(#ah)"/><rect x="604" y="40" width="106" height="52" rx="8" class="k-cross"/><text x="657" y="62" class="small b" text-anchor="middle">Rerank / LLM</text><text x="657" y="80" class="sm" text-anchor="middle">next stage</text><text x="10" y="126" class="sm">Everything up to top-k is vector search. The quality ceiling is set by the embedding model and the chunks;</text><text x="10" y="142" class="sm">the index only decides how fast you get there.</text></svg><figcaption>The query path. <a href="search-types.html">Search types</a> covers mixing this with keyword search; <a href="reranking.html">reranking</a> covers the next stage.</figcaption></figure>
+<p>This page follows one query through that path. The <a href="vector-databases.html">vector databases</a> page covers how the index is built and stored; here the focus is what happens at query time and how to tune and judge it.</p></section><section id="path"><h2>A query, step by step</h2>
+<ol class="plain">
+<li><strong>Prepare the text.</strong> Some embedding models are trained with different instructions for questions and documents, for example a <code>query:</code> prefix, or a separate <code>query_embed</code> call. Use the query form for questions and the passage form for chunks, or similarity drops for no visible reason.</li>
+<li><strong>Embed with the exact model and version used for the index.</strong> Vectors from two different models live in unrelated spaces, so comparing them gives meaningless scores rather than an error. Store the model name beside every vector and check it at query time.</li>
+<li><strong>Normalise.</strong> Most text models return unit-length vectors. If yours does not, normalise both sides so cosine similarity and dot product agree (the lab below shows why).</li>
+<li><strong>Probe the index.</strong> The ANN index returns a candidate set, usually larger than k, by walking a graph or scanning a few clusters.</li>
+<li><strong>Apply filters.</strong> Tenant, permissions, date or document type. Done inside the traversal when the engine supports it; see <a href="vector-databases.html#filtering">filtering</a>.</li>
+<li><strong>Return the top k</strong> with ids, scores and metadata, ready for fusion with keyword results, a reranker, or the prompt.</li>
+</ol>
+<div class="table"><table><thead><tr><th>Step</th><th>Typical time</th><th>What drives it</th></tr></thead><tbody>
+<tr><td>Embed the query</td><td class="num">5–20 ms</td><td>Small model on local CPU or GPU; 50–200 ms through a hosted API</td></tr>
+<tr><td>ANN search</td><td class="num">1–20 ms</td><td>Index type, ef or nprobe, whether the index fits in RAM</td></tr>
+<tr><td>Filters</td><td class="num">0–50 ms</td><td>How selective the filter is and where it is applied</td></tr>
+<tr><td>Fetch text and metadata</td><td class="num">1–10 ms</td><td>Same row as the vector, or a second store</td></tr>
+</tbody></table></div>
+<p>Illustrative figures. The point is the shape: in most systems the query embedding and the reranker cost more than the vector search itself.</p></section><section id="exact"><h2>Exact k-NN, worked by hand</h2>
+<p>Exact k-nearest-neighbour search compares the query with every stored vector and keeps the k best. With unit vectors, similarity is just the dot product: multiply matching numbers and add them up.</p>
+<figure class="fig"><svg viewBox="0 0 722 250" class="dg" role="img" aria-label="Three unit vectors A, B and C and a query q on a quarter circle, with their cosine similarities"><path d="M60 220 L60 20" class="axis"/><path d="M60 220 L300 220" class="axis"/><path d="M260 220 A200 200 0 0 0 60 20" class="ghost"/><path d="M60 220 L260 220" class="wire" marker-end="url(#ah)"/><circle cx="260" cy="220" r="6" class="dot-it"/><text x="268" y="214" class="small b">C (1.000, 0.000)</text><path d="M60 220 L233.2 120" class="wire" marker-end="url(#ah)"/><circle cx="233.2" cy="120" r="6" class="dot-it"/><text x="242" y="116" class="small b">A (0.866, 0.500)</text><path d="M60 220 L111.8 26.8" class="wire" marker-end="url(#ah)"/><circle cx="111.8" cy="26.8" r="6" class="dot-it"/><text x="120" y="24" class="small b">B (0.259, 0.966)</text><path d="M60 220 L213.2 91.4" class="wire hot" marker-end="url(#ah)"/><circle cx="213.2" cy="91.4" r="7" class="dot-q"/><text x="150" y="84" class="small b">q (0.766, 0.643)</text><text x="380" y="40" class="b">Similarity to q = dot product</text><text x="380" y="70" class="mono small">A: 0.866×0.766 + 0.500×0.643 = 0.985</text><text x="380" y="94" class="mono small">B: 0.259×0.766 + 0.966×0.643 = 0.820</text><text x="380" y="118" class="mono small">C: 1.000×0.766 + 0.000×0.643 = 0.766</text><text x="380" y="150" class="small b">Top-2: A, then B</text><text x="380" y="178" class="sm">Each number is the cosine of the angle between the</text><text x="380" y="194" class="sm">vectors: A is 10° from q, B 35°, C 40°.</text></svg><figcaption>Two dimensions instead of 384 or 768, but the arithmetic is identical. Real search does this for every stored vector.</figcaption></figure>
+<div class="formula">exact cost per query = N vectors × d dimensions multiply-adds</div>
+<div class="table"><table><thead><tr><th>Corpus</th><th>Work per query</th><th>Rough time, one CPU core</th></tr></thead><tbody>
+<tr><td>30k chunks × 384 dims</td><td class="num">11.5M</td><td class="num">about 1 ms</td></tr>
+<tr><td>1M chunks × 768 dims</td><td class="num">768M</td><td class="num">tens of ms</td></tr>
+<tr><td>50M chunks × 768 dims</td><td class="num">38B</td><td class="num">seconds</td></tr>
+</tbody></table></div>
+<p>Exact search is the right answer more often than people expect:</p>
+<ul class="plain">
+<li><strong>Small corpora</strong>, up to roughly 100k to 1M vectors, where it is fast enough and has perfect recall.</li>
+<li><strong>Very selective filters</strong>: if a filter leaves 2,000 rows, scanning them exactly beats walking a graph built for all 50M.</li>
+<li><strong>Ground truth</strong>: exact results are what you measure an ANN index against (see <a href="#recalls">two different recalls</a>).</li>
+</ul></section><section id="lab"><h2>Nearest neighbours, hands on</h2>
+<p>Thirty stored vectors from three topics, drawn as arrows from the origin. Click anywhere to move the query, then compare the three ways of measuring "near". Arrow length matters for two of them.</p>
+<div class="lab" id="knnlab">
+  <div class="lab-row"><span class="lab-k">Measure</span><span class="seg" role="group" aria-label="Similarity measure"><button type="button" data-m="cos" aria-pressed="true">Cosine</button><button type="button" data-m="dot" aria-pressed="false">Dot product</button><button type="button" data-m="l2" aria-pressed="false">Euclidean</button></span>
+    <label>k <input type="range" id="knn-k" min="1" max="8" value="3"><output id="knn-kv">3</output></label>
+    <label><input type="checkbox" id="knn-norm"> Normalise every vector</label></div>
+  <div class="lab-row"><span class="lab-k">Queries</span><span class="chips" role="group" aria-label="Preset queries"><button type="button" data-q="0.8,40">Between topics</button><button type="button" data-q="0.35,20">Short query</button><button type="button" data-q="1.2,72">Long query</button></span></div>
+  <div class="plane"><svg id="knn-svg" viewBox="0 0 560 340" class="dg" role="img" aria-label="Stored vectors in two dimensions, the query, and its k nearest neighbours under the chosen measure"></svg></div>
+  <div class="lab-out" id="knn-out" aria-live="polite"></div>
+</div>
+<p>Three things to try. With <strong>Dot product</strong>, long arrows win even when they point the wrong way, which is why unnormalised vectors are risky. With <strong>Euclidean</strong> and a short query, the nearest points are simply the short ones near the origin. Tick <strong>Normalise</strong> and all three measures give the same ranking, because for unit vectors distance² = 2 − 2 × cosine.</p></section><section id="walk"><h2>How an HNSW search walks</h2>
+<p>The <a href="vector-databases.html#indexes">HNSW index</a> is a layered graph. Finding neighbours in it is a search with two phases.</p>
+<pre><code>entry = the top layer's entry point
+for layer in top .. 1:                       # phase 1: greedy descent
+    entry = move to any neighbour closer to q, until none is closer
+
+candidates = {entry}   results = {entry}     # phase 2: beam search on layer 0
+while candidates:
+    c = closest candidate
+    if c is farther than the worst result and len(results) == ef: stop
+    for n in neighbours(c) not yet visited:
+        if len(results) &lt; ef or n is closer than the worst result:
+            add n to candidates and results; keep only the ef best results
+return the k closest results</code></pre>
+<p>The beam width <code>ef</code> (efSearch) is what stops the walk from getting stuck. A purely greedy walk stops at the first node with no closer neighbour, which may be a local dead end. Keeping <code>ef</code> candidates open lets the search back out and try another route.</p>
+<figure class="fig"><svg viewBox="0 0 722 260" class="dg" role="img" aria-label="Left: a greedy walk stops at a node whose only neighbour is farther from the query, missing the true nearest neighbour. Right: a beam of four candidates keeps another branch open and reaches it"><text x="10" y="20" class="b">Greedy (ef = 1)</text><text x="10" y="38" class="sm">always moves to the closest neighbour</text><line x1="20" y1="190" x2="90" y2="150" class="rule"/><line x1="90" y1="150" x2="150" y2="110" class="rule"/><line x1="150" y1="110" x2="210" y2="90" class="rule"/><line x1="90" y1="150" x2="120" y2="200" class="rule"/><line x1="90" y1="150" x2="170" y2="205" class="rule"/><line x1="170" y1="205" x2="270" y2="200" class="rule"/><line x1="270" y1="200" x2="300" y2="140" class="rule"/><circle cx="20" cy="190" r="7" class="cell"/><circle cx="90" cy="150" r="7" class="cell"/><circle cx="150" cy="110" r="7" class="cell"/><circle cx="210" cy="90" r="7" class="cell"/><circle cx="170" cy="205" r="7" class="cell"/><circle cx="270" cy="200" r="7" class="cell"/><circle cx="300" cy="140" r="8" class="cell new"/><circle cx="120" cy="200" r="7" class="cell"/><path d="M20 190 L90 150 L150 110 L210 90" class="wire hot" marker-end="url(#ah)"/><path d="M202 82 L218 98 M218 82 L202 98" class="xmark"/><circle cx="260" cy="110" r="7" class="dot-q"/><text x="256" y="96" class="small b">q</text><text x="198" y="170" class="small okt">true nearest</text><text x="10" y="246" class="small bad">stuck at ✕: its only neighbour is farther from q</text><line x1="361" y1="10" x2="361" y2="250" class="rule"/><text x="380" y="20" class="b">Beam (ef = 4)</text><text x="380" y="38" class="sm">keeps the branch greedy dropped, and comes back to it</text><line x1="395" y1="190" x2="465" y2="150" class="rule"/><line x1="465" y1="150" x2="525" y2="110" class="rule"/><line x1="525" y1="110" x2="585" y2="90" class="rule"/><line x1="465" y1="150" x2="495" y2="200" class="rule"/><line x1="465" y1="150" x2="545" y2="205" class="rule"/><line x1="545" y1="205" x2="645" y2="200" class="rule"/><line x1="645" y1="200" x2="675" y2="140" class="rule"/><circle cx="395" cy="190" r="7" class="cell"/><circle cx="465" cy="150" r="7" class="cell"/><circle cx="525" cy="110" r="7" class="cell"/><circle cx="585" cy="90" r="7" class="cell"/><circle cx="545" cy="205" r="7" class="cell hot"/><circle cx="645" cy="200" r="7" class="cell hot"/><circle cx="675" cy="140" r="8" class="cell new"/><circle cx="495" cy="200" r="7" class="cell"/><path d="M395 190 L465 150 L525 110 L585 90" class="wire hot" marker-end="url(#ah)"/><path d="M465 150 L545 205 L645 200 L675 140" class="wire hot" marker-end="url(#ah)"/><circle cx="635" cy="110" r="7" class="dot-q"/><text x="631" y="96" class="small b">q</text><text x="573" y="170" class="small okt">true nearest</text><text x="380" y="246" class="small okt">the kept branch leads to the true nearest neighbour</text></svg><figcaption>Illustrative. Larger ef visits more nodes: better recall, more work. Real graphs also have long-range links that make dead ends rarer.</figcaption></figure>
+<p>Two practical consequences: <code>ef</code> must be at least k, and in pgvector a query returns at most <code>hnsw.ef_search</code> rows unless iterative scans are enabled, so asking for 100 results with the default ef of 40 quietly gives you 40.</p></section><section id="knobs"><h2>Recall, latency and the knobs</h2>
+<div class="table"><table><thead><tr><th>Knob</th><th>Set when</th><th>Raising it</th></tr></thead><tbody>
+<tr><td>HNSW <code>m</code> (links per node, default 16 in pgvector)</td><td>Build</td><td>Better recall, bigger index, slower build</td></tr>
+<tr><td>HNSW <code>ef_construction</code> (default 64)</td><td>Build</td><td>Better graph quality, slower build</td></tr>
+<tr><td>HNSW <code>ef_search</code> (default 40)</td><td>Each query</td><td>Better recall, slower query</td></tr>
+<tr><td>IVF <code>lists</code> / <code>nprobe</code></td><td>Build / each query</td><td>More probes: better recall, slower query</td></tr>
+<tr><td>Quantization level</td><td>Build</td><td>Less compression: better accuracy, more memory</td></tr>
+</tbody></table></div>
+<p>Only the query-time knobs can be tuned without rebuilding, so tune them with a sweep rather than by feel:</p>
+<div class="table"><table><thead><tr><th>ef_search</th><th>Recall@10 vs exact</th><th>p95 latency</th></tr></thead><tbody>
+<tr><td class="num">10</td><td class="num">0.86</td><td class="num">1.1 ms</td></tr>
+<tr><td class="num">40</td><td class="num">0.95</td><td class="num">2.3 ms</td></tr>
+<tr><td class="num">100</td><td class="num">0.985</td><td class="num">4.8 ms</td></tr>
+<tr><td class="num">200</td><td class="num">0.995</td><td class="num">8.9 ms</td></tr>
+<tr><td>exact scan</td><td class="num">1.00</td><td class="num">≈180 ms</td></tr>
+</tbody></table></div>
+<p>Illustrative: one million 768-dim vectors on one machine. The curve flattens: going from 0.95 to 0.995 costs about 4× the latency. Pick the smallest setting that meets your recall target inside the latency budget, and re-run the sweep when the corpus grows.</p></section><section id="recalls"><h2>Two different recalls</h2>
+<p>"Recall" means two different things in vector search, and mixing them up leads to fixing the wrong component.</p>
+<div class="table"><table><thead><tr><th></th><th>Index recall</th><th>Retrieval recall</th></tr></thead><tbody>
+<tr><td>Compares against</td><td>Exact k-NN over the same vectors</td><td>Labelled relevant chunks (a <a href="glossary.html#golden-set">golden set</a>)</td></tr>
+<tr><td>Measures</td><td>How much the ANN index approximates away</td><td>Whether search finds what answers the question</td></tr>
+<tr><td>Typical value</td><td>0.95–0.99</td><td>Often 0.5–0.9 at first</td></tr>
+<tr><td>Fix when low</td><td>Raise ef_search or nprobe</td><td>Better chunks, embedding model, hybrid search, filters, query rewriting</td></tr>
+</tbody></table></div>
+<div class="formula">index recall@k = |ANN top-k ∩ exact top-k| / k</div>
+<div class="note"><p>An index can score 0.99 index recall while retrieval recall is 0.6. That means the index faithfully returns the nearest vectors, and the nearest vectors are the wrong passages. Raising ef_search will not help; the problem is upstream. See <a href="evals.html#recall">recall@k, step by step</a>.</p></div></section><section id="compress"><h2>Making vectors smaller</h2>
+<p>At scale, memory is the cost. Compression stores each vector in fewer bytes, searches the small form, then re-scores a shortlist with the full vectors.</p>
+<div class="table"><table><thead><tr><th>Form</th><th>Bytes for 768 dims</th><th>50M vectors</th><th>Accuracy</th></tr></thead><tbody>
+<tr><td>float32 (default)</td><td class="num">3,072</td><td class="num">154 GB</td><td>Full</td></tr>
+<tr><td>float16 / bfloat16</td><td class="num">1,536</td><td class="num">77 GB</td><td>Near identical</td></tr>
+<tr><td>int8 scalar quantization</td><td class="num">768</td><td class="num">38 GB</td><td>Small loss</td></tr>
+<tr><td>Binary (1 bit per dim)</td><td class="num">96</td><td class="num">4.8 GB</td><td>Large loss; needs re-scoring</td></tr>
+<tr><td><a href="glossary.html#pq">Product quantization</a>, 96 codes</td><td class="num">96</td><td class="num">4.8 GB</td><td>Moderate loss; needs re-scoring</td></tr>
+<tr><td>Matryoshka truncation to 256 dims</td><td class="num">1,024</td><td class="num">51 GB</td><td>Small loss, only for models trained for it</td></tr>
+</tbody></table></div>
+<div class="formula">search compressed → shortlist k × 4 to 10 → re-score with full vectors → keep k</div>
+<p>Raw vector sizes only; the index graph adds more. Re-scoring recovers most of the lost accuracy because the compressed form only needs to get the right items onto the shortlist, not to order them perfectly. pgvector offers <code>halfvec</code> for float16 and <code>binary_quantize</code> for bits; dedicated engines offer int8, binary and PQ with built-in re-scoring.</p></section><section id="results"><h2>k, thresholds and diversity</h2>
+<h3>How many to retrieve</h3>
+<p>Retrieve wide, pass narrow. A common shape is 50 to 100 candidates from vector search, a reranker to order them, and 5 to 10 chunks into the prompt. Without a reranker, retrieve 10 to 20 and pass most of them.</p>
+<h3>Why a fixed score threshold is fragile</h3>
+<p>Similarity scores are not probabilities. Each model spreads them differently: some put nearly every pair between 0.7 and 0.9, others use the whole range. A cut-off tuned for one model breaks when you change models, and even with one model a score of 0.8 means "close" for one query and "the best of a bad lot" for another. Compare scores within a query, calibrate any threshold on labelled data, or let a reranker decide whether anything is good enough to answer.</p>
+<h3>Near-duplicates and MMR</h3>
+<p>Annual reports repeat whole paragraphs year after year, and wikis keep old copies. Plain top-k can then fill every slot with the same passage. <strong>Maximal marginal relevance</strong> (MMR) picks results one at a time, rewarding similarity to the query and penalising similarity to what is already picked:</p>
+<div class="formula">next = argmax over candidates [ λ × sim(q, d) − (1 − λ) × max sim(d, already picked) ]</div>
+<div class="lab" id="mmrlab">
+  <div class="lab-row"><span class="lab-k">Question</span><span>"What supply chain risks does the company report?"</span></div>
+  <div class="lab-row"><label>λ (relevance vs diversity) <input type="range" id="mmr-l" min="0" max="10" value="7"><output id="mmr-lv">0.7</output></label><span class="lab-k">Picks 4 of 8 candidates</span></div>
+  <div class="mmr"><div><h4>Plain top-4</h4><ol id="mmr-plain"></ol></div><div><h4>MMR picks</h4><ol id="mmr-picks"></ol></div></div>
+  <div class="lab-out" id="mmr-out" aria-live="polite"></div>
+</div>
+<p>λ = 1 is plain top-k; λ = 0 ignores the query and only spreads out. Values around 0.5 to 0.8 usually work. Removing exact duplicates at ingestion, or filtering to the latest document version, is cheaper still when you can do it.</p></section><section id="failures"><h2>Where vector search fails</h2>
+<div class="table"><table><thead><tr><th>Failure</th><th>Example</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Exact identifiers</td><td>Error code <code>E-4021</code>, SKU, ticket key</td><td><a href="search-types.html">Hybrid search</a> with BM25</td></tr>
+<tr><td>Numbers, dates and years</td><td>FY2023 and FY2024 reports embed almost identically</td><td><a href="glossary.html#metadata-filter">Metadata filters</a> extracted from the query</td></tr>
+<tr><td>Negation</td><td>"plans that do <em>not</em> cover dental" matches plans that do</td><td><a href="reranking.html">Reranking</a> with a cross-encoder</td></tr>
+<tr><td>Unusual jargon</td><td>Internal product names the model never saw</td><td>Hybrid search, a domain-tuned model, query rewriting</td></tr>
+<tr><td>Question vs passage mismatch</td><td>A 6-word question against 300-word chunks</td><td>Query instructions, <a href="glossary.html#query-rewrite">query rewriting</a>, smaller chunks</td></tr>
+<tr><td>Near-duplicates</td><td>The same paragraph in three versions</td><td>Dedupe at ingestion, version filters, MMR</td></tr>
+<tr><td>Model mismatch</td><td>Index on model v1, queries on v2</td><td>Store the model per vector; re-embed with a <a href="backfills.html">backfill</a></td></tr>
+<tr><td>Numeric lookups</td><td>"What was Q3 revenue?" from a table chunk</td><td>Answer from structured data instead of retrieval</td></tr>
+</tbody></table></div>
+<p>Most of these are not index problems, so raising recall knobs does nothing. They show up as low retrieval recall on specific slices of a golden set, which is why the <a href="evals.html#golden">golden set</a> needs exact-ID, numeric and negation questions.</p></section><section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"At query time I embed the question with the same pinned model as the index, run filtered ANN search to get about 50 candidates, then rerank down to the handful that go into the prompt. I tune ef_search with a sweep against exact search until index recall is around 0.95 inside the latency budget, and I track retrieval recall separately on a golden set, because a perfect index can still return the wrong passages. Where vector search is weak, on IDs, numbers, years and negation, I add BM25, metadata filters and a reranker. At large scale I quantize and re-score the shortlist with full vectors."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="embeddings.html">Embeddings</a></li><li><a href="vector-databases.html">Vector databases</a></li><li><a href="search-types.html">Search types</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#exact-knn">Glossary: exact k-NN</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(() => {
+  const svg = document.getElementById('knn-svg');
+  if (!svg) return;
+  const $ = (id) => document.getElementById(id);
+  const O = { x: 50, y: 310 }, S = 210;
+  const TOPICS = [{ name: 'pricing', cls: 'dot-it', deg: 14 }, { name: 'refunds', cls: 'dot-eng', deg: 44 }, { name: 'security', cls: 'dot-hr', deg: 74 }];
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const POINTS = [];
+  TOPICS.forEach((t, ti) => { for (let i = 0; i < 10; i++) {
+    const a = (t.deg + (rnd() - 0.5) * 18) * Math.PI / 180, len = 0.4 + rnd() * 0.85;
+    POINTS.push({ id: `${t.name[0].toUpperCase()}${i + 1}`, topic: ti, x: Math.cos(a) * len, y: Math.sin(a) * len });
+  } });
+  let metric = 'cos', k = 3, norm = false, q = { x: Math.cos(40 * Math.PI / 180) * 0.8, y: Math.sin(40 * Math.PI / 180) * 0.8 };
+  const len = (v) => Math.hypot(v.x, v.y);
+  const unit = (v) => { const l = len(v) || 1; return { x: v.x / l, y: v.y / l }; };
+  const vec = (p) => (norm ? unit(p) : p);
+  const SCORE = {
+    cos: (a, b) => (a.x * b.x + a.y * b.y) / (len(a) * len(b)),
+    dot: (a, b) => a.x * b.x + a.y * b.y,
+    l2: (a, b) => -Math.hypot(a.x - b.x, a.y - b.y),
+  };
+  const ranked = (m) => {
+    const qv = vec(q);
+    return POINTS.map((p) => ({ p, s: SCORE[m](qv, vec(p)) })).sort((a, b) => b.s - a.s).slice(0, k);
+  };
+  const X = (v) => O.x + v.x * S, Y = (v) => O.y - v.y * S;
+  function render() {
+    const top = ranked(metric), picked = new Set(top.map((r) => r.p.id)), qv = vec(q);
+    let h = `<path d="M${O.x} ${O.y} L${O.x} 10" class="axis"/><path d="M${O.x} ${O.y} L550 ${O.y}" class="axis"/>`;
+    h += `<path d="M${O.x + S} ${O.y} A${S} ${S} 0 0 0 ${O.x} ${O.y - S}" class="ghost"/><text x="${O.x + S + 4}" y="${O.y - 6}" class="sm">length 1</text>`;
+    POINTS.forEach((p) => { const v = vec(p); h += `<line x1="${O.x}" y1="${O.y}" x2="${X(v)}" y2="${Y(v)}" class="rule"/>`; });
+    if (metric === 'l2') top.forEach((r) => { const v = vec(r.p); h += `<line x1="${X(qv)}" y1="${Y(qv)}" x2="${X(v)}" y2="${Y(v)}" class="wire hot"/>`; });
+    else h += `<line x1="${O.x}" y1="${O.y}" x2="${X(qv)}" y2="${Y(qv)}" class="wire hot"/>`;
+    POINTS.forEach((p) => { const v = vec(p); h += `<circle cx="${X(v)}" cy="${Y(v)}" r="5" class="${TOPICS[p.topic].cls}"><title>${p.id} · ${TOPICS[p.topic].name} · length ${len(p).toFixed(2)}</title></circle>`; });
+    top.forEach((r) => { const v = vec(r.p); h += `<circle cx="${X(v)}" cy="${Y(v)}" r="10" class="pick"/>`; });
+    h += `<circle cx="${X(qv)}" cy="${Y(qv)}" r="7" class="dot-q"/><text x="${X(qv) + 10}" y="${Y(qv) + 16}" class="small b">query</text>`;
+    TOPICS.forEach((t, i) => { h += `<circle cx="${380 + i * 62}" cy="22" r="5" class="${t.cls}"/><text x="${388 + i * 62}" y="26" class="sm">${t.name}</text>`; });
+    svg.innerHTML = h;
+    const name = { cos: 'cosine similarity', dot: 'dot product', l2: 'Euclidean distance' }[metric];
+    const sets = Object.fromEntries(['cos', 'dot', 'l2'].map((m) => [m, ranked(m).map((r) => r.p.id).join(',')]));
+    const agree = sets.cos === sets.dot && sets.dot === sets.l2;
+    const items = top.map((r) => `<li>${r.p.id} <span class="badge info">${TOPICS[r.p.topic].name}</span> length ${len(r.p).toFixed(2)} · ${metric === 'l2' ? 'distance ' + (-r.s).toFixed(2) : 'score ' + r.s.toFixed(3)}</li>`).join('');
+    const verdict = agree ? '<span class="badge ok">all three measures agree</span>'
+      : `<span class="badge bad">measures disagree</span> cosine picks ${sets.cos.replace(/,/g, ', ')}; dot product ${sets.dot.replace(/,/g, ', ')}; Euclidean ${sets.l2.replace(/,/g, ', ')}`;
+    $('knn-out').innerHTML = `Top ${k} by ${name}, query length ${len(q).toFixed(2)}${norm ? ' (normalised)' : ''}: <ol>${items}</ol><p style="margin:8px 0 0">${verdict}</p>`;
+  }
+  svg.addEventListener('pointerdown', (e) => {
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const v = { x: (p.x - O.x) / S, y: (O.y - p.y) / S };
+    const a = Math.min(Math.max(Math.atan2(v.y, v.x), 0.03), Math.PI / 2 - 0.03), l = Math.min(Math.max(len(v), 0.15), 1.35);
+    q = { x: Math.cos(a) * l, y: Math.sin(a) * l }; render();
+  });
+  document.querySelectorAll('#knnlab [data-m]').forEach((b) => b.addEventListener('click', () => {
+    metric = b.dataset.m;
+    document.querySelectorAll('#knnlab [data-m]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    render();
+  }));
+  document.querySelectorAll('#knnlab [data-q]').forEach((b) => b.addEventListener('click', () => {
+    const [l, d] = b.dataset.q.split(',').map(Number);
+    q = { x: Math.cos(d * Math.PI / 180) * l, y: Math.sin(d * Math.PI / 180) * l }; render();
+  }));
+  $('knn-k').addEventListener('input', (e) => { k = +e.target.value; $('knn-kv').textContent = k; render(); });
+  $('knn-norm').addEventListener('change', (e) => { norm = e.target.checked; render(); });
+  render();
+})();
+(() => {
+  const root = document.getElementById('mmrlab');
+  if (!root) return;
+  const $ = (id) => document.getElementById(id);
+  const C = [
+    { t: 'Supply chain risk factor paragraph, 2025 annual report', s: 0.91, g: 'A', topic: 'supply' },
+    { t: 'The same paragraph, 2024 annual report', s: 0.90, g: 'A', topic: 'supply' },
+    { t: 'The same paragraph, 2023 annual report', s: 0.89, g: 'A', topic: 'supply' },
+    { t: 'Single-source suppliers for key components', s: 0.84, g: 'B', topic: 'supply' },
+    { t: 'Shipping and logistics cost increases', s: 0.80, g: 'C', topic: 'supply' },
+    { t: 'Supplier concentration in one region', s: 0.78, g: 'D', topic: 'supply' },
+    { t: 'Inventory write-downs on excess components', s: 0.66, g: 'E', topic: 'inventory' },
+    { t: 'Currency risk on supplier payments', s: 0.58, g: 'F', topic: 'fx' },
+  ];
+  const sim = (a, b) => (a.g === b.g ? 0.97 : a.topic === b.topic ? 0.5 : 0.25);
+  const K = 4;
+  function mmr(lambda) {
+    const picked = [], left = C.map((_, i) => i);
+    while (picked.length < K) {
+      let best = -1, bestScore = -Infinity;
+      for (const i of left) {
+        const red = picked.length ? Math.max(...picked.map((j) => sim(C[i], C[j]))) : 0;
+        const score = lambda * C[i].s - (1 - lambda) * red;
+        if (score > bestScore) { bestScore = score; best = i; }
+      }
+      picked.push(best); left.splice(left.indexOf(best), 1);
+    }
+    return picked;
+  }
+  const li = (i, seen) => `<li class="${seen.has(C[i].g) ? 'dup' : ''}"><span>${C[i].t}${seen.has(C[i].g) ? ' <span class="badge bad">duplicate</span>' : ''}</span><span class="s">sim ${C[i].s.toFixed(2)}</span></li>`;
+  function list(ids) { const seen = new Set(); return ids.map((i) => { const h = li(i, seen); seen.add(C[i].g); return h; }).join(''); }
+  function render() {
+    const lambda = +$('mmr-l').value / 10;
+    $('mmr-lv').textContent = lambda.toFixed(1);
+    const plain = [0, 1, 2, 3], picks = mmr(lambda);
+    $('mmr-plain').innerHTML = list(plain);
+    $('mmr-picks').innerHTML = list(picks);
+    const dups = (ids) => ids.length - new Set(ids.map((i) => C[i].g)).size;
+    const offTopic = picks.filter((i) => C[i].topic !== 'supply').length;
+    $('mmr-out').innerHTML = `Plain top-4 spends <strong>${dups(plain)}</strong> of 4 slots on repeats. MMR at λ = ${lambda.toFixed(1)} has <strong>${dups(picks)}</strong> repeats`
+      + (offTopic ? ` but pulls in <strong>${offTopic}</strong> less relevant result${offTopic > 1 ? 's' : ''}: diversity is now outweighing relevance.` : ' and keeps every pick on topic.');
+  }
+  $('mmr-l').addEventListener('input', render);
+  render();
+})();
+</script>
+</body>
+</html>
