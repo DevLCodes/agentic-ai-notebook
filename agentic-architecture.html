@@ -130,6 +130,7 @@
   .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
   .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
 </style>
+<link rel="stylesheet" href="assets/scene3d.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -155,7 +156,17 @@
     <a href="#s7">1.7 Sessions</a><a href="#quiz">✎ Quiz</a>
   </nav>
 
-  <!-- ============ 1.1 ============ -->
+    <!-- ============ 3D ============ -->
+  <h3>See it in 3D: an orchestrator and its subagents</h3>
+  <figure class="fig3d" id="orch3d">
+    <div class="stage3d" role="img" aria-label="A lead agent splits a research task among three subagents, each with its own small context; they return short summaries; a pre-tool hook blocks a risky tool call; the session is saved so the run can resume"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagrams below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. The card stacks are each subagent’s own context window.</figcaption>
+  </figure>
+
+<!-- ============ 1.1 ============ -->
   <h2 id="s1">1.1 Agentic loops</h2>
   <div class="cols">
     <div>
@@ -669,6 +680,48 @@ function renderScore() {
                                            : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
 }
 renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.orch3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.6], w: 25, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'A lead agent gets a broad task: “Compare three vector databases for our 50M-chunk index.” It splits the work rather than doing all of it in one growing context.' },
+    { t: 1.6, text: 'Each subagent starts with a fresh context holding only its brief, not the lead’s whole history. That is the main reason to use subagents (Claude Agent SDK subagents, OpenAI Agents SDK handoffs).' },
+    { t: 3.4, text: 'They work in parallel on pgvector, Pinecone and Qdrant, each with its own tools and its own context budget.' },
+    { t: 5.2, text: 'A subagent tries to run a shell command. A PreToolUse hook (plain code) checks it against an allow-list and blocks it; the subagent carries on with search only.' },
+    { t: 6.8, text: 'Each subagent returns a short summary with sources, not its full transcript, so the lead’s context stays small.' },
+    { t: 8.6, text: 'The lead writes the comparison. The session is saved after every step, so a crash or a timeout resumes from the last step instead of starting again.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const lead = c.obj('robot', -5.6, 0, 'Lead agent', 'splits work · writes the result');
+    const ses = c.obj(c.SHAPES.database(0x55606d, { r: 1.0, th: 0.36 }), -5.6, 5.8, 'Session store', 'resume after a crash');
+    const names = [['pgvector', -5.2], ['Pinecone', 0], ['Qdrant', 5.2]];
+    const subs = names.map(([n, z], i) => c.obj(c.SHAPES.robot([C.ingest, C.kb, C.serve][i]), 2.4, z, `Subagent: ${n}`, 'own context · own tools'));
+    names.forEach(([, z]) => { const k = c.SHAPES.cards(); k.position.set(4.6, 0, z); k.scale.set(0.6, 0.6, 0.6); c.scene.add(k); });
+    const hook = c.obj('shield', 9.4, 0, 'PreToolUse hook', 'allow-list in code');
+    c.lane([V(-5.6, 0), V(-1.4, 0)]);
+    names.forEach(([, z]) => c.lane([V(-1.4, 0), V(-1.4, z), V(2.4, z)]));
+    c.lane([V(2.4, 0), V(9.4, 0)]);
+    names.forEach(([, z], i) => c.packet({ pts: [V(-5.6, 0), V(-1.4, 0), V(-1.4, z), V(2.4, z)], t0: 1.4 + i * 0.2, t1: 2.6 + i * 0.2, kind: 'doc', to: subs[i], label: i === 0 ? 'brief only' : undefined }));
+    c.packet({ pts: [V(2.4, 0), V(9.4, 0)], t0: 5.2, t1: 5.9, kind: 'env', color: P.bad, to: hook, label: 'bash: curl … | sh' });
+    c.packet({ pts: [V(9.4, 0), V(10.6, 0, 1.6), V(11.2, 1.8, 0.15)], t0: 6.0, t1: 6.5, kind: 'env', color: P.bad, label: 'blocked' });
+    names.forEach(([, z], i) => c.packet({ pts: [V(2.4, z), V(-1.4, z), V(-1.4, 0), V(-5.6, 0)], t0: 6.8 + i * 0.25, t1: 7.8 + i * 0.25, kind: 'chunk', s: 0.8, to: lead, label: i === 1 ? 'summary + sources' : undefined }));
+    [2.0, 4.0, 8.4].forEach((t) => c.packet({ pts: arc(c.top(lead, 0), c.top(ses, 0), 1.6), t0: t, t1: t + 0.6, kind: 'span', s: 1.6, to: ses }));
+  },
+};
+boot(D);
 </script>
 </body>
 </html>

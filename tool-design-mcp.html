@@ -144,6 +144,7 @@
   .role.on { background: var(--hl); border-color: var(--red); transform: rotate(-1.5deg) scale(1.06); }
   .roles .arrow { font-size: 22px; color: var(--pencil); }
 </style>
+<link rel="stylesheet" href="assets/scene3d.css">
 </head>
 <body>
 <!-- shared "pencil" filter that makes every doodle wobble a little -->
@@ -169,7 +170,17 @@
     <a href="#s5">2.5 Built-in tools</a><a href="#quiz">✎ Quiz</a>
   </nav>
 
-  <!-- ============ 2.1 ============ -->
+    <!-- ============ 3D ============ -->
+  <h3>See it in 3D: an MCP host, clients and servers</h3>
+  <figure class="fig3d" id="mcp3d">
+    <div class="stage3d" role="img" aria-label="An MCP host such as an IDE runs one client per server; each client lists the server tools; the model calls the Postgres query tool, gets a structured error, fixes the query and retries; GitHub and Slack servers sit alongside"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagrams below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Each line between a client and its server is one MCP connection (stdio locally, Streamable HTTP remotely).</figcaption>
+  </figure>
+
+<!-- ============ 2.1 ============ -->
   <h2 id="s1">2.1 Tool interface design</h2>
   <p>The tool <b>description</b> is the <span class="hl">primary mechanism</span> Claude uses to choose a tool.
     When it picks the wrong tool, fix the description first: it's the lowest-effort, highest-leverage change.</p>
@@ -916,6 +927,51 @@ function renderScore() {
                                            : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
 }
 renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.mcp3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.6], w: 25, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'The host is the app the person uses: Claude Desktop, Claude Code, an IDE such as Cursor, or your own agent. It runs one MCP client per server it connects to.' },
+    { t: 1.4, text: 'Each client connects to its server: stdio for a local process, Streamable HTTP for a remote one. Here: the GitHub, Postgres and Slack MCP servers.' },
+    { t: 2.8, text: 'On connect, each client calls tools/list. The tool names, descriptions and JSON schemas go into the model’s context: the description is what the model chooses by.' },
+    { t: 4.6, text: 'The model calls query on the Postgres server with SQL that names a column that doesn’t exist.' },
+    { t: 5.8, text: 'The server returns a structured error, not a stack trace: isError true, “column signup_ts not found; columns are created_at, …”, retryable.' },
+    { t: 7.4, text: 'Because the error says what to change, the model fixes the query and retries once, and the call succeeds.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const host = c.obj('browser', -9.6, 0, 'MCP host', 'Claude Desktop · IDE · your app');
+    const llm = c.obj('modelGem', -9.6, -5.2, 'Model', 'chooses tools by description');
+    const zs = [-4.6, 0, 4.6];
+    const cl = zs.map((z) => c.obj(c.SHAPES.server({ color: 0x4a6a8a, h: 1.1, w: 0.9, d: 0.8 }), -3.4, z, 'MCP client', ''));
+    const gh = c.obj('gitRepo', 4.6, -4.6, 'GitHub MCP server', 'issues · PRs');
+    const pg = c.obj(c.SHAPES.database(C.kb, { r: 1.1, th: 0.4 }), 4.6, 0, 'Postgres MCP server', 'query · schema');
+    const sl = c.obj('browser', 4.6, 4.6, 'Slack MCP server', 'post · search');
+    c.note('stdio', 0.6, -4.6, 0.3, [0.5, 0]); c.note('Streamable HTTP', 0.6, 4.6, 0.3, [0.5, 0]);
+    zs.forEach((z) => { c.lane([V(-9.6, 0), V(-6.4, 0), V(-6.4, z), V(-3.4, z)]); c.lane([V(-3.4, z), V(4.6, z)]); });
+    const srv = [gh, pg, sl];
+    zs.forEach((z, i) => c.packet({ pts: [V(-3.4, z), V(3.4, z)], t0: 1.4 + i * 0.15, t1: 2.2 + i * 0.15, kind: 'ask', to: srv[i], label: i === 0 ? 'initialize' : undefined }));
+    zs.forEach((z, i) => c.packet({ pts: [V(3.4, z), V(-3.4, z), V(-6.4, z), V(-6.4, 0), V(-9.6, 0)], t0: 2.8 + i * 0.2, t1: 4.0 + i * 0.2, kind: 'doc', to: host, label: i === 1 ? 'tools/list' : undefined }));
+    c.packet({ pts: arc(c.top(host, 0), c.top(llm, 0), 1.6), t0: 4.0, t1: 4.5, kind: 'doc', to: llm });
+    c.packet({ pts: [V(-9.6, 0), V(-6.4, 0), V(-3.4, 0), V(3.4, 0)], t0: 4.6, t1: 5.6, kind: 'env', to: pg, label: 'query(SELECT signup_ts …)' });
+    c.packet({ pts: [V(3.4, 0), V(-3.4, 0), V(-6.4, 0), V(-9.6, 0)], t0: 5.8, t1: 6.8, kind: 'env', color: P.bad, to: host, label: 'isError · column not found · retryable' });
+    c.packet({ pts: [V(-9.6, 0), V(-6.4, 0), V(-3.4, 0), V(3.4, 0)], t0: 7.4, t1: 8.3, kind: 'env', to: pg, label: 'query(SELECT created_at …)' });
+    c.packet({ pts: [V(3.4, 0), V(-3.4, 0), V(-6.4, 0), V(-9.6, 0)], t0: 8.4, t1: 9.3, kind: 'span', s: 1.6, color: P.ship, to: host, label: '1,204 rows' });
+  },
+};
+boot(D);
 </script>
 </body>
 </html>

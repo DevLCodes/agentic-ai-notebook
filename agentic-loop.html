@@ -132,6 +132,7 @@
   .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
   .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
 </style>
+<link rel="stylesheet" href="assets/scene3d.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -194,7 +195,17 @@
     <span class="hl"><b>Your loop</b> supplies the agency.</span></p>
 
 
-  <!-- 1. Diagram -->
+    <!-- ============ 3D ============ -->
+  <h3>See it in 3D: one run of the loop</h3>
+  <figure class="fig3d" id="loop3d">
+    <div class="stage3d" role="img" aria-label="A user task goes to the agent harness, which sends the messages and tool definitions to the model; the model asks for a web search, the harness runs it and appends the result to the context, asks again, runs a SQL query, and the model ends the turn with an answer"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagrams below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Yellow spheres are requests, purple shapes are the model’s decisions, grey spheres are tool results.</figcaption>
+  </figure>
+
+<!-- 1. Diagram -->
   <h2>1 · Explore the stages</h2>
   <p class="lede">Click a stage (or Tab to it and press Enter) to see what it means, what actually runs, and how it breaks.</p>
   <div class="grid" style="grid-template-columns: 1fr">
@@ -514,6 +525,60 @@ function renderScore() {
                                            : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
 }
 renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.loop3d = {
+  loop: 13,
+  view: { target: [0, 0, 0.6], w: 24, d: 16, el: 52 },
+  steps: [
+    { t: 0.0, text: 'Perceive: a user asks “How did EU sign-ups change after the March price change?” The harness (your loop, or an SDK such as the Claude Agent SDK or LangGraph) builds the request: system prompt, messages and tool definitions.' },
+    { t: 1.4, text: 'Reason: the model reads it and does not answer yet. It returns stop_reason = tool_use with a call: web_search(“March price change announcement”).' },
+    { t: 2.8, text: 'Act: the harness, not the model, runs the tool. Observe: the result goes back into the context as a tool_result message.' },
+    { t: 4.8, text: 'The loop repeats with the longer context. This time the model calls run_sql against the analytics warehouse.' },
+    { t: 7.2, text: 'The rows come back as another tool_result. Every turn the context grows, which is why long runs need trimming or summarising.' },
+    { t: 9.2, text: 'With enough evidence, the model returns stop_reason = end_turn and a final answer. A max-iterations guard in the harness stops a loop that never gets there.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const usr = c.obj('person', -9.6, 0, 'User', 'asks a question');
+    const har = c.obj(c.SHAPES.server({ color: 0x4a6a8a }), -4.2, 0, 'Agent harness', 'runs the loop · max iterations');
+    const llm = c.obj('modelGem', 1.4, -4.6, 'Model', 'Claude · GPT · Gemini');
+    const ctx = c.obj(c.SHAPES.database(0x55606d, { r: 1.1, th: 0.36 }), 1.4, 4.6, 'Context window', 'messages so far');
+    const ws = c.obj(c.SHAPES.server(), 7.4, -2.2, 'web_search', 'tool');
+    const sql = c.obj(c.SHAPES.server({ color: 0x3f6b55, emi: C.ok }), 7.4, 2.6, 'run_sql', 'tool');
+    c.lane([V(-9.6, 0), V(-4.2, 0)]);
+    c.lane([V(-4.2, 0), V(3.6, 0), V(3.6, -2.2), V(7.4, -2.2)]);
+    c.lane([V(3.6, 0), V(3.6, 2.6), V(7.4, 2.6)]);
+    const toLLM = (t0, label) => c.packet({ pts: arc(c.top(har, 0), c.top(llm, 0), 2.5), t0, t1: t0 + 0.8, kind: 'env', to: llm, label });
+    const fromLLM = (t0, label, color) => c.packet({ pts: arc(c.top(llm, 0), c.top(har, 0), 2.5), t0, t1: t0 + 0.7, kind: 'vec', color, to: har, label });
+    const append = (t0) => c.packet({ pts: arc(c.top(har, 0), c.top(ctx, 0), 2), t0, t1: t0 + 0.6, kind: 'span', s: 1.6, to: ctx, label: 'append' });
+    c.packet({ pts: [V(-9.6, 0), V(-4.2, 0)], t0: 0, t1: 0.8, kind: 'ask', from: usr, to: har, label: 'EU sign-ups after March?' });
+    toLLM(0.6, 'messages + tools');
+    fromLLM(1.6, 'tool_use · web_search');
+    c.packet({ pts: [V(-4.2, 0), V(3.6, 0), V(3.6, -2.2), V(7.4, -2.2)], t0: 2.8, t1: 3.6, kind: 'env', to: ws });
+    c.packet({ pts: [V(7.4, -2.2), V(3.6, -2.2), V(3.6, 0), V(-4.2, 0)], t0: 3.7, t1: 4.4, kind: 'span', s: 1.6, to: har, label: 'tool_result' });
+    append(4.4);
+    toLLM(5.0, 'longer context');
+    fromLLM(5.9, 'tool_use · run_sql');
+    c.packet({ pts: [V(-4.2, 0), V(3.6, 0), V(3.6, 2.6), V(7.4, 2.6)], t0: 6.6, t1: 7.2, kind: 'env', to: sql });
+    c.packet({ pts: [V(7.4, 2.6), V(3.6, 2.6), V(3.6, 0), V(-4.2, 0)], t0: 7.3, t1: 8.0, kind: 'span', s: 1.6, to: har, label: 'tool_result · 12 rows' });
+    append(8.0);
+    toLLM(8.6);
+    fromLLM(9.4, 'end_turn', P.ship);
+    c.packet({ pts: [V(-4.2, 0), V(-9.6, 0)], t0: 10.2, t1: 11.2, kind: 'doc', color: P.ans, to: usr, label: 'answer + the query it ran' });
+  },
+};
+boot(D);
 </script>
 </body>
 </html>

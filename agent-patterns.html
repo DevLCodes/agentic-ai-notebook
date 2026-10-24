@@ -132,6 +132,7 @@
   .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
   .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
 </style>
+<link rel="stylesheet" href="assets/scene3d.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -169,7 +170,17 @@
     <text class="p" x="10" y="246" style="font-size:13px">↑ click any box to jump to it</text>
   </svg>
 
-  <!-- ============ why ============ -->
+    <!-- ============ 3D ============ -->
+  <h3>See it in 3D: planner, parallel executors and a critic</h3>
+  <figure class="fig3d" id="patterns3d">
+    <div class="stage3d" role="img" aria-label="A planner splits a trip request into three independent tasks that run in parallel, a join waits for all three, and a critic checks the draft against the request before it is returned"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagrams below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. The three middle tasks don’t depend on each other, so they run as a DAG in parallel.</figcaption>
+  </figure>
+
+<!-- ============ why ============ -->
   <h2 id="why">0 · The autonomy dial</h2>
   <div class="cols">
     <svg class="doodle" viewBox="0 0 480 265" role="img" aria-label="A dial from 'code decides' to 'model decides'. DAG and planner-executor sit near code, RAG and self-critique in the middle, ReAct and multi-agent near the model end.">
@@ -699,6 +710,50 @@ function renderScore() {
                                            : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
 }
 renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.patterns3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.4], w: 25, d: 16, el: 52 },
+  steps: [
+    { t: 0.0, text: '“Plan a 3-day work trip to Berlin next month.” A planner makes one call and writes a plan: three tasks with their dependencies.' },
+    { t: 1.6, text: 'None of the three depends on another, so they form a DAG and run in parallel: flights, hotels near the venue, and visa and travel rules.' },
+    { t: 3.4, text: 'Each executor is a small ReAct loop with its own tools, such as a flights API, a hotels API, or a search over the company travel policy.' },
+    { t: 5.0, text: 'The join waits for all three. Total time is the slowest branch, not the sum, which is the reason to use a DAG.' },
+    { t: 6.4, text: 'A critic compares the draft with the request and the policy. The hotel is over the nightly cap, so it sends one round back.' },
+    { t: 8.4, text: 'The revised plan passes and is returned. Each pattern is the same agentic loop arranged differently; pick the simplest one that passes your evals.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const usr = c.obj('person', -10.4, 0, 'User', 'trip request');
+    const pl = c.obj('robot', -5.6, 0, 'Planner', 'one plan · dependencies');
+    const ex = [['Flights', 'flights API', -4.4], ['Hotels', 'hotels API', 0], ['Visa & policy', 'policy search', 4.4]].map(([n, s, z], i) =>
+      c.obj(c.SHAPES.robot([C.ingest, C.kb, C.serve][i]), 0, z, n, s));
+    const join = c.obj(c.SHAPES.server({ color: 0x55606d }), 5.2, 0, 'Join', 'waits for all');
+    const cr = c.obj(c.SHAPES.robot(C.gov), 10, 0, 'Critic', 'checks against the request');
+    c.lane([V(-10.4, 0), V(-5.6, 0)]);
+    [-4.4, 0, 4.4].forEach((z) => { c.lane([V(-5.6, 0), V(-2.6, 0), V(-2.6, z), V(0, z)]); c.lane([V(0, z), V(2.6, z), V(2.6, 0), V(5.2, 0)]); });
+    c.lane([V(5.2, 0), V(10, 0)]);
+    c.packet({ pts: [V(-10.4, 0), V(-5.6, 0)], t0: 0, t1: 0.9, kind: 'ask', from: usr, to: pl, label: '3 days in Berlin' });
+    [-4.4, 0, 4.4].forEach((z, i) => c.packet({ pts: [V(-5.6, 0), V(-2.6, 0), V(-2.6, z), V(0, z)], t0: 1.6, t1: 2.6, kind: 'env', to: ex[i], label: i === 1 ? 'three tasks, no dependencies' : undefined }));
+    [-4.4, 0, 4.4].forEach((z, i) => c.packet({ pts: [V(0, z), V(2.6, z), V(2.6, 0), V(5.2, 0)], t0: [3.6, 4.4, 3.9][i], t1: [4.6, 5.0, 4.8][i], kind: 'chunk', s: 0.85, to: join }));
+    c.packet({ pts: [V(5.2, 0), V(10, 0)], t0: 5.6, t1: 6.4, kind: 'doc', to: cr, label: 'draft plan' });
+    c.packet({ pts: arc(c.top(cr, 0), c.top(ex[1], 0), 4), t0: 6.6, t1: 7.6, kind: 'env', color: P.bad, to: ex[1], label: 'hotel over the cap' });
+    c.packet({ pts: [V(0, 0), V(2.6, 0), V(5.2, 0), V(10, 0)], t0: 7.8, t1: 8.6, kind: 'chunk', s: 0.85, to: cr });
+    c.packet({ pts: arc(c.top(cr, 0), c.top(usr, 0), 6), t0: 8.8, t1: 10.2, kind: 'doc', color: P.ans, to: usr, label: 'plan within policy' });
+  },
+};
+boot(D);
 </script>
 </body>
 </html>
