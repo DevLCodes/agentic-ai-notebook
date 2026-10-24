@@ -151,6 +151,7 @@
   .stat { display: inline-block; min-width: 130px; margin: 4px 10px 4px 0; }
   .stat b { display: block; font-family: var(--title); font-weight: normal; font-size: 26px; color: var(--ink); }
 </style>
+<link rel="stylesheet" href="assets/scene3d.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -175,7 +176,17 @@
     <text class="p" x="10" y="356" style="font-size:13px">↑ click any box to jump to it</text>
   </svg>
 
-  <!-- ============ why ============ -->
+    <!-- ============ 3D ============ -->
+  <h3>See it in 3D: one request as a trace</h3>
+  <figure class="fig3d" id="trace3d">
+    <div class="stage3d" role="img" aria-label="A user request becomes a trace: an agent span contains model calls and tool calls, each emitted as spans with tokens, cost and latency to an OpenTelemetry collector, which forwards them to an LLM tracing tool and to a metrics dashboard; a latency alert fires"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagrams below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Grey spheres are spans; dashboard bars are p95 latency, cost per request and error rate.</figcaption>
+  </figure>
+
+<!-- ============ why ============ -->
   <h2 id="why">0 · Why LLM apps need their own kind of monitoring</h2>
   <table class="hand">
     <tr><th></th><th>classic web service</th><th>LLM app / agent</th></tr>
@@ -638,6 +649,52 @@ function renderScore() {
                                            : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
 }
 renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.trace3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.6], w: 25, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'A request arrives and gets a trace ID. Everything that happens for it becomes a span under that trace: the agent run, each model call, each tool call.' },
+    { t: 1.6, text: 'Model-call spans record what generic APM misses: model and version, prompt version, input and output tokens, cost, time to first token.' },
+    { t: 3.0, text: 'Tool-call spans record arguments, result size, errors and latency. A slow vector search shows up here, not as “the agent was slow”.' },
+    { t: 4.6, text: 'Spans go to an OpenTelemetry collector, which forwards them to an LLM tracing tool (Langfuse, LangSmith, Arize Phoenix) and to metrics (Datadog, Grafana).' },
+    { t: 6.4, text: 'Dashboards watch p95, not the mean: one 40-second run in a hundred is invisible in an average and painful for that user.' },
+    { t: 8.0, text: 'p95 latency crosses its threshold and an alert fires, linking straight to the slowest traces, so on-call starts from the span that caused it.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const usr = c.obj('person', -10, 0, 'Request', 'trace_id 7f3a…');
+    const ag = c.obj('robot', -5.2, 0, 'Agent span', 'whole run');
+    const m1 = c.obj('modelGem', -0.6, -4.4, 'LLM call span', 'tokens · cost · TTFT');
+    const tl = c.obj(c.SHAPES.server(), -0.6, 0, 'Tool call span', 'args · latency · errors');
+    const m2 = c.obj('modelGem', -0.6, 4.4, 'LLM call span', 'final answer');
+    const otel = c.obj(c.SHAPES.server({ color: 0x55606d }), 4.4, 0, 'OTel collector', 'one pipeline');
+    const lf = c.obj(c.SHAPES.monitor([C.model, C.kb]), 9, -3.6, 'LLM tracing', 'Langfuse · LangSmith · Phoenix');
+    const dd = c.obj(c.SHAPES.monitor([C.serve, C.gov, C.dlq]), 9, 3.6, 'Metrics', 'Datadog · Grafana');
+    const al = c.obj('tray', 9, 8.4, 'Alert', 'p95 over threshold');
+    c.lane([V(-10, 0), V(-5.2, 0)]);
+    [-4.4, 0, 4.4].forEach((z) => c.lane([V(-5.2, 0), V(-3, 0), V(-3, z), V(-0.6, z)]));
+    c.packet({ pts: [V(-10, 0), V(-5.2, 0)], t0: 0, t1: 0.9, kind: 'ask', from: usr, to: ag });
+    [m1, tl, m2].forEach((g, i) => c.packet({ pts: [V(-5.2, 0), V(-3, 0), V(-3, [-4.4, 0, 4.4][i]), V(-0.6, [-4.4, 0, 4.4][i])], t0: 1.2 + i * 1.0, t1: 1.9 + i * 1.0, kind: 'env', to: g }));
+    [ag, m1, tl, m2].forEach((g, i) => c.packet({ pts: arc(c.top(g, 0), c.top(otel, 0), 2), t0: 3.4 + i * 0.3, t1: 4.4 + i * 0.3, kind: 'span', to: otel, label: i === 2 ? 'span · 1.8 s' : undefined }));
+    c.packet({ pts: arc(c.top(otel, 0), c.top(lf, 0), 2), t0: 4.8, t1: 5.6, kind: 'span', n: 3, st: 0.1, to: lf });
+    c.packet({ pts: arc(c.top(otel, 0), c.top(dd, 0), 2), t0: 5.0, t1: 5.8, kind: 'span', n: 3, st: 0.1, to: dd });
+    c.packet({ pts: arc(c.top(dd, 0), c.top(al, 0), 1.6), t0: 8.0, t1: 8.8, kind: 'env', color: P.bad, to: al, label: 'p95 9.2 s > 6 s' });
+    c.tick((t) => { dd.userData.setBar(0, t > 7.4 ? 0.9 : 0.4); dd.userData.setBar(1, 0.35); dd.userData.setBar(2, 0.12); lf.userData.setBar(0, 0.5); lf.userData.setBar(1, 0.3); });
+  },
+};
+boot(D);
 </script>
 </body>
 </html>

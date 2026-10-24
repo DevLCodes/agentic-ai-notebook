@@ -132,6 +132,7 @@
   .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
   .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
 </style>
+<link rel="stylesheet" href="assets/scene3d.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -170,7 +171,17 @@
     <text class="p" x="10" y="246" style="font-size:13px">↑ click any box to jump to it</text>
   </svg>
 
-  <!-- ============ why ============ -->
+    <!-- ============ 3D ============ -->
+  <h3>See it in 3D: a LangGraph state graph</h3>
+  <figure class="fig3d" id="graph3d">
+    <div class="stage3d" role="img" aria-label="A LangGraph graph with retrieve, grade, rewrite and generate nodes; a conditional edge sends the run to rewrite when retrieved documents are irrelevant and to generate when they are relevant; a checkpointer saves state after every node"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagrams below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Envelopes are the graph state moving between nodes; grey spheres are checkpoints.</figcaption>
+  </figure>
+
+<!-- ============ why ============ -->
   <h2 id="why">0 · What a framework actually gives you</h2>
   <div class="cols">
     <svg class="doodle" viewBox="0 0 460 300" role="img" aria-label="The agentic loop in the centre, surrounded by six things frameworks add: prompt templates, tool schemas from functions, orchestration, state and memory, human in the loop, tracing">
@@ -901,6 +912,53 @@ function renderScore() {
                                            : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
 }
 renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.graph3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.6], w: 25, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'LangGraph models an agent as a graph: nodes are steps, edges decide what runs next, and one state object travels between them. CrewAI (roles and tasks) and Google ADK (agent trees) wrap the same loop differently.' },
+    { t: 1.4, text: 'retrieve fetches documents for the question and writes them into the state.' },
+    { t: 2.6, text: 'grade is a small model call that labels the documents relevant or not. Its output drives a conditional edge.' },
+    { t: 3.8, text: 'Not relevant: the edge goes to rewrite, which reformulates the query, and back to retrieve. A recursion limit stops an endless cycle.' },
+    { t: 6.4, text: 'Relevant this time: the edge goes to generate, which writes the answer from the documents.' },
+    { t: 8.0, text: 'A checkpointer (SQLite or Postgres) saves the state after every node under a thread_id, so a run can pause for human approval or resume after a crash.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const st = c.obj('person', -10, 0, 'Question', 'initial state');
+    const rt = c.obj(c.SHAPES.server(), -5, 0, 'retrieve', 'node');
+    const gr = c.obj('modelGem', 0, 0, 'grade', 'node · conditional edge');
+    const rw = c.obj(c.SHAPES.modelGem(C.serve), -2.5, 5, 'rewrite', 'node');
+    const gn = c.obj('modelGem', 5, 0, 'generate', 'node');
+    const end = c.obj(c.SHAPES.signpost(C.ok), 9.6, 0, 'END', '', { lift: 0.5 });
+    end.userData.pivot.rotation.z = 0.2;
+    const ck = c.obj(c.SHAPES.database(0x55606d, { r: 1.1, th: 0.36 }), 0, -5.6, 'Checkpointer', 'state per thread_id');
+    c.lane([V(-10, 0), V(9.6, 0)]);
+    c.lane([V(0, 0), V(0, 5), V(-2.5, 5)]);
+    c.lane([V(-2.5, 5), V(-5, 5), V(-5, 0)]);
+    c.packet({ pts: [V(-10, 0), V(-5, 0)], t0: 0.2, t1: 1.2, kind: 'env', from: st, to: rt, label: 'state' });
+    c.packet({ pts: [V(-5, 0), V(0, 0)], t0: 1.6, t1: 2.5, kind: 'env', to: gr, label: '+ documents' });
+    c.packet({ pts: [V(0, 0), V(0, 5), V(-2.5, 5)], t0: 3.8, t1: 4.6, kind: 'env', color: P.bad, to: rw, label: 'not relevant' });
+    c.packet({ pts: [V(-2.5, 5), V(-5, 5), V(-5, 0)], t0: 4.8, t1: 5.6, kind: 'env', to: rt, label: 'rewritten query' });
+    c.packet({ pts: [V(-5, 0), V(0, 0)], t0: 5.7, t1: 6.3, kind: 'env', to: gr });
+    c.packet({ pts: [V(0, 0), V(5, 0)], t0: 6.4, t1: 7.2, kind: 'env', color: P.ship, to: gn, label: 'relevant' });
+    c.packet({ pts: [V(5, 0), V(9.6, 0)], t0: 7.4, t1: 8.0, kind: 'doc', color: P.ans, to: end, label: 'answer' });
+    for (const [g, t] of [[rt, 2.5], [gr, 3.4], [rw, 4.6], [gn, 7.2]]) c.packet({ pts: arc(c.top(g, 0), c.top(ck, 0), 2), t0: t, t1: t + 0.6, kind: 'span', to: ck });
+  },
+};
+boot(D);
 </script>
 </body>
 </html>

@@ -1,0 +1,101 @@
+/* Shared 3D figure styles for the concept pages. The system-design palette is scoped to .fig3d so it never
+   overrides the notebook's own --ink and --paper. */
+.fig3d {
+  --bg: #e9ecef;
+  --paper: #f7f8f9;
+  --ink: #1c2530;
+  --muted: #586473;
+  --line: #cdd4dc;
+  --card: rgba(248, 249, 251, 0.9);
+  --accent: #4255d4;
+  --accent-ink: #ffffff;
+  --track: #d3d9e0;
+  --code-bg: #eef1f4;
+  --c-src: #8795a3;
+  --c-ingest: #2a9d8f;
+  --c-kb: #4d5fd8;
+  --c-serve: #d7932a;
+  --c-model: #7c5cff;
+  --c-gov: #b2456e;
+  --c-cross: #4a5562;
+  --line-strong: #9aa5b1;
+  --wire: #7d8996;
+  --c-dlq: #b23a3a;
+  --t-src: #e4e8ec;
+  --t-ingest: #d8eeea;
+  --t-kb: #dfe3fa;
+  --t-serve: #f8ead2;
+  --t-model: #fbe1da;
+  --t-gov: #f3dde6;
+  --t-cross: #dfe2e6;
+  --t-dlq: #f6dddb;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+.lbl { display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 3px 8px 4px; border-radius: 7px;
+    background: rgba(250, 251, 252, 0.84); border: 1px solid var(--line);
+    font-family: var(--font-body); font-size: 12px; line-height: 1.2; color: var(--ink);
+    white-space: nowrap; transition: background .2s, border-color .2s, transform .2s; }
+.lbl b { font-weight: 600; }
+.lbl span { display: none; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.lbl.on span { display: block; }
+.lbl.on { background: var(--ink); border-color: var(--ink); color: #fff; transform: translateY(-3px); }
+.lbl.on span { color: #c9d2dc; }
+.plate-lbl { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.lane-lbl { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+#chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+#chips a { display: inline-block; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); text-decoration: none; transition: background .2s, color .2s, border-color .2s; }
+#chips a:hover { border-color: var(--ink); color: var(--ink); }
+#chips li.on a { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.fig3d { margin: 6px 0 26px; }
+.stage3d { position: relative; height: clamp(300px, 50vh, 450px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+.fig3d.hero .stage3d { height: clamp(440px, 74vh, 800px); border-radius: 18px; }
+.stage3d canvas { display: block; }
+.labels3 { position: absolute; inset: 0; pointer-events: none; }
+.hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.reset3 { position: absolute; top: 10px; right: 10px; z-index: 2; }
+.nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+.fig3d.ready .nogl { display: none; }
+.l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.88); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+.l3.pk { font-family: var(--font-mono); font-size: 10.5px; background: var(--ink); border-color: var(--ink); color: #fff; }
+.l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+.l3.sc.ok { background: #dcf3e4; border-color: var(--c-ok); }
+.l3.miss { font-family: var(--font-mono); font-size: 11px; background: #f6dddb; border-color: var(--c-dlq); color: #8c2b2b; }
+.l3.cap { background: none; border: 0; padding: 0 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted); }
+.l3.scr { background: none; border: 0; padding: 0; font-family: var(--font-mono); font-size: 10px; color: #c9d2dc; }
+.l3.id { padding: 0 5px; font-family: var(--font-mono); font-size: 10.5px; }
+.ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+.ctl3 .k, .ctl3 .meta3 { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ctl3 .meta3 { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12px; }
+.steps3 { display: flex; flex-wrap: wrap; gap: 4px; }
+.steps3 button { min-width: 30px; padding: 4px 0; background: var(--paper); color: var(--ink); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.steps3 button:hover { border-color: var(--ink); }
+.steps3 button[aria-current="step"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.track3 { position: relative; height: 4px; margin-top: 10px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.fill3 { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--ink); }
+.out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 4.6em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; }
+.fig3d.hero .out3 { font-size: 16px; min-height: 3.6em; }
+.fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.hero-chips { margin-top: 10px; }
+.legend i.pk-doc { background: #fff; border: 1px solid var(--line-strong); }
+.legend i.pk-env { background: #ffc857; height: 7px; }
+.legend i.pk-chunk { background: #5fd3c3; }
+.legend i.pk-vec { background: #8f9bff; transform: rotate(45deg) scale(.85); }
+.legend i.pk-bad { background: #e0413a; }
+.legend i.pk-span { background: #75859a; border-radius: 50%; width: 8px; height: 8px; }
+@media (max-width: 760px) {
+  .stage3d { height: min(78vh, 600px); }
+  .fig3d.hero .stage3d { height: min(82vh, 680px); }
+  .l3.pk, .l3.cap, .lane-lbl { display: none; }
+  .l3 { font-size: 10px; }
+  .out3 { font-size: 14px; }
+  .ctl3 .meta3 { display: none; }
+  .lbl span, .plate-lbl, .lane-lbl, .hint { display: none; }
+  .lbl { font-size: 10.5px; padding: 2px 6px; }
+  #chips a { font-size: 11.5px; }
+}
