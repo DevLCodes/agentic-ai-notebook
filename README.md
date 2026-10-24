@@ -3,9 +3,7 @@
 Free, interactive, notebook-style pages for engineers learning to build AI agents.
 Each page explains one topic with diagrams, hands-on labs and a quiz at the end.
 
-**Start here:** https://devlcodes.github.io/agentic-ai-notebook/ — the home page has two doors:
-**Concepts** (eight notebooks, with the roadmap at [`concepts.html`](https://devlcodes.github.io/agentic-ai-notebook/concepts.html))
-and **System designs** (worked walkthroughs and topic pages).
+**Start here:** https://devlcodes.github.io/agentic-ai-notebook/
 
 ![The roadmap: eight topics arranged around the core idea](og-image.png)
 

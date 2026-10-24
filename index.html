@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agentic AI notebook</title>
-<meta name="description" content="Free, interactive notes for engineers building AI agents: eight concept notebooks with labs and quizzes, and worked system designs with animated 3D architectures.">
+<title>Agentic AI: learning roadmap</title>
+<meta name="description" content="Free, interactive notes for engineers learning to build AI agents: the agentic loop, agent patterns, multi-agent architecture, tools and MCP, frameworks, evals, observability and governance.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Agentic AI notebook">
-<meta property="og:description" content="Free, interactive notes for engineers building AI agents: eight concept notebooks with labs and quizzes, and worked system designs with animated 3D architectures.">
+<meta property="og:title" content="Agentic AI: a learning roadmap">
+<meta property="og:description" content="Free, interactive notes for engineers learning to build AI agents: the agentic loop, agent patterns, multi-agent architecture, tools and MCP, frameworks, evals, observability and governance.">
 <meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/">
 <meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -132,83 +132,177 @@
   .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
   .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
 </style>
-<style>
-  .lead { font-size: 21px; margin-bottom: 18px; }
-  .doors { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start; margin-top: 20px; }
-  @media (max-width: 860px) { .doors { grid-template-columns: 1fr; } }
-  .door { margin: 0; padding: 22px 24px 20px; line-height: 1.45; }
-  .door > b { font-size: 30px; display: block; margin-bottom: 4px; }
-  .door p { margin: 0 0 12px; font-size: 17px; }
-  .door h3 { font-size: 20px; margin: 14px 0 4px; }
-  .door ol, .door ul { margin: 0 0 6px; padding-left: 24px; font-size: 17px; }
-  .door li { margin: 2px 0; }
-  .door li.done::marker { color: var(--green); }
-  .door li.done a::after { content: " ✓"; color: var(--green); text-decoration: none; display: inline-block; }
-  .door .groups { list-style: none; padding-left: 0; }
-  .door .groups li { margin: 3px 0; }
-  .door .groups .k { font-family: var(--title); color: var(--red); margin-right: 4px; }
-  .go { display: inline-block; margin-top: 12px; font-family: var(--title); font-size: 21px; color: #222; text-decoration: none;
-        background: #fffef8; padding: 4px 16px; border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
-  .go:hover, .go:focus-visible { background: var(--hl); }
-  .prog { font-size: 15px; color: var(--pencil); margin-left: 10px; }
-</style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+  <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#c0392b" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  .node .bg { transition: transform .15s; transform-box: fill-box; transform-origin: center; }
+  .node > a:hover .bg, .node > a:focus .bg { transform: scale(1.03); stroke: var(--ink); stroke-width: 3; }
+  .node > a:hover .ttl { fill: var(--red); }
+  .leaf:hover text, .leaf:focus text { fill: var(--red); text-decoration: underline; }
+  .donebtn { cursor: pointer; }
+  .donebtn:hover rect { fill: var(--hl); }
+  .web text { font-family: var(--hand); }
+</style>
 <div class="page">
-  <h1>Agentic AI notebook</h1>
-  <p class="lead muted">Free, interactive notes for engineers building AI agents. <span class="hl">Learn the ideas in Concepts, then see them put together in System designs.</span></p>
+  <h1>Agentic AI: a learning roadmap</h1>
+  <p class="muted">Free, interactive notes for engineers learning to build AI agents, from the first loop to evals, observability and governance. Each page has labs to play with and a quiz at the end.<br>
+    Eight notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
+    Follow the red numbers for the suggested order. Tick "done" as you go (saved in this browser).</p>
 
-  <div class="doors">
-    <section class="door sticky blue" aria-labelledby="concepts-h">
-      <b id="concepts-h">Concepts</b>
-      <p>Eight notebooks in learning order, each with diagrams, labs and a quiz.</p>
-      <ol id="concepts">
-        <li data-id="loop"><a href="agentic-loop.html">The Agentic Loop</a></li>
-        <li data-id="pat"><a href="agent-patterns.html">Agent Patterns</a></li>
-        <li data-id="arch"><a href="agentic-architecture.html">Agentic Architecture</a></li>
-        <li data-id="tools"><a href="tool-design-mcp.html">Tool Design &amp; MCP</a></li>
-        <li data-id="fw"><a href="frameworks.html">Framework Utilisation</a></li>
-        <li data-id="evals"><a href="testing-and-evals.html">Testing &amp; Evals</a></li>
-        <li data-id="obs"><a href="llm-observability.html">LLM Observability</a></li>
-        <li data-id="gov"><a href="ai-governance.html">AI Governance</a></li>
-      </ol>
-      <a class="go" href="concepts.html">Open the roadmap →</a><span class="prog" id="prog"></span>
-    </section>
+  <svg class="doodle web" viewBox="0 0 1240 1085" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to eight topic pages in learning order">
+    <g id="spokes"></g>
+    <g id="links"></g>
+    <g filter="url(#rough)">
+      <ellipse cx="620" cy="540" rx="130" ry="62" style="fill:#ffe066; stroke:#222; stroke-width:2.6"/>
+    </g>
+    <text class="t" x="620" y="538" text-anchor="middle" style="font-size:32px; fill:#1f3a93">Agentic AI</text>
+    <text x="620" y="568" text-anchor="middle" style="font-size:16px; fill:#555" id="progress"></text>
+    <g id="nodes"></g>
+  </svg>
 
-    <section class="door sticky pink" aria-labelledby="designs-h">
-      <b id="designs-h">System designs</b>
-      <p>Worked designs with animated 3D architectures, and topic pages that go deeper on each building block.</p>
-      <h3>Walkthroughs</h3>
+  <div class="cols">
+    <div class="sticky blue">
+      <b>How the web reads</b>
       <ul>
-        <li><a href="system-design/enterprise-search.html">Enterprise Search Assistant</a>: RAG over 10M documents</li>
-        <li><a href="system-design/knowledge-freshness.html">Fresh Knowledge Base Pipeline</a>: changes live in 15 minutes</li>
-        <li><a href="system-design/finsight.html">FinSight</a>: answers from SEC filings, measured</li>
-        <li><a href="system-design/support-agent.html">AI Customer Support Agent</a>: actions that move money</li>
+        <li><b>Solid lines</b>: every topic hangs off the core idea</li>
+        <li><b class="red">Red dashed ring, 1 → 8</b>: the suggested order, with why each step leads to the next</li>
+        <li><b>Grey dotted lines</b>: topics that share ideas across the ring</li>
+        <li>Each page ends with a <b>quiz</b>. Get the gold star, then tick done.</li>
       </ul>
-      <h3>Topic pages</h3>
-      <ul class="groups">
-        <li><span class="k">Data loading</span> <a href="system-design/knowledge-base.html">Knowledge base</a> · <a href="system-design/chunking.html">Chunking</a> · <a href="system-design/backfills.html">Backfills</a></li>
-        <li><span class="k">Retrieval</span> <a href="system-design/embeddings.html">Embeddings</a> · <a href="system-design/vector-databases.html">Vector databases</a> · <a href="system-design/vector-search.html">Vector search</a> · <a href="system-design/search-types.html">Search types</a> · <a href="system-design/reranking.html">Reranking</a></li>
-        <li><span class="k">Architecture</span> <a href="system-design/routing.html">Routing</a></li>
-        <li><span class="k">Quality</span> <a href="system-design/evals.html">Evals</a> · <a href="system-design/testing.html">Testing in production</a></li>
-        <li><span class="k">Governance</span> <a href="system-design/access-control.html">Access control</a></li>
-        <li><span class="k">Reference</span> <a href="system-design/glossary.html">Glossary</a></li>
+    </div>
+    <div class="sticky">
+      <b>Coming next</b>
+      <ul>
+        <li>Retrieval: chunking, hybrid search, reranking, RAG evals</li>
+        <li>Agent memory: short-term context, long-term stores, summarisation</li>
+        <li>Production: latency, caching, cost and model routing</li>
+        <li>Model layer: fine-tuning vs prompting, when to buy vs build</li>
       </ul>
-      <a class="go" href="system-design/index.html">Open system designs →</a>
-    </section>
+    </div>
   </div>
-
-  <p class="sig">— new to agents? start with Concepts. Know the basics? pick a design.</p>
+  <h2>All topics</h2>
+  <ol class="topic-list">
+    <li><a href="agentic-loop.html">The Agentic Loop</a>: the engine everything runs on</li>
+    <li><a href="agent-patterns.html">Agent Patterns</a>: RAG, ReAct, planner–executor, DAG, multi-agent, self-critique</li>
+    <li><a href="agentic-architecture.html">Agentic Architecture</a>: orchestration, subagents, gates, hooks, sessions</li>
+    <li><a href="tool-design-mcp.html">Tool Design &amp; MCP</a>: how agents act</li>
+    <li><a href="frameworks.html">Framework Utilisation</a>: CrewAI, ADK, LangGraph, LlamaIndex, Semantic Kernel, AutoGen</li>
+    <li><a href="testing-and-evals.html">Testing &amp; Evals</a>: prove it works</li>
+    <li><a href="llm-observability.html">LLM Observability</a>: watch it in production</li>
+    <li><a href="ai-governance.html">AI Governance</a>: ship it safely</li>
+  </ol>
+  <h2>System design walkthroughs</h2>
+  <p>Worked designs that put these ideas together, with an animated architecture, illustrated deep dives and a glossary.
+    Start with <a href="system-design/enterprise-search.html">the Enterprise Search Assistant</a>, or browse <a href="system-design/index.html">all designs and topics</a>.</p>
+  <p class="sig">— start at ① and work round the ring</p>
 </div>
+
 <script>
-(() => {
-  let done = [];
-  try { done = JSON.parse(localStorage.getItem('agentic-ai-roadmap-done') || '[]'); } catch (e) {}
-  const items = document.querySelectorAll('#concepts li');
-  items.forEach((li) => li.classList.toggle('done', done.includes(li.dataset.id)));
-  const n = [...items].filter((li) => li.classList.contains('done')).length;
-  document.getElementById('prog').textContent = n ? `${n} of 8 done` : '';
-})();
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const W = 270, H = 215, C = [620, 540];
+const T = [
+  { id: 'loop', n: 1, href: 'agentic-loop.html', t: 'The Agentic Loop', s: 'the engine everything runs on', x: 440, y: 140, c: '#fff59d',
+    leaves: [['4 stages, explained', 'diagram'], ['step-through simulator', 'simtitle'], ['stop_reason explorer', 'srpanel'], ['quiz', 'quiz']] },
+  { id: 'pat', n: 2, href: 'agent-patterns.html', t: 'Agent Patterns', s: 'RAG · ReAct · DAG · critic…', x: 800, y: 140, c: '#ffe0b8',
+    leaves: [['RAG vs RAG agent', 'rag'], ['ReAct trace', 'react'], ['planner–executor', 'plan'], ['DAG critical path', 'dag'], ['self-critique rounds', 'critic']] },
+  { id: 'arch', n: 3, href: 'agentic-architecture.html', t: 'Agentic Architecture', s: 'many agents, one system', x: 1090, y: 390, c: '#ffd1dc',
+    leaves: [['multi-agent orchestration', 's2'], ['subagents & context', 's3'], ['workflow handoffs', 's4'], ['Agent SDK hooks', 's5'], ['sessions & resumption', 's7']] },
+  { id: 'tools', n: 4, href: 'tool-design-mcp.html', t: 'Tool Design & MCP', s: 'how agents act', x: 1090, y: 690, c: '#cdeafe',
+    leaves: [['tool interface design', 's1'], ['structured errors', 's2'], ['tool_choice', 's3'], ['MCP hosts · clients · servers', 'mcp-core'], ['built-in tools', 's5']] },
+  { id: 'fw', n: 5, href: 'frameworks.html', t: 'Framework Utilisation', s: 'CrewAI · ADK · LangChain…', x: 800, y: 940, c: '#e3d4f7',
+    leaves: [['CrewAI crews & flows', 'crew'], ['Google ADK agent trees', 'adk'], ['LangChain & LangGraph', 'lc'], ['AutoGen termination lab', 'ag'], ['framework picker', 'pick']] },
+  { id: 'evals', n: 6, href: 'testing-and-evals.html', t: 'Testing & Evals', s: 'prove it works', x: 440, y: 940, c: '#c8f0d8',
+    leaves: [['metrics to track', 'metrics'], ['unit & integration tests', 'unit'], ['LLM-as-judge', 'model'], ['RAG & agent metrics', 'emetrics'], ['DeepEval · RAGAS', 'tools']] },
+  { id: 'obs', n: 7, href: 'llm-observability.html', t: 'LLM Observability', s: 'watch it in production', x: 150, y: 690, c: '#d7f0f4',
+    leaves: [['reading agent traces', 'trace'], ['cost calculator', 'cost'], ['why p95, not the mean', 'cost'], ['production signals', 'prod'], ['LangSmith · Langfuse · …', 'tools']] },
+  { id: 'gov', n: 8, href: 'ai-governance.html', t: 'AI Governance', s: 'ship it safely', x: 150, y: 390, c: '#fbe6a2',
+    leaves: [['prompt injection', 'sec-inj'], ['EU AI Act', 'comp-eu'], ['NIST · ISO 42001', 'comp-fw'], ['guardrail lab', 'gr-lab'], ['defence in depth', 'swiss']] },
+];
+const byId = Object.fromEntries(T.map(t => [t.id, t]));
+// where the segment a→b leaves a's box (half sizes hw, hh), plus a small gap
+function exitPt([ax, ay], [bx, by], hw, hh, gap = 8) {
+  const dx = bx - ax, dy = by - ay, s = Math.min(hw / Math.abs(dx || 1e-9), hh / Math.abs(dy || 1e-9));
+  const L = Math.hypot(dx, dy);
+  return [ax + dx * s + dx / L * gap, ay + dy * s + dy / L * gap];
+}
+const curve = ([x1, y1], [x2, y2], bend) => {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  return `M${x1},${y1} Q${mx - dy / L * bend},${my + dx / L * bend} ${x2},${y2}`;
+};
+
+// spokes: centre → each topic
+$('spokes').innerHTML = T.map(t => {
+  const p = [t.x, t.y], a = exitPt(C, p, 130 * .8, 62 * .8, 4), b = exitPt(p, C, W / 2, H / 2, 4);
+  return `<path class="s" d="${curve(a, b, 14)}" filter="url(#rough)"/>`;
+}).join('');
+
+// ring (learning order) + cross-links
+// [from, to, label, text-anchor, [x, y]]: explicit spots, the gaps between seven cards are too tight to compute
+const RING = [['loop', 'pat', 'six ways to shape the loop', 'middle', [620, 20]], ['pat', 'arch', 'multi-agent, in depth', 'start', [985, 256]],
+  ['arch', 'tools', 'agents need tools', 'end', [940, 545]], ['tools', 'fw', 'frameworks wrap loop + tools', 'start', [985, 834]],
+  ['fw', 'evals', 'measure which one wins', 'middle', [620, 1076]], ['evals', 'obs', 'offline evals → live traffic', 'end', [255, 834]],
+  ['obs', 'gov', 'prod signals → guardrails', 'start', [300, 545]]];
+const CROSS = [['gov', 'pat', 'critic ≈ output guardrail', 22], ['obs', 'tools', 'trace every tool call', -8]];
+const seg = (p, q) => { const P = [p.x, p.y], Q = [q.x, q.y]; return [exitPt(P, Q, W / 2, H / 2, 10), exitPt(Q, P, W / 2, H / 2, 16)]; };
+$('links').innerHTML =
+  RING.map(([a, b, l, anchor, [tx, ty]]) => {
+    const [s, e] = seg(byId[a], byId[b]), bend = -40;
+    return `<path d="${curve(s, e, bend)}" style="fill:none; stroke:#c0392b; stroke-width:2.4; stroke-dasharray:8 6" marker-end="url(#arrR)"/>
+      <text x="${tx}" y="${ty}" text-anchor="${anchor}" style="font-size:16px; fill:#c0392b">${esc(l)}</text>`;
+  }).join('') +
+  CROSS.map(([a, b, l, off, at = .5]) => {
+    const [s, e] = seg(byId[a], byId[b]), mx = s[0] + (e[0] - s[0]) * at, my = s[1] + (e[1] - s[1]) * at;
+    return `<path d="M${s[0]},${s[1]} L${e[0]},${e[1]}" style="fill:none; stroke:#999; stroke-width:1.6; stroke-dasharray:2 5; stroke-linecap:round"/>
+      <text x="${mx}" y="${my + (off || -8)}" text-anchor="middle" style="font-size:15px; fill:#777">${esc(l)}</text>`;
+  }).join('');
+
+// topic nodes
+const KEY = 'agentic-ai-roadmap-done';
+let done; try { done = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { done = new Set(); }
+function renderNodes() {
+  $('nodes').innerHTML = T.map(t => {
+    const x = t.x - W / 2, y = t.y - H / 2, d = done.has(t.id);
+    return `<g class="node" data-id="${t.id}">
+      <rect x="${x + 5}" y="${y + 7}" width="${W}" height="${H}" style="fill:rgba(0,0,0,.12)"/>
+      <a href="${t.href}" aria-label="Open ${esc(t.t)}">
+        <rect class="bg" x="${x}" y="${y}" width="${W}" height="${H}" style="fill:${t.c}; stroke:#444; stroke-width:1.5"/>
+        <rect x="${t.x - 45}" y="${y - 10}" width="90" height="20" transform="rotate(-3 ${t.x} ${y})" style="fill:rgba(255,255,255,.65)"/>
+        <text class="t ttl" x="${x + 44}" y="${y + 38}" style="font-size:22px; fill:#1f3a93">${esc(t.t)}</text>
+        <text x="${x + 44}" y="${y + 60}" style="font-size:15px; fill:#555">${esc(t.s)}</text>
+      </a>
+      <circle cx="${x + 20}" cy="${y + 28}" r="15" style="fill:#fff; stroke:#c0392b; stroke-width:2.2"/>
+      <text x="${x + 20}" y="${y + 34}" text-anchor="middle" style="font-family:var(--title); font-size:18px; fill:#c0392b">${t.n}</text>
+      ${t.leaves.map(([l, h], i) => `<a class="leaf" href="${t.href}#${h}"><text x="${x + 20}" y="${y + 88 + i * 23}" style="font-size:16.5px; fill:#222">• ${esc(l)}</text></a>`).join('')}
+      <g class="donebtn" data-id="${t.id}" role="button" tabindex="0" aria-pressed="${d}" aria-label="Mark ${esc(t.t)} done">
+        <rect x="${x + W - 74}" y="${y + H - 30}" width="64" height="22" rx="6" style="fill:${d ? '#b9f2c6' : '#fffef8'}; stroke:${d ? '#1e8449' : '#888'}; stroke-width:1.5"/>
+        <text x="${x + W - 42}" y="${y + H - 14}" text-anchor="middle" style="font-size:14px; fill:${d ? '#1e8449' : '#555'}">${d ? '✓ done' : '☐ done'}</text>
+      </g>
+      ${d ? `<text x="${x + W - 20}" y="${y + 40}" text-anchor="middle" transform="rotate(12 ${x + W - 20} ${y + 40})" style="font-family:var(--title); font-size:26px; fill:#1e8449">★</text>` : ''}
+    </g>`;
+  }).join('');
+  $('progress').textContent = `${done.size} / ${T.length} done`;
+}
+function toggle(id) {
+  done.has(id) ? done.delete(id) : done.add(id);
+  try { localStorage.setItem(KEY, JSON.stringify([...done])); } catch {}
+  renderNodes();
+}
+$('nodes').addEventListener('click', e => { const b = e.target.closest('.donebtn'); if (b) toggle(b.dataset.id); });
+$('nodes').addEventListener('keydown', e => { const b = e.target.closest('.donebtn');
+  if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(b.dataset.id); } });
+renderNodes();
 </script>
 </body>
 </html>
