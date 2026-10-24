@@ -1,0 +1,1518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>“Ask Your Data” Analytics Agent · Agentic System Designs</title>
+<meta name="description" content="A system design for a natural-language analytics agent over a BigQuery warehouse for 2,000 non-technical users: schema metadata retrieval without sample rows, running every query as the user, guards in code, execution accuracy, and production monitoring without labels using proxies, a weekly graded sample and rollback triggers, with interactive 3D diagrams.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: an animated 3D system as the hero, then one reading column of design sections, each with its own interactive 3D scene. Single deliberate light look, shared with the other walkthroughs. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef;
+    --paper: #f7f8f9;
+    --ink: #1c2530;
+    --muted: #586473;
+    --line: #cdd4dc;
+    --card: rgba(248, 249, 251, 0.9);
+    --accent: #4255d4;
+    --accent-ink: #ffffff;
+    --track: #d3d9e0;
+    --code-bg: #eef1f4;
+    --c-src: #8795a3; --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #7c5cff; --c-gov: #b2456e; --c-cross: #4a5562;
+    --line-strong: #9aa5b1; --wire: #7d8996; --c-dlq: #b23a3a;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  .wrap {
+    max-width: 1240px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* ---------- hero ---------- */
+  .intro { padding-block: 40px 20px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 48px); line-height: 1.05; text-wrap: balance; }
+  .prompt { margin: 0; font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .prompt q { font-style: italic; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .stage-wrap {
+    position: relative; height: clamp(440px, 72vh, 780px);
+    border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee;
+  }
+  #stage { position: absolute; inset: 0; }
+  #stage canvas { display: block; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .hint { position: absolute; left: 14px; top: 12px; margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  #reset { position: absolute; top: 12px; right: 12px; }
+
+  .lbl {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 3px 8px 4px; border-radius: 7px;
+    background: rgba(250, 251, 252, 0.84); border: 1px solid var(--line);
+    font-family: var(--font-body); font-size: 12px; line-height: 1.2; color: var(--ink);
+    white-space: nowrap; transition: background .2s, border-color .2s, transform .2s;
+  }
+  .lbl b { font-weight: 600; }
+  .lbl span { display: none; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .lbl.on span { display: block; }
+  .lbl.on { background: var(--ink); border-color: var(--ink); color: #fff; transform: translateY(-3px); }
+  .lbl.on span { color: #c9d2dc; }
+  .plate-lbl { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .lane-lbl { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+
+  .cap {
+    margin-top: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px 14px; display: grid; gap: 10px;
+  }
+  .cap-top { display: flex; align-items: center; gap: 12px; }
+  .meta { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .cap-top .meta:last-child { margin-left: auto; }
+  button {
+    font: 600 13px var(--font-body); color: var(--accent-ink); background: var(--accent);
+    border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; min-width: 72px;
+  }
+  button.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+  button:focus-visible, #bar:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #caption { margin: 0; font-size: 16px; line-height: 1.45; min-height: 2.9em; }
+  #bar { position: relative; height: 8px; border-radius: 4px; background: var(--track); cursor: pointer; touch-action: none; }
+  #fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 4px; background: var(--ink); }
+  #bar .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--paper); }
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  #chips a {
+    display: inline-block; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); text-decoration: none; transition: background .2s, color .2s, border-color .2s;
+  }
+  #chips a:hover { border-color: var(--ink); color: var(--ink); }
+  #chips li.on a { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.6; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg rect.k-serve[height="16"], .dg rect.k-kb[height="16"], .dg rect.k-model[height="16"], .dg rect.k-gov[height="16"], .dg rect.k-cross[height="16"] { stroke-width: 0; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-cross { fill: #b8c0c9; }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .deeper-k { margin: 20px 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+
+
+  /* ---------- 3D figures ---------- */
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(300px, 50vh, 450px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .fig3d.hero .stage3d { height: clamp(440px, 74vh, 800px); border-radius: 18px; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .reset3 { position: absolute; top: 10px; right: 10px; z-index: 2; }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .fig3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.88); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.pk { font-family: var(--font-mono); font-size: 10.5px; background: var(--ink); border-color: var(--ink); color: #fff; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.sc.ok { background: #dcf3e4; border-color: var(--c-ok); }
+  .l3.miss { font-family: var(--font-mono); font-size: 11px; background: #f6dddb; border-color: var(--c-dlq); color: #8c2b2b; }
+  .l3.cap { background: none; border: 0; padding: 0 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted); }
+  .l3.scr { background: none; border: 0; padding: 0; font-family: var(--font-mono); font-size: 10px; color: #c9d2dc; }
+  .l3.id { padding: 0 5px; font-family: var(--font-mono); font-size: 10.5px; }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k, .ctl3 .meta3 { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 .meta3 { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12px; }
+  .steps3 { display: flex; flex-wrap: wrap; gap: 4px; }
+  .steps3 button { min-width: 30px; padding: 4px 0; background: var(--paper); color: var(--ink); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .steps3 button:hover { border-color: var(--ink); }
+  .steps3 button[aria-current="step"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .track3 { position: relative; height: 4px; margin-top: 10px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .fill3 { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--ink); }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 4.6em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; }
+  .fig3d.hero .out3 { font-size: 16px; min-height: 3.6em; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .hero-chips { margin-top: 10px; }
+  .legend i.pk-doc { background: #fff; border: 1px solid var(--line-strong); }
+  .legend i.pk-env { background: #ffc857; height: 7px; }
+  .legend i.pk-chunk { background: #5fd3c3; }
+  .legend i.pk-vec { background: #8f9bff; transform: rotate(45deg) scale(.85); }
+  .legend i.pk-bad { background: #e0413a; }
+  .legend i.pk-span { background: #75859a; border-radius: 50%; width: 8px; height: 8px; }
+  :root { --c-ok: #46b06a; }
+  @media (max-width: 760px) {
+    .stage3d { height: min(78vh, 600px); }
+    .fig3d.hero .stage3d { height: min(82vh, 680px); }
+    .l3.pk, .l3.cap, .lane-lbl { display: none; }
+    .l3 { font-size: 10px; }
+    .out3 { font-size: 14px; }
+    .ctl3 .meta3 { display: none; }
+  }
+
+  /* ---------- article ---------- */
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 48px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 40px; margin-bottom: 40px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 28px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; color: var(--ink); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .tags li { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .say { font-style: italic; }
+  .budget { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 6px 0 6px; font-family: var(--font-mono); font-size: 11px; color: #fff; }
+  .budget div { display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; min-width: 0; }
+  .budget-key { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  footer { padding-block: 0 48px; font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 32px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+  }
+  @media (max-width: 760px) {
+    .lbl span, .plate-lbl, .lane-lbl, .hint { display: none; }
+    .lbl { font-size: 10.5px; padding: 2px 6px; }
+    #caption { font-size: 14.5px; }
+    #chips a { font-size: 11.5px; }
+    .prompt, .lead { font-size: 16.5px; }
+    h2 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<header class="wrap"><div class="intro">
+  <p class="eyebrow">Agentic system design walkthrough</p>
+  <h1>“Ask Your Data” Analytics Agent</h1>
+  <p class="prompt"><q>About 2,000 non-technical sales and marketing people want to ask questions in plain English, like “What was revenue by region last quarter vs the same quarter last year?”, and get back a number, a chart and a one-line explanation. The data is in a BigQuery warehouse of about 800 tables with confusing names and a partial dbt layer. Some tables hold customer PII. Analysts answer these by hand today, with a 3-day backlog; leadership wants it live in a quarter.</q></p>
+  <ul class="legend" aria-label="Colour key">
+    <li><i style="background:var(--c-src)"></i>Users</li>
+    <li><i style="background:var(--c-ingest)"></i>Agent</li>
+    <li><i style="background:var(--c-kb)"></i>Warehouse and metadata</li>
+    <li><i style="background:var(--c-model)"></i>Models</li>
+    <li><i style="background:var(--c-gov)"></i>Security and guards</li>
+    <li><i style="background:var(--c-cross)"></i>Evals and operations</li>
+  </ul>
+  <ul class="legend" aria-label="What the moving shapes mean">
+    <li><i class="pk-doc"></i>Question or answer</li>
+    <li><i class="pk-env"></i>SQL or query</li>
+    <li><i class="pk-chunk"></i>Schema card or result</li>
+    <li><i class="pk-vec"></i>Model output</li>
+    <li><i class="pk-bad"></i>Blocked</li>
+    <li><i class="pk-span"></i>Signal or check</li>
+  </ul>
+</div></header>
+
+<div class="wrap">
+<figure class="fig3d hero" id="hero">
+  <div class="stage3d" role="img" aria-label="Animated 3D view of the whole system: a user asks a question; the agent retrieves table cards from a schema index built from dbt docs and column metadata without sample rows; it writes SQL, a cost guard dry-runs it, and the query runs in BigQuery as the user, so their own permissions apply; aggregated results become a number, a chart and a one-line explanation; signals and a weekly graded sample feed the dashboard and a kill switch"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <ul id="chips" class="hero-chips">
+      <li data-k="picture"><a href="#picture">The one-minute picture</a></li>
+      <li data-k="schema"><a href="#schema">Finding the right tables</a></li>
+      <li data-k="identity"><a href="#identity">Run as the user</a></li>
+      <li data-k="guards"><a href="#guards">Guards in code</a></li>
+      <li data-k="evals"><a href="#evals">Evals</a></li>
+      <li data-k="prod"><a href="#production">Production</a></li>
+    </ul>
+</figure>
+</div>
+
+<div class="wrap doc">
+  <nav class="toc" aria-label="Sections">
+    <p>The solution</p>
+    <ol>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#success">Success metrics</a></li>
+      <li><a href="#picture">The one-minute picture</a></li>
+      <li><a href="#schema">Finding the right tables</a></li>
+      <li><a href="#identity">Run every query as the user</a></li>
+      <li><a href="#pii">Keep the model away from raw rows</a></li>
+      <li><a href="#guards">Guards in code</a></li>
+      <li><a href="#answer">Number, chart and explanation</a></li>
+      <li><a href="#evals">Evals before launch</a></li>
+      <li><a href="#production">Production without labels</a></li>
+      <li><a href="#scale">Latency and cost</a></li>
+      <li><a href="#mistakes">Common weak answers</a></li>
+      <li><a href="#risks">Risks and v2</a></li>
+      <li><a href="#presenting">Presenting it in 45 minutes</a></li>
+      <li><a href="#numbers">Numbers to remember</a></li>
+      <li><a href="glossary.html">Glossary</a></li>
+    </ol>
+  </nav>
+
+  <article>
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul class="tags"><li>Clarify</li></ul>
+      <p class="lead">Ask about correctness, PII and permissions before anything else: a wrong revenue number sent to leadership, or a sales rep seeing finance data, is worse than no answer.</p>
+      <div class="table"><table>
+        <thead><tr><th>Question</th><th>Answer</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td>Users</td><td class="num">~2,000 non-technical people; a few hundred questions an hour at peak</td><td>They can’t check SQL, so the answer must say what it computed</td></tr>
+          <tr><td>Output</td><td>A number, a chart and a one-line explanation, plus the SQL behind it for anyone who wants it</td><td>Showing the query and the tables makes answers checkable</td></tr>
+          <tr><td>Data</td><td class="num">BigQuery, ~800 tables, confusing names, dbt docs for some</td><td>Picking the right table is the hard part, not writing SQL</td></tr>
+          <tr><td>PII</td><td>Some tables hold names, emails, phone numbers</td><td>Raw rows must never reach the model or the prompt</td></tr>
+          <tr><td>Permissions</td><td>Teams already have different access in BigQuery</td><td>The agent must not widen anyone’s access</td></tr>
+          <tr><td>Latency</td><td class="num">Answer within 30 s at p95</td><td>A few model calls plus one or two queries</td></tr>
+          <tr><td>Cost</td><td>A budget per question for model tokens and BigQuery bytes scanned</td><td>One bad query can scan terabytes</td></tr>
+          <tr><td>Timeline</td><td>Live in a quarter</td><td>Start with the curated tables most questions use, not all 800</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="success">
+      <h2>Success metrics</h2>
+      <ul class="tags"><li>Measure</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Metric</th><th>Target</th><th>Measured by</th></tr></thead>
+        <tbody>
+          <tr><td>Execution accuracy</td><td class="num">≥ 90% offline</td><td>Run the generated SQL and the analyst’s SQL; compare the results</td></tr>
+          <tr><td>Graded accuracy in production</td><td class="num">≥ 85%</td><td>Analysts grade 50 random answers a week</td></tr>
+          <tr><td>Access violations</td><td class="num">0</td><td>Query audit log: every query ran as its user, no table outside their groups</td></tr>
+          <tr><td>PII in prompts or answers</td><td class="num">0</td><td>Prompt logs scanned; PII columns never selected unaggregated</td></tr>
+          <tr><td>Latency</td><td class="num">p95 &lt; 30 s</td><td>Traces per question</td></tr>
+          <tr><td>Backlog</td><td>Analyst queue shrinks from 3 days</td><td>Ticket volume for routine questions</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="picture">
+      <h2>The one-minute picture</h2>
+      <ul class="tags"><li>Start here</li></ul>
+      <ol class="plain">
+        <li><strong>Question:</strong> the user asks in the chat; SSO identifies them.</li>
+        <li><strong>Find the tables:</strong> retrieval over a schema index (table and column descriptions from dbt, column names and types, join keys, a few example questions). No sample rows.</li>
+        <li><strong>Write SQL:</strong> the model writes BigQuery SQL for the chosen tables, using the business definitions from the semantic layer.</li>
+        <li><strong>Guards in code:</strong> SELECT only, a dry run to check bytes against a cap, a row limit, and no unaggregated PII columns.</li>
+        <li><strong>Run as the user:</strong> the query executes with the user’s own credentials, so BigQuery enforces their permissions.</li>
+        <li><strong>Answer:</strong> the model sees only the aggregated result, and writes the one-line explanation; code draws the chart.</li>
+        <li><strong>Around it:</strong> a golden set from analysts’ past answers before launch; proxies, a weekly graded sample and kill triggers after.</li>
+      </ol>
+      <div class="note"><p><strong>In one breath:</strong> “Schema retrieval over metadata, never rows; the model writes SQL; code checks it and caps its cost; it runs as the user so the warehouse enforces access; the model only sees aggregates; and analysts’ past answers are the eval set.”</p></div>
+    </section>
+
+    <section id="schema">
+      <h2>Finding the right tables</h2>
+      <ul class="tags"><li>Schema index</li><li>Semantic layer</li></ul>
+<figure class="fig3d" id="schema3d">
+  <div class="stage3d" role="img" aria-label="Table cards are built from dbt docs, column names and types, join keys and example questions, but no sample rows; a PII tag marks sensitive columns; a question retrieves the top table cards, and the model picks fct_orders and dim_region"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Cards are table descriptions, not data.</figcaption>
+</figure>
+      <p>Don’t put the warehouse in a vector database: 50 TB of rows is the wrong thing to search, and it would copy PII into a second system. Index the <em>metadata</em> instead, one card per table:</p>
+      <ul class="plain">
+        <li>table name and a plain-English description (from dbt where it exists, written by analysts where it doesn’t),</li>
+        <li>columns with types and descriptions, and which are PII (from policy tags),</li>
+        <li>join keys and grain (“one row per order”),</li>
+        <li>a handful of example questions this table answers, taken from analysts’ past work,</li>
+        <li>freshness and owner.</li>
+      </ul>
+      <p>Retrieval picks the top tables for a question; the model then chooses among them. Start with the 50–100 curated tables that most questions use, with deprecated ones (<code>dim_cust_legacy</code>) excluded or clearly marked. A <strong>semantic layer</strong> (dbt metrics, Looker LookML, Cube) gives the model fixed definitions of “revenue” and “signups”, so two people asking the same thing get the same number.</p>
+    </section>
+
+    <section id="identity">
+      <h2>Run every query as the user</h2>
+      <ul class="tags"><li>Security default</li></ul>
+<figure class="fig3d" id="identity3d">
+  <div class="stage3d" role="img" aria-label="A sales rep and a finance analyst ask the agent; with a shared service account both could read the finance tables; running each query with the user's own credentials, BigQuery applies their own permissions, so the sales rep's query on finance tables is denied"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. The red path is what a shared service account would allow.</figcaption>
+</figure>
+      <p class="lead">A shared service account is the most common security mistake in this design. It can read everything the agent might need, so a cleverly worded prompt from anyone can read finance data.</p>
+      <div class="table"><table>
+        <thead><tr><th></th><th>Shared service account</th><th>Run as the user</th></tr></thead>
+        <tbody>
+          <tr><td>Who BigQuery thinks is asking</td><td>The agent</td><td>The person who asked</td></tr>
+          <tr><td>Access</td><td>The union of everyone’s needs</td><td>Exactly that person’s existing access</td></tr>
+          <tr><td>Prompt injection impact</td><td>Can reach any table the account can</td><td>Can’t exceed the user’s own rights</td></tr>
+          <tr><td>Audit log</td><td>Every query looks the same</td><td>Every query is attributed to a person</td></tr>
+        </tbody>
+      </table></div>
+      <p>In BigQuery this means OAuth on behalf of the signed-in user (or short-lived impersonated credentials scoped to them), with dataset IAM, row-level access policies and column-level security through policy tags. The agent’s own service account holds only what it needs to read metadata.</p>
+    </section>
+
+    <section id="pii">
+      <h2>Keep the model away from raw rows</h2>
+      <ul class="tags"><li>Security default</li></ul>
+      <p>Sample rows in the schema index look helpful: the model sees what values look like. They also put customer names and emails into every prompt that retrieves that table. Raising PII as a requirement and then indexing sample rows breaks your own requirement.</p>
+      <div class="table"><table>
+        <thead><tr><th>Instead of</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td>Sample rows</td><td>Column profiles computed in code: type, null rate, distinct count, and value lists only for safe low-cardinality columns (regions, plan tiers)</td></tr>
+          <tr><td>Raw result rows to the model</td><td>Aggregated results only; code formats tables and charts</td></tr>
+          <tr><td>Selecting PII columns</td><td>A check that rejects SQL selecting a PII-tagged column without aggregation</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="guards">
+      <h2>Guards in code</h2>
+      <ul class="tags"><li>Before every query</li></ul>
+<figure class="fig3d" id="guards3d">
+  <div class="stage3d" role="img" aria-label="Generated SQL passes checks in order: read-only, no unaggregated PII columns, a dry run within the bytes cap, and a row limit; a query that would scan 4 terabytes is stopped at the dry run and the agent asks the user to narrow the date range"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Each tile is one check; it lights green as the query passes, red where it stops.</figcaption>
+</figure>
+      <div class="table"><table>
+        <thead><tr><th>#</th><th>Check</th><th>How</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Read only</td><td>Parse the SQL (for example with sqlglot); allow a single SELECT, no DML, DDL or scripting</td></tr>
+          <tr><td>2</td><td>No unaggregated PII</td><td>PII-tagged columns may appear only inside COUNT or similar aggregates</td></tr>
+          <tr><td>3</td><td>Cost cap</td><td>A BigQuery dry run returns bytes to be scanned; above the cap, ask the user to narrow it</td></tr>
+          <tr><td>4</td><td>Row limit and timeout</td><td>Enforced by the query runner, not requested in the prompt</td></tr>
+        </tbody>
+      </table></div>
+      <p>The same idea as every other agent that acts: the model proposes, code decides. A failed check returns a clear error the model can fix once (“column email can’t be selected; count it instead”).</p>
+    </section>
+
+    <section id="answer">
+      <h2>Number, chart and explanation</h2>
+      <ul class="tags"><li>Grounded output</li></ul>
+      <p>The result comes back as a small aggregated table. Code picks the chart (a bar for categories, a line for time) and computes the headline number and any comparison, such as the percentage change. The model writes the one-line explanation from those numbers only, and the answer shows the tables used and the SQL behind a “show query” link. If the question is ambiguous (“last quarter” in fiscal or calendar terms), it asks rather than guesses.</p>
+    </section>
+
+    <section id="evals">
+      <h2>Evals before launch</h2>
+      <ul class="tags"><li>Source · size · per step</li></ul>
+<figure class="fig3d" id="evals3d">
+  <div class="stage3d" role="img" aria-label="Analysts' past questions with their SQL form the golden set; for each, the agent's SQL and the analyst's SQL both run, and the result sets are compared; per-step checks score table selection and whether the SQL runs; a regression run on every change compares scores with the current version"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Dashboard bars: table-selection recall, SQL that runs, execution accuracy.</figcaption>
+</figure>
+      <h3>The data</h3>
+      <p>The 3-day backlog is an asset: years of analyst tickets with the question, the SQL that answered it and the number sent back. Take about 500, stratified by team and question type (totals, comparisons, top-N, time series, funnels), plus questions that should be declined (PII lists, data that doesn’t exist).</p>
+      <h3>The metric: execution accuracy</h3>
+      <p>Run the agent’s SQL and the analyst’s SQL, and compare the <em>results</em>: same rows and values, with rounding tolerance and order ignored unless the question asks for an order. Don’t grade the SQL text with an LLM judge: two very different queries can both be right, and a query that looks right can return the wrong number.</p>
+      <h3>Per-step tests</h3>
+      <div class="table"><table>
+        <thead><tr><th>Step</th><th>Metric</th><th>Bar</th></tr></thead>
+        <tbody>
+          <tr><td>Table selection</td><td>Recall@5 of the tables the analyst used</td><td class="num">≥ 95%</td></tr>
+          <tr><td>SQL validity</td><td>Parses, passes the guards, runs without error</td><td class="num">≥ 98%</td></tr>
+          <tr><td>End to end</td><td>Execution accuracy</td><td class="num">≥ 90%</td></tr>
+          <tr><td>Declines</td><td>Correctly declines PII and impossible questions</td><td class="num">≥ 95%</td></tr>
+          <tr><td>Security</td><td>Queries outside the user’s access that succeed</td><td class="num">0</td></tr>
+        </tbody>
+      </table></div>
+      <p>The whole set runs on every change to prompts, models or the schema index, and a change ships only if no score drops.</p>
+    </section>
+
+    <section id="production">
+      <h2>Production without labels</h2>
+      <ul class="tags"><li>Proxies · graded sample · triggers</li></ul>
+<figure class="fig3d" id="prod3d">
+  <div class="stage3d" role="img" aria-label="Live answers produce signals: thumbs, rephrases within two minutes, SQL errors and empty results, declines, latency and cost; analysts grade 50 random answers a week; every query is logged with the user's identity; a dashboard compares them with thresholds, and a kill switch pulls back to the pilot group or stops the agent"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Dashboard bars: 👎 rate, rephrase rate, graded accuracy.</figcaption>
+</figure>
+      <p class="lead">In production there are no golden labels, so correctness and recall@k can’t be measured directly on live traffic. Say so, then use three layers.</p>
+      <h3>1. Live proxy signals, on every answer</h3>
+      <div class="table"><table>
+        <thead><tr><th>Signal</th><th>What it suggests</th></tr></thead>
+        <tbody>
+          <tr><td>👍 / 👎</td><td>Explicit feedback</td></tr>
+          <tr><td>Rephrase rate: the same user asks a similar question within 2 minutes</td><td>The first answer probably missed</td></tr>
+          <tr><td>SQL error and empty-result rate</td><td>Wrong tables, wrong filters or broken schema</td></tr>
+          <tr><td>Decline rate</td><td>Too low: it’s guessing. Too high: it’s useless</td></tr>
+          <tr><td>p95 latency; LLM cost and BigQuery bytes per question</td><td>Health against the 30-second target and the budget</td></tr>
+        </tbody>
+      </table></div>
+      <h3>2. Real accuracy, from a weekly sample</h3>
+      <p>Analysts grade 50 random answers each week. That is the true accuracy number to compare with the offline 90%, and every wrong answer becomes a new golden-set case, so the eval set grows from real failures.</p>
+      <h3>3. Safety, at zero tolerance</h3>
+      <p>Every query is logged with the user’s identity. Alert on any access to a table outside the user’s groups and on any PII column selected unaggregated.</p>
+      <h3>Rollback triggers</h3>
+      <div class="table"><table>
+        <thead><tr><th>Trigger</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>Any access violation</td><td>Instant kill switch; questions go back to analysts</td></tr>
+          <tr><td>👎 above 15% for 3 days, or weekly graded accuracy below 85%</td><td>Pull back to the pilot group and investigate</td></tr>
+          <tr><td>Cost per question above 2× budget</td><td>Alert and tighten the bytes cap</td></tr>
+        </tbody>
+      </table></div>
+      <p>Launch to one pilot team for 2 weeks before all 2,000 users.</p>
+      <div class="note"><p><strong>A template for any design:</strong> proxies, a human-graded sample, safety alerts, rollback triggers with numbers, and a pilot first. Only the domain proxies change: rephrase rate here, engineer 👍 for an on-call bot, refund-reversal rate for a support agent.</p></div>
+    </section>
+
+    <section id="scale">
+      <h2>Latency and cost</h2>
+      <ul class="tags"><li>Back of the envelope</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Stage</th><th>Budget</th></tr></thead>
+        <tbody>
+          <tr><td>Schema retrieval</td><td class="num">&lt; 1 s</td></tr>
+          <tr><td>SQL generation (1–2 model calls, one retry on a guard error)</td><td class="num">3–8 s</td></tr>
+          <tr><td>Dry run and query in BigQuery</td><td class="num">2–15 s, partitioned tables help</td></tr>
+          <tr><td>Chart and explanation</td><td class="num">2–4 s</td></tr>
+          <tr><td>Total at p95</td><td class="num">&lt; 30 s</td></tr>
+        </tbody>
+      </table></div>
+      <p>Illustrative. BigQuery bytes scanned usually costs more than the model; the dry-run cap and partition filters are what keep it bounded. Caching results for identical questions over unchanged data helps popular dashboards-style questions.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common weak answers</h2>
+      <ul class="tags"><li>What interviewers probe</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Weak answer</th><th>Strong answer</th></tr></thead>
+        <tbody>
+          <tr><td>A shared service account runs the queries</td><td>Run as the user; the warehouse enforces their access, and the audit log names them</td></tr>
+          <tr><td>Sample rows in the schema index “for context”</td><td>Column profiles computed in code; no raw values; PII columns tagged</td></tr>
+          <tr><td>An LLM judge grades the SQL</td><td>Execution accuracy: run both queries and compare the results</td></tr>
+          <tr><td>“We’ll track correctness and recall@k in production”</td><td>No live labels: proxies plus a weekly graded sample, and say so</td></tr>
+          <tr><td>No rollback plan</td><td>Kill on any access violation; pull back on 👎 &gt; 15% for 3 days or graded accuracy &lt; 85%</td></tr>
+          <tr><td>All 800 tables on day one</td><td>Curated tables first, a semantic layer for metrics, a pilot team</td></tr>
+        </tbody>
+      </table></div>
+      <p>Strong signals worth keeping: requirements first including PII and groundedness; indexing schema metadata, not data, and saying why; the cost guard in code; a golden set from analysts’ past answers with per-step tests; and asking for a question to be rephrased when it is unclear.</p>
+    </section>
+
+    <section id="risks">
+      <h2>Risks and v2</h2>
+      <ul class="tags"><li>Failure modes</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Risk</th><th>Detected by</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Plausible but wrong number</td><td>Weekly graded sample, rephrase rate</td><td>Semantic-layer metrics, shown SQL and tables, execution-accuracy gate</td></tr>
+          <tr><td>Two definitions of “revenue”</td><td>Disagreeing answers to the same question</td><td>One governed metric definition</td></tr>
+          <tr><td>Schema drift breaks queries</td><td>SQL error rate per table</td><td>Rebuild table cards from dbt on every deploy</td></tr>
+          <tr><td>Runaway scan cost</td><td>Bytes per question</td><td>Dry-run cap, partition filters</td></tr>
+          <tr><td>Access widening</td><td>Audit log alerts</td><td>Run as the user; kill switch</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>v2:</strong> follow-up questions on the same result, saved answers that refresh, and suggested next questions; widen from curated tables as the graded accuracy holds.</p>
+    </section>
+
+    <section id="presenting">
+      <h2>Presenting it in 45 minutes</h2>
+      <ul class="tags"><li>Interview script</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Step</th><th>Time</th><th>What to cover</th></tr></thead>
+        <tbody>
+          <tr><td>1. Clarify</td><td class="num">5 min</td><td>Correctness, PII, permissions, latency, cost, the 800 tables, the timeline</td></tr>
+          <tr><td>2. The one-minute picture</td><td class="num">3 min</td><td>Schema index, SQL, guards, run as user, aggregated answer, evals</td></tr>
+          <tr><td>3. Tables and semantics</td><td class="num">8 min</td><td>Metadata cards, curated tables first, semantic layer</td></tr>
+          <tr><td>4. Security defaults</td><td class="num">8 min</td><td>Run as the user, no raw rows, guards in code</td></tr>
+          <tr><td>5. Evals before launch</td><td class="num">8 min</td><td>Golden set from analyst tickets, execution accuracy, per-step tests, regression gate</td></tr>
+          <tr><td>6. Production</td><td class="num">8 min</td><td>Proxies, weekly graded sample, safety alerts, triggers, pilot</td></tr>
+          <tr><td>7. Latency, cost, risks</td><td class="num">5 min</td><td>The 30-second budget, bytes caps, drift</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="numbers">
+      <h2>Numbers to remember</h2>
+      <ul class="tags"><li>Cheat sheet</li></ul>
+      <div class="table"><table>
+        <tbody>
+          <tr><td>Users · tables</td><td class="num">~2,000 · ~800 (start with 50–100 curated)</td></tr>
+          <tr><td>Golden set</td><td class="num">~500 analyst tickets with SQL and answers</td></tr>
+          <tr><td>Execution accuracy bar</td><td class="num">≥ 90% offline</td></tr>
+          <tr><td>Weekly graded sample</td><td class="num">50 answers; pull back below 85%</td></tr>
+          <tr><td>👎 trigger</td><td class="num">&gt; 15% for 3 days</td></tr>
+          <tr><td>Rephrase window</td><td class="num">2 minutes</td></tr>
+          <tr><td>Access violations</td><td class="num">0; any one is an instant kill</td></tr>
+          <tr><td>Latency</td><td class="num">p95 &lt; 30 s</td></tr>
+          <tr><td>Pilot</td><td class="num">One team, 2 weeks</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </article>
+</div>
+
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. The 3D views use Three.js loaded from a CDN, so they need a connection; the text and tables cover the same ground. Figures show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarse = window.matchMedia('(pointer: coarse)').matches;
+const BG = 0xe6eaee;
+const V3 = THREE.Vector3;
+
+// ---------- palette ----------
+const C = {
+  source: 0x8795a3, ingest: 0x2a9d8f, kb: 0x4d5fd8, serve: 0xe3a13b, model: 0x7c5cff,
+  gov: 0xb2456e, cross: 0x4a5562, dlq: 0xa9443c, ok: 0x46b06a, glass: 0xc9e2f2,
+  rack: 0x3c4652, git: 0xe8603c, canary: 0xf2c230, v2: 0x2f9e6b, steel: 0x9aa5b1,
+};
+const P = {
+  env: 0xffc857, doc: 0xffffff, chunk: 0x5fd3c3, vec: 0x8f9bff, bad: 0xe0413a, span: 0x75859a,
+  ask: 0xffd27a, acl: 0xe27ab0, ans: 0xff9f86, ship: 0x46b06a, same: 0xb8c0c9,
+};
+
+// ---------- primitives ----------
+function mat(color, o = {}) {
+  const m = new THREE.MeshStandardMaterial({
+    color, roughness: o.rough ?? 0.55, metalness: o.metal ?? 0,
+    emissive: new THREE.Color(o.emi ?? color), emissiveIntensity: o.glow ?? 0,
+    transparent: o.opacity != null, opacity: o.opacity ?? 1,
+    side: o.side ?? THREE.FrontSide, flatShading: !!o.flat,
+    depthWrite: o.opacity == null || o.opacity > 0.6,
+  });
+  m.userData.base = o.glow ?? 0;
+  return m;
+}
+function mesh(geo, color, o = {}) {
+  const m = new THREE.Mesh(geo, mat(color, o));
+  m.castShadow = o.cast ?? true;
+  m.receiveShadow = true;
+  return m;
+}
+function rb(w, h, d, color, o = {}) {
+  const r = Math.max(0.002, Math.min(o.r ?? 0.12, h / 2 - 0.001, w / 2 - 0.001, d / 2 - 0.001));
+  return mesh(new RoundedBoxGeometry(w, h, d, o.seg ?? 3, r), color, o);
+}
+function grp() { const g = new THREE.Group(); g.userData.glow = []; g.userData.h = 1; return g; }
+function put(g, m, x = 0, y = 0, z = 0, glow = true) {
+  m.position.set(x, y, z);
+  g.add(m);
+  if (glow) g.userData.glow.push(m);
+  return m;
+}
+function rod(a, b, r, color, o) {
+  const m = mesh(new THREE.CylinderGeometry(r, r, a.distanceTo(b), 14), color, o);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new V3(0, 1, 0), b.clone().sub(a).normalize());
+  return m;
+}
+function label(parent, html, cls, pos, center = [0.5, 1]) {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.innerHTML = html;
+  const obj = new CSS2DObject(el);
+  obj.position.copy(pos);
+  obj.center.set(center[0], center[1]);
+  parent.add(obj);
+  return obj;
+}
+
+// ---------- shapes: each returns a group standing on y = 0 ----------
+function database(color, o = {}) {
+  const r = o.r ?? 1.2, n = o.tiers ?? 3, th = o.th ?? 0.5, gap = 0.08;
+  const g = grp();
+  const light = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55).getHex();
+  for (let i = 0; i < n; i++) put(g, mesh(new THREE.CylinderGeometry(r, r, th, 48), color, { rough: 0.42 }), 0, th / 2 + i * (th + gap), 0);
+  for (let i = 1; i < n; i++) put(g, mesh(new THREE.CylinderGeometry(r * 0.95, r * 0.95, gap + 0.01, 48), light, { cast: false }), 0, i * (th + gap) - gap / 2, 0, false);
+  const H = n * th + (n - 1) * gap;
+  put(g, mesh(new THREE.CylinderGeometry(r * 0.8, r * 0.8, 0.012, 48), light, { cast: false }), 0, H + 0.006, 0, false);
+  g.userData.h = H;
+  g.userData.r = r;
+  return g;
+}
+function topic(o = {}) {
+  const n = o.parts ?? 3, len = o.len ?? 6, gap = o.gap ?? 0.9, rr = o.rad ?? 0.3, color = o.color ?? C.ingest;
+  const segs = o.segs ?? Math.round(len * 1.4);
+  const g = grp();
+  const y = rr + 0.14;
+  for (let p = 0; p < n; p++) {
+    const z = (p - (n - 1) / 2) * gap;
+    const tube = mesh(new THREE.CylinderGeometry(rr, rr, len, 28, 1, true), C.glass, { opacity: 0.32, side: THREE.DoubleSide, cast: false, rough: 0.15 });
+    tube.rotation.z = Math.PI / 2;
+    put(g, tube, 0, y, z, false);
+    for (let k = 0; k <= segs; k++) {
+      const ring = mesh(new THREE.TorusGeometry(rr + 0.012, k === 0 || k === segs ? 0.06 : 0.03, 8, 28), color, { cast: false });
+      ring.rotation.y = Math.PI / 2;
+      put(g, ring, -len / 2 + (k * len) / segs, y, z);
+    }
+    put(g, rb(len + 0.2, 0.1, rr * 1.5, 0xc3cbd4, { cast: false, r: 0.04 }), 0, 0.05, z, false);
+    if (o.labels !== false && n > 1) label(g, `P${p}`, 'l3 cap', new V3(-len / 2 - 0.3, y, z), [1, 0.5]);
+  }
+  g.userData.h = 2 * rr + 0.2;
+  g.userData.y = y;
+  g.userData.len = len;
+  g.userData.lane = (p) => (p - (n - 1) / 2) * gap;
+  return g;
+}
+function server(o = {}) {
+  const w = o.w ?? 1.2, h = o.h ?? 1.7, d = o.d ?? 1.0;
+  const g = grp();
+  put(g, rb(w, h, d, o.color ?? C.rack, { r: 0.1, emi: o.emi ?? C.ingest }), 0, h / 2, 0);
+  for (let i = 0; i < 3; i++) {
+    const y = h * (0.24 + i * 0.26);
+    put(g, rb(w * 0.82, h * 0.18, 0.05, 0x6b7684, { cast: false, r: 0.02 }), 0, y, d / 2, false);
+    put(g, mesh(new THREE.SphereGeometry(0.05, 10, 8), o.led ?? 0x46d27a, { glow: 1.4, cast: false }), w * 0.3, y, d / 2 + 0.04, false);
+    put(g, rb(w * 0.4, 0.03, 0.02, 0x9aa5b1, { cast: false, r: 0.01 }), -w * 0.12, y, d / 2 + 0.03, false);
+  }
+  g.userData.h = h;
+  return g;
+}
+function sheet(color = 0xffffff) {
+  const g = grp();
+  put(g, rb(0.9, 0.05, 1.2, color, { r: 0.02 }), 0, 0.025, 0);
+  for (let i = 0; i < 4; i++) put(g, rb(i === 0 ? 0.42 : 0.66, 0.012, 0.07, 0xaeb7c2, { cast: false, r: 0.005 }), i === 0 ? -0.12 : 0, 0.056, -0.38 + i * 0.24, false);
+  g.userData.h = 0.06;
+  return g;
+}
+function stand(g, h) {
+  put(g, mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.1, 32), C.steel), 0, 0.05, 0, false);
+  put(g, mesh(new THREE.CylinderGeometry(0.06, 0.06, h, 12), C.steel), 0, h / 2, 0, false);
+}
+function browser(accent = 0x4255d4) {
+  const g = grp();
+  stand(g, 0.7);
+  put(g, rb(2.4, 1.6, 0.14, 0xf4f6f8, { r: 0.08 }), 0, 1.5, 0);
+  put(g, rb(2.4, 0.28, 0.16, accent, { r: 0.07 }), 0, 2.18, 0.005);
+  [0xe2674f, 0xe3a13b, 0x46b06a].forEach((c, i) => put(g, mesh(new THREE.SphereGeometry(0.05, 10, 8), c, { cast: false }), -1.0 + i * 0.15, 2.18, 0.09, false));
+  put(g, rb(0.8, 0.62, 0.03, 0xcfd8f0, { cast: false, r: 0.02 }), -0.6, 1.42, 0.08, false);
+  for (let i = 0; i < 4; i++) put(g, rb(i === 0 ? 0.6 : 0.9, 0.07, 0.03, 0xb8c0c9, { cast: false, r: 0.01 }), i === 0 ? 0.3 : 0.45, 1.72 - i * 0.2, 0.08, false);
+  g.userData.h = 2.35;
+  return g;
+}
+function wiki() {
+  const g = grp();
+  for (let i = 0; i < 5; i++) {
+    const s = rb(1.4, 0.08, 1.8, i % 2 ? 0xf7f8f9 : 0xe9edf1, { r: 0.03 });
+    s.rotation.y = (i - 2) * 0.07;
+    put(g, s, (i - 2) * 0.03, 0.05 + i * 0.1, 0);
+  }
+  for (let k = 0; k < 4; k++) put(g, rb(k === 0 ? 0.6 : 1.0, 0.012, 0.08, 0x9aa5b1, { cast: false, r: 0.005 }), k === 0 ? -0.2 : 0, 0.5, -0.55 + k * 0.32, false);
+  put(g, rb(0.16, 0.02, 0.55, C.gov, { cast: false, r: 0.01 }), 0.45, 0.51, -0.85, false);
+  g.userData.h = 0.55;
+  return g;
+}
+function gitRepo() {
+  const g = grp();
+  put(g, rb(1.8, 0.12, 1.3, 0x2b3440, { r: 0.05 }), 0, 0.06, 0, false);
+  const A = new V3(-0.4, 0.5, 0), B = new V3(-0.4, 1.95, 0), Cn = new V3(0.45, 1.45, 0);
+  g.add(rod(A, B, 0.07, 0x55606d));
+  g.add(rod(A.clone().add(new V3(0, 0.25, 0)), Cn, 0.07, 0x55606d));
+  for (const p of [A, B, Cn]) put(g, mesh(new THREE.SphereGeometry(0.22, 24, 16), C.git, { rough: 0.4 }), p.x, p.y, p.z);
+  g.userData.h = 2.2;
+  return g;
+}
+function bucket() {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.9, 0.68, 1.1, 40, 1, true), 0x7f93a8, { side: THREE.DoubleSide, rough: 0.45 }), 0, 0.55, 0);
+  put(g, mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.05, 40), 0x6c7f93), 0, 0.025, 0, false);
+  const rim = mesh(new THREE.TorusGeometry(0.9, 0.05, 10, 40), 0x6c7f93);
+  rim.rotation.x = Math.PI / 2;
+  put(g, rim, 0, 1.1, 0, false);
+  put(g, mesh(new THREE.TorusGeometry(0.9, 0.03, 8, 40, Math.PI), 0x6c7f93), 0, 1.1, 0, false);
+  for (let i = 0; i < 2; i++) {
+    const s = rb(0.6, 0.8, 0.03, 0xffffff, { r: 0.02 });
+    s.rotation.z = i ? -0.22 : 0.2;
+    const stripe = rb(0.6, 0.14, 0.035, 0xd04a3a, { r: 0.01, cast: false });
+    stripe.position.set(0, 0.3, 0);
+    s.add(stripe);
+    put(g, s, i ? 0.25 : -0.2, 1.15, i ? 0.12 : -0.15, false);
+  }
+  g.userData.h = 2.0;
+  return g;
+}
+function modelGem(color = C.model) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.7, 0.85, 0.3, 6), 0x3b3f58), 0, 0.15, 0, false);
+  const gem = put(g, mesh(new THREE.IcosahedronGeometry(0.72, 0), color, { flat: true, rough: 0.3 }), 0, 1.12, 0);
+  g.userData.spin = gem;
+  g.userData.h = 1.85;
+  return g;
+}
+function tray(color = C.dlq) {
+  const g = grp();
+  const w = 1.8, d = 1.3, h = 0.5, t = 0.08;
+  put(g, rb(w, t, d, color, { r: 0.03 }), 0, t / 2, 0);
+  put(g, rb(w, h, t, color, { r: 0.03 }), 0, h / 2, -d / 2 + t / 2);
+  put(g, rb(w, h, t, color, { r: 0.03 }), 0, h / 2, d / 2 - t / 2);
+  put(g, rb(t, h, d, color, { r: 0.03 }), -w / 2 + t / 2, h / 2, 0);
+  put(g, rb(t, h, d, color, { r: 0.03 }), w / 2 - t / 2, h / 2, 0);
+  g.userData.h = h;
+  return g;
+}
+function robot(color = C.serve) {
+  const g = grp();
+  put(g, rb(1.2, 1.0, 0.9, color, { r: 0.2 }), 0, 0.5, 0);
+  put(g, rb(1.0, 0.72, 0.82, 0xf3f4f6, { r: 0.2 }), 0, 1.42, 0);
+  put(g, rb(0.78, 0.3, 0.04, 0x1c2530, { r: 0.08, cast: false }), 0, 1.45, 0.41, false);
+  for (const x of [-0.18, 0.18]) put(g, mesh(new THREE.SphereGeometry(0.07, 12, 10), 0x7fe3ff, { glow: 1.2, cast: false }), x, 1.45, 0.44, false);
+  g.add(rod(new V3(0, 1.78, 0), new V3(0, 2.08, 0), 0.03, C.steel));
+  put(g, mesh(new THREE.SphereGeometry(0.09, 14, 10), color), 0, 2.12, 0);
+  g.userData.h = 2.25;
+  return g;
+}
+function person(color = 0xdfe6ee) {
+  const g = grp();
+  put(g, mesh(new THREE.CapsuleGeometry(0.38, 0.7, 6, 16), color, { rough: 0.7 }), 0, 0.76, 0);
+  put(g, mesh(new THREE.SphereGeometry(0.3, 24, 16), 0xf1d3b8, { rough: 0.7 }), 0, 1.82, 0);
+  g.userData.h = 2.1;
+  return g;
+}
+function monitor(colors = [C.ingest, C.serve]) {
+  const g = grp();
+  stand(g, 0.8);
+  put(g, rb(2.9, 1.8, 0.14, 0x2b3440, { r: 0.08, emi: 0x4255d4 }), 0, 1.65, 0);
+  put(g, rb(2.62, 1.52, 0.02, 0x16202b, { cast: false, r: 0.02 }), 0, 1.65, 0.08, false);
+  const bars = [];
+  const n = colors.length, span = 2.1, bw = Math.min(0.42, (span / n) * 0.6);
+  colors.forEach((c, i) => {
+    const b = rb(bw, 1, 0.04, c, { cast: false, r: 0.01, glow: 0.45 });
+    b.position.set(-span / 2 + (span / n) * (i + 0.5), 1.0, 0.11);
+    g.add(b);
+    bars.push(b);
+  });
+  const thr = rb(2.4, 0.03, 0.03, 0xff5a4e, { cast: false, r: 0.01, glow: 1 });
+  thr.position.set(0, 1.0 + 0.9, 0.12);
+  g.add(thr);
+  g.userData.setBar = (i, v) => { const b = bars[i]; v = Math.max(0.02, v); b.scale.y = v; b.position.y = 1.0 + v / 2; };
+  bars.forEach((_, i) => g.userData.setBar(i, 0.1));
+  g.userData.thr = thr;
+  g.userData.h = 2.6;
+  return g;
+}
+function bird() {
+  const g = grp();
+  const body = mesh(new THREE.SphereGeometry(0.5, 24, 16), C.canary, { rough: 0.6 });
+  body.scale.set(1.15, 0.85, 0.8);
+  put(g, body, 0, 0.62, 0);
+  put(g, mesh(new THREE.SphereGeometry(0.3, 24, 16), C.canary, { rough: 0.6 }), 0.45, 1.02, 0);
+  const beak = mesh(new THREE.ConeGeometry(0.1, 0.26, 12), 0xf08a24);
+  beak.rotation.z = -Math.PI / 2;
+  put(g, beak, 0.83, 1.0, 0, false);
+  for (const z of [-0.2, 0.2]) put(g, mesh(new THREE.SphereGeometry(0.05, 10, 8), 0x1c2530, { cast: false }), 0.62, 1.1, z, false);
+  const tail = rb(0.4, 0.08, 0.32, 0xd9a514, { r: 0.03 });
+  tail.rotation.z = 0.5;
+  put(g, tail, -0.62, 0.78, 0, false);
+  for (const z of [-0.14, 0.14]) g.add(rod(new V3(0, 0.3, z), new V3(0, 0.0, z), 0.03, 0xf08a24));
+  g.userData.h = 1.35;
+  return g;
+}
+function signpost(color = C.serve) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.12, 24), C.steel), 0, 0.06, 0, false);
+  put(g, mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.5, 12), C.steel), 0, 1.25, 0, false);
+  const pivot = new THREE.Group();
+  pivot.position.y = 2.15;
+  g.add(pivot);
+  const board = rb(1.6, 0.5, 0.12, color, { r: 0.06 });
+  board.position.x = 0.85;
+  pivot.add(board);
+  const tip = mesh(new THREE.ConeGeometry(0.4, 0.5, 4), color);
+  tip.rotation.z = -Math.PI / 2;
+  tip.scale.set(1, 1, 0.3);
+  tip.position.x = 1.88;
+  pivot.add(tip);
+  g.userData.glow.push(board, tip);
+  g.userData.pivot = pivot;
+  g.userData.h = 2.5;
+  return g;
+}
+function shield(color = C.gov) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.12, 24), C.steel), 0, 0.06, 0, false);
+  put(g, mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.2, 12), C.steel), 0, 0.6, 0, false);
+  const hex = mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.16, 6), color, { rough: 0.4 });
+  hex.rotation.x = Math.PI / 2;
+  hex.rotation.y = Math.PI / 6;
+  put(g, hex, 0, 1.95, 0);
+  put(g, rb(0.46, 0.38, 0.12, 0xf3f4f6, { r: 0.05 }), 0, 1.86, 0.12, false);
+  put(g, mesh(new THREE.TorusGeometry(0.14, 0.045, 8, 18, Math.PI), 0xf3f4f6), 0, 2.05, 0.12, false);
+  g.userData.hex = hex;
+  g.userData.h = 2.8;
+  return g;
+}
+function flag(color) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.2, 8), 0x6b7684), 0, 0.6, 0, false);
+  put(g, rb(0.55, 0.34, 0.03, color, { r: 0.02 }), 0.29, 1.02, 0);
+  g.userData.h = 1.2;
+  return g;
+}
+function cards() {
+  const g = grp();
+  for (let i = 0; i < 6; i++) {
+    const c = rb(1.2, 0.05, 0.85, i % 2 ? 0xfff3dc : 0xffe3ad, { r: 0.03 });
+    c.rotation.y = (i - 3) * 0.06;
+    put(g, c, 0, 0.03 + i * 0.07, 0);
+  }
+  put(g, mesh(new THREE.SphereGeometry(0.09, 12, 10), C.ok, { cast: false }), 0.4, 0.48, 0.2, false);
+  g.userData.h = 0.45;
+  return g;
+}
+function tile(color) { return rb(0.36, 0.22, 0.36, color, { r: 0.05, glow: 0.15 }); }
+
+const SHAPES = { database, topic, server, sheet, browser, wiki, gitRepo, bucket, modelGem, tray, robot, person, monitor, bird, signpost, shield, flag, cards };
+
+// ---------- paths ----------
+const V = (x, z, y = 0.9) => new V3(x, y, z);
+function arc(a, b, h, n = 32) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const s = i / n;
+    const p = new V3().lerpVectors(a, b, s);
+    p.y += h * Math.sin(Math.PI * s);
+    pts.push(p);
+  }
+  return pts;
+}
+function poly(pts) {
+  const segs = [];
+  let L = 0;
+  for (let i = 0; i < pts.length - 1; i++) { const l = pts[i].distanceTo(pts[i + 1]); segs.push(l); L += l; }
+  return (f, out) => {
+    let d = f * L;
+    for (let i = 0; i < segs.length; i++) {
+      if (d <= segs[i] || i === segs.length - 1) return out.lerpVectors(pts[i], pts[i + 1], segs[i] ? Math.min(1, d / segs[i]) : 1);
+      d -= segs[i];
+    }
+    return out;
+  };
+}
+function packetMesh(kind, color) {
+  switch (kind) {
+    case 'env': return rb(0.62, 0.16, 0.44, color ?? P.env, { r: 0.05, glow: 0.3 });
+    case 'doc': return rb(0.5, 0.06, 0.66, color ?? P.doc, { r: 0.02, glow: 0.2 });
+    case 'vec': return mesh(new THREE.OctahedronGeometry(0.27), color ?? P.vec, { glow: 0.35, flat: true });
+    case 'span': return mesh(new THREE.SphereGeometry(0.13, 10, 8), color ?? P.span, { glow: 0.3 });
+    case 'ask': return mesh(new THREE.SphereGeometry(0.24, 16, 12), color ?? P.ask, { glow: 0.35 });
+    default: return rb(0.38, 0.38, 0.38, color ?? P.chunk, { r: 0.09, glow: 0.3 });
+  }
+}
+
+// ---------- one interactive stage ----------
+const live = [];
+
+function makeStage(fig, def) {
+  const host = fig.querySelector('.stage3d');
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+  } catch (e) {
+    return null;
+  }
+  const big = !!def.hero;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.appendChild(renderer.domElement);
+  const lr = new CSS2DRenderer();
+  lr.domElement.className = 'labels3';
+  host.appendChild(lr.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(BG);
+  scene.fog = new THREE.Fog(BG, 100, 200);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 400);
+  const view = def.view;
+  const target = new V3(...view.target);
+
+  scene.add(new THREE.HemisphereLight(0xf3f6ff, 0x8e98a3, 1.15));
+  const sun = new THREE.DirectionalLight(0xfff2df, 2.4);
+  sun.position.set(target.x - 14, 30, target.z + 18);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(big ? 2048 : 1024, big ? 2048 : 1024);
+  const ext = Math.max(view.w, view.d) * 0.62;
+  Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 100 });
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.03;
+  sun.shadow.radius = 5;
+  sun.target.position.copy(target);
+  scene.add(sun, sun.target);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshStandardMaterial({ color: 0xdce1e6, roughness: 0.95 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const ctx = {
+    scene, C, P, V, V3, arc, SHAPES, THREE, rb, mesh, tile, label, LOOP: def.loop,
+    packets: [], glowers: [], shows: [], tickers: [],
+  };
+  // place a shape with a name label
+  ctx.obj = (shape, x, z, name, sub, o = {}) => {
+    const g = typeof shape === 'string' ? SHAPES[shape](...(o.args ?? [])) : shape;
+    g.position.set(x, o.y ?? 0, z);
+    if (o.rot) g.rotation.y = o.rot;
+    scene.add(g);
+    g.userData.arrivals = [];
+    if (name) {
+      g.userData.lab = label(g, `<b>${name}</b>${sub ? `<span>${sub}</span>` : ''}`, 'lbl', new V3(0, g.userData.h + (o.lift ?? 0.35), 0));
+      g.userData.el = g.userData.lab.element;
+    }
+    ctx.glowers.push(g);
+    return g;
+  };
+  ctx.top = (g, lift = 0.3) => new V3(g.position.x, g.position.y + g.userData.h + lift, g.position.z);
+  ctx.pulse = (g, ...ts) => g.userData.arrivals.push(...ts);
+  ctx.show = (g, t0, t1 = 1e9, mode = 'pop') => {
+    const css = [];
+    g.traverse((o) => { if (o.isCSS2DObject) css.push(o); });
+    ctx.shows.push({ g, t0, t1, mode, css, y0: g.position.y, s0: g.scale.clone() });
+  };
+  ctx.tick = (fn) => ctx.tickers.push(fn);
+  ctx.lane = (pts) => {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 0.01) continue;
+      const m = rb(len + 0.22, 0.05, 0.22, 0xb4bcc6, { r: 0.02, seg: 2, cast: false, rough: 0.8 });
+      m.position.set((a.x + b.x) / 2, 0.03, (a.z + b.z) / 2);
+      m.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+      scene.add(m);
+    }
+  };
+  ctx.note = (html, x, z, y = 0.3, center = [0.5, 0]) => label(scene, html, 'lane-lbl', new V3(x, y, z), center);
+  ctx.packet = (sp) => {
+    const n = sp.n ?? 1;
+    const at = poly(sp.pts);
+    for (let k = 0; k < n; k++) {
+      const t0 = sp.t0 + k * (sp.st ?? 0.12), t1 = sp.t1 + k * (sp.st ?? 0.12);
+      const m = packetMesh(sp.kind ?? 'chunk', sp.color);
+      const sc = (sp.s ?? 1) * (def.ps ?? 1.3);
+      m.visible = false;
+      scene.add(m);
+      let lab = null;
+      if (sp.label && k === 0) lab = label(m, sp.label, 'l3 pk', new V3(0, 0.35, 0));
+      ctx.packets.push({ m, at, t0, dur: t1 - t0, lab, s: sc });
+      if (sp.to && k === n - 1) sp.to.userData.arrivals.push(t1);
+    }
+    if (sp.from) sp.from.userData.arrivals.push(sp.t0 + 0.05);
+  };
+
+  const built = def.build(ctx);
+  const steps = def.steps;
+
+  // ---------- camera ----------
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(target);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI * 0.47;
+  controls.enableZoom = false;
+  controls.enablePan = false;
+  if (coarse) { controls.enabled = false; renderer.domElement.style.touchAction = 'auto'; }
+  let userCam = false, dist = 40, portrait = false;
+  const resetBtn = fig.querySelector('.reset3');
+  controls.addEventListener('start', () => { userCam = true; if (resetBtn) resetBtn.hidden = false; });
+  resetBtn?.addEventListener('click', () => { userCam = false; resetBtn.hidden = true; controls.target.copy(target); });
+
+  function placeCamera(t) {
+    // portrait screens look down the long axis, so the flow runs top to bottom
+    const az = THREE.MathUtils.degToRad(view.az ?? 0) + (portrait ? Math.PI / 2 : 0) + (reduceMotion ? 0 : 0.08 * Math.sin((2 * Math.PI * t) / def.loop));
+    const el = THREE.MathUtils.degToRad(portrait ? Math.min(66, (view.el ?? 45) + 14) : view.el ?? 45);
+    camera.position.set(
+      target.x + Math.sin(az) * Math.cos(el) * dist,
+      target.y + Math.sin(el) * dist,
+      target.z + Math.cos(az) * Math.cos(el) * dist
+    );
+    camera.lookAt(target);
+  }
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    const vf = THREE.MathUtils.degToRad(camera.fov);
+    const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+    portrait = camera.aspect < 0.85;
+    dist = portrait
+      ? Math.max((view.d / 2) / Math.tan(hf / 2), (view.w / 2) / Math.tan(vf / 2))
+      : Math.max((view.w / 2) / Math.tan(hf / 2), (view.d / 2) / Math.tan(vf / 2));
+    scene.fog.near = dist + 25;
+    scene.fog.far = dist + 120;
+    renderer.setSize(w, h);
+    lr.setSize(w, h);
+  }
+  new ResizeObserver(resize).observe(host);
+  resize();
+
+  // ---------- controls: play, steps, caption ----------
+  const playBtn = fig.querySelector('.pp');
+  const stepsEl = fig.querySelector('.steps3');
+  const capEl = fig.querySelector('.out3');
+  const metaEl = fig.querySelector('.meta3');
+  const fillEl = fig.querySelector('.fill3');
+  const stepBtns = steps.map((s, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = String(i + 1);
+    b.setAttribute('aria-label', `Step ${i + 1}`);
+    b.addEventListener('click', () => { simT = s.t + 0.001; setPlaying(false); });
+    stepsEl.appendChild(b);
+    return b;
+  });
+  let playing = !reduceMotion;
+  let simT = reduceMotion ? (def.still ?? steps[steps.length - 1].t + 0.6) : 0;
+  function setPlaying(p) { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(!p)); }
+  setPlaying(playing);
+  playBtn.addEventListener('click', () => setPlaying(!playing));
+  let cur = -1;
+  function setStep(i) {
+    if (i === cur) return;
+    cur = i;
+    capEl.textContent = steps[i].text;
+    metaEl.textContent = `Step ${i + 1} of ${steps.length}`;
+    stepBtns.forEach((b, j) => b.setAttribute('aria-current', j === i ? 'step' : 'false'));
+    if (def.onStep) def.onStep(i, steps[i]);
+  }
+
+  const L = def.loop;
+  const mod = (a) => ((a % L) + L) % L;
+  const tmp = new V3();
+  function update(t) {
+    for (const p of ctx.packets) {
+      const rel = mod(t - p.t0);
+      const on = rel <= p.dur;
+      if (on) {
+        const f = rel / p.dur;
+        p.at(f, tmp);
+        p.m.position.copy(tmp);
+        p.m.scale.setScalar(p.s * Math.max(0.001, Math.min(1, f / 0.12, (1 - f) / 0.12)));
+        p.m.rotation.y = f * Math.PI;
+      }
+      p.m.visible = on;
+      if (p.lab) p.lab.visible = on;
+    }
+    for (const g of ctx.glowers) {
+      let k = 0;
+      for (const ta of g.userData.arrivals) {
+        const rel = mod(t - ta);
+        if (rel < 1.6) k = Math.max(k, Math.exp(-rel / 0.38));
+      }
+      for (const m of g.userData.glow) m.material.emissiveIntensity = m.material.userData.base + 0.55 * k;
+      const on = k > 0.3;
+      if (g.userData.el && on !== g.userData.on) { g.userData.on = on; g.userData.el.classList.toggle('on', on); }
+      if (g.userData.spin) g.userData.spin.rotation.y = t * 0.6;
+    }
+    for (const s of ctx.shows) {
+      const on = t >= s.t0 && t < s.t1;
+      s.g.visible = on;
+      for (const c of s.css) c.visible = on;
+      if (!on) continue;
+      let k = Math.min(1, (t - s.t0) / 0.3);
+      let y = s.y0;
+      if (s.mode === 'drop' && s.t1 - t < 0.7) {
+        const f = 1 - (s.t1 - t) / 0.7;
+        y = s.y0 + 0.9 * f - 1.6 * f * f;
+        k = Math.min(k, 1 - f * 0.9);
+      }
+      s.g.position.y = y;
+      s.g.scale.copy(s.s0).multiplyScalar(Math.max(0.001, k));
+    }
+    for (const fn of ctx.tickers) fn(t);
+    let i = 0;
+    while (i + 1 < steps.length && t >= steps[i + 1].t) i++;
+    setStep(i);
+    if (fillEl) fillEl.style.width = `${(t / L) * 100}%`;
+  }
+
+  fig.classList.add('ready');
+  const clock = new THREE.Clock();
+  const st = {
+    visible: true,
+    frame() {
+      const dt = Math.min(clock.getDelta(), 0.1);
+      if (!st.visible) return;
+      if (playing) simT = mod(simT + dt);
+      update(simT);
+      if (userCam) controls.update(); else placeCamera(simT);
+      renderer.render(scene, camera);
+      lr.render(scene, camera);
+    },
+  };
+  new IntersectionObserver((es) => { st.visible = es[0].isIntersecting; }).observe(host);
+  return st;
+}
+
+function boot(defs) {
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) {
+      if (!e.isIntersecting) continue;
+      io.unobserve(e.target);
+      const def = defs[e.target.id];
+      if (!def) continue;
+      try {
+        const st = makeStage(e.target, def);
+        if (st) live.push(st);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, { rootMargin: '400px 0px' });
+  for (const id in defs) {
+    const el = document.getElementById(id);
+    if (el) io.observe(el);
+  }
+  (function loop() {
+    for (const st of live) st.frame();
+    requestAnimationFrame(loop);
+  })();
+}
+
+
+// ======================================================================
+// Scenes. Each one: a camera view, a loop length, captions, and a build()
+// that places shapes and schedules packets on the loop's timeline.
+// ======================================================================
+const D = {};
+
+const tiles = (c, labels, x0, z, gap) => labels.map((s, i) => {
+  const t = c.tile(0x9aa5b1);
+  t.scale.set(3.2, 1, 1.5);
+  t.position.set(x0 + i * gap, 0.12, z);
+  c.scene.add(t);
+  c.label(t, s, 'l3 id', new c.V3(0, 0.2, 0), [0.5, 1]);
+  return t;
+});
+const light = (m, color, t, on) => {
+  m.material.color.setHex(on ? color : 0x9aa5b1);
+  m.material.emissive.setHex(on ? color : 0x9aa5b1);
+  m.material.emissiveIntensity = on ? 0.35 + 0.12 * Math.sin(t * 6) : 0.1;
+};
+
+// ---------- hero: the whole system ----------
+D.hero = {
+  hero: true,
+  loop: 17,
+  ps: 1.7,
+  view: { target: [0.6, 0, -2.4], w: 47, d: 24, el: 50 },
+  steps: [
+    { t: 0.0, k: ['picture'], text: 'A marketing manager asks: “Which campaigns drove the most signups in October?” SSO identifies them, and their identity travels with the question.' },
+    { t: 1.6, k: ['schema'], text: 'The agent retrieves table cards from the schema index: descriptions from dbt, columns and types, join keys and example questions. No sample rows.' },
+    { t: 3.2, k: ['schema'], text: 'The semantic layer supplies the governed definition of “signups”, and the model writes BigQuery SQL against the chosen tables.' },
+    { t: 4.8, k: ['guards'], text: 'Code checks the SQL: one SELECT, no unaggregated PII columns, a dry run within the bytes cap, a row limit.' },
+    { t: 6.4, k: ['identity'], text: 'The query runs in BigQuery as the user, so their own dataset, row and column permissions apply. The audit log names them.' },
+    { t: 8.4, k: ['picture'], text: 'Only the aggregated result comes back. Code draws the chart and computes the number; the model writes one line explaining it.' },
+    { t: 10.2, k: ['picture'], text: 'The answer: “Spring Promo drove 4,210 signups, 31% of October’s total”, with a bar chart and the SQL behind a link.' },
+    { t: 12.0, k: ['evals', 'prod'], text: 'Every answer leaves signals: 👍/👎, rephrases, SQL errors, declines, latency and cost. Analysts grade 50 random answers a week.' },
+    { t: 14.2, k: ['prod'], text: 'The kill switch watches access violations, 👎 rate and graded accuracy, and can pull the agent back to the pilot team or stop it.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const plate = (x0, x1, z0, z1, color, text) => {
+      const m = c.rb(x1 - x0, 0.12, z1 - z0, color, { r: 0.05, seg: 2, rough: 0.9, cast: false });
+      m.position.set((x0 + x1) / 2, 0.06, (z0 + z1) / 2);
+      c.scene.add(m);
+      c.label(c.scene, text, 'plate-lbl', new c.V3(x0 + 0.4, 0.2, z1 - 0.25), [0, 1]);
+    };
+    plate(-21.6, -14.4, -4.4, 4.4, 0xd7dde3, 'Users');
+    plate(-13.8, 4.6, -10.6, 7.6, 0xcde3df, 'Agent');
+    plate(5.2, 21.6, -10.6, 7.6, 0xd5daf0, 'Warehouse, as the user');
+    plate(-13.8, 15.4, -16.8, -12.8, 0xd3d9e0, 'Evals and operations');
+
+    const usr = c.obj('person', -18, 0, 'Marketing manager', 'SSO · groups: marketing');
+    const ag = c.obj('robot', -10.4, 0, 'Agent', 'plans · retries once');
+    const idx = c.obj(c.SHAPES.database(C.kb, { r: 1.2, th: 0.42 }), -10.4, -7.0, 'Schema index', 'table cards · no rows');
+    const sem = c.obj('cards', -5.0, -7.0, 'Semantic layer', 'dbt metrics · “signups”');
+    const llm = c.obj('modelGem', -5.0, 0, 'SQL writer', 'model');
+    const gd = c.obj('shield', 0.6, 0, 'Guards', 'SELECT · PII · bytes cap');
+    const bq = c.obj(c.SHAPES.database(C.kb, { r: 1.8, th: 0.56 }), 9, 0, 'BigQuery', 'IAM · row + column security');
+    const id = c.obj(c.SHAPES.shield(C.gov), 9, -6.2, 'User credentials', 'OAuth on behalf of the user');
+    const log = c.obj(c.SHAPES.database(0x55606d, { r: 1.0, th: 0.36 }), 15, -6.2, 'Audit log', 'query + user');
+    const ans = c.obj(c.SHAPES.monitor([C.serve, C.serve, C.kb]), 15, 3.6, 'Answer', 'number · chart · one line');
+    const gold = c.obj('cards', -7.6, -14.8, 'Weekly graded sample', '50 answers by analysts');
+    const dash = c.obj(c.SHAPES.monitor([C.dlq, C.serve, C.ok]), 1.2, -14.8, 'Signals', '👎 · rephrase · errors · cost');
+    const ks = c.obj(c.SHAPES.signpost(C.dlq), 9.6, -14.8, 'Kill switch', 'violation → stop', { lift: 0.5 });
+    ks.userData.pivot.rotation.z = -0.25;
+
+    c.lane([V(-18, 0), V(9, 0)]);
+    c.lane([V(-10.4, 0), V(-10.4, -5.6)]);
+    c.lane([V(9, 1.8), V(9, 3.6), V(15, 3.6)]);
+
+    c.packet({ pts: [V(-18, 0), V(-10.4, 0)], t0: 0, t1: 0.9, kind: 'doc', from: usr, to: ag, label: 'signups by campaign, October?' });
+    c.packet({ pts: [V(-10.4, 0), V(-10.4, -5.6)], t0: 1.6, t1: 2.2, kind: 'ask', to: idx });
+    c.packet({ pts: [V(-10.4, -5.6), V(-10.4, 0)], t0: 2.3, t1: 3.0, kind: 'chunk', n: 3, st: 0.1, s: 0.8, to: ag, label: 'fct_signups · dim_campaign' });
+    c.packet({ pts: arc(c.top(sem, 0), c.top(llm, 0), 1.6), t0: 3.2, t1: 3.8, kind: 'chunk', s: 0.8, from: sem, to: llm, label: 'signups = …' });
+    c.packet({ pts: [V(-10.4, 0), V(-5.0, 0)], t0: 3.3, t1: 3.9, kind: 'chunk', s: 0.8, to: llm });
+    c.packet({ pts: [V(-5.0, 0), V(0.6, 0)], t0: 4.1, t1: 4.8, kind: 'env', to: gd, label: 'SELECT campaign, COUNT(*) …' });
+    c.pulse(gd, 4.8, 5.8);
+    c.packet({ pts: [V(0.6, 0), V(7.2, 0)], t0: 6.0, t1: 6.6, kind: 'env', color: P.ship, to: bq });
+    c.packet({ pts: arc(c.top(id, 0), c.top(bq, 0), 1.6), t0: 6.4, t1: 7.0, kind: 'span', s: 1.6, from: id, to: bq, label: 'as the user' });
+    c.packet({ pts: arc(c.top(bq, 0), c.top(log, 0), 2), t0: 7.0, t1: 7.6, kind: 'span', s: 1.4, to: log });
+    c.packet({ pts: [V(7.2, 0), V(-5.0, 0)], t0: 8.4, t1: 9.4, kind: 'chunk', s: 0.85, to: llm, label: '12 aggregated rows' });
+    c.packet({ pts: [V(9, 1.8), V(9, 3.6), V(15, 3.6)], t0: 8.6, t1: 9.6, kind: 'chunk', s: 0.85, to: ans });
+    c.packet({ pts: arc(c.top(ans, 0), c.top(usr, 0), 7), t0: 10.2, t1: 11.6, kind: 'doc', color: P.ans, to: usr, label: 'Spring Promo: 4,210 signups' });
+    c.packet({ pts: arc(c.top(usr, 0), c.top(dash, 0), 7), t0: 12.0, t1: 13.0, kind: 'span', to: dash, label: '👍' });
+    c.packet({ pts: arc(c.top(gold, 0), c.top(dash, 0), 2), t0: 12.6, t1: 13.4, kind: 'span', color: P.ship, to: dash, label: '46/50 correct' });
+    c.packet({ pts: arc(c.top(dash, 0), c.top(ks, 0), 2), t0: 14.2, t1: 15.0, kind: 'span', color: P.ship, to: ks, label: 'all clear' });
+    c.tick((t) => { dash.userData.setBar(0, 0.18); dash.userData.setBar(1, 0.22); dash.userData.setBar(2, t > 13.4 ? 0.92 : 0.5); ans.userData.setBar(0, 0.85); ans.userData.setBar(1, 0.5); ans.userData.setBar(2, 0.35); });
+  },
+};
+
+// ---------- 1. finding the right tables ----------
+D.schema3d = {
+  loop: 11,
+  view: { target: [0, 0, 0.6], w: 25, d: 16, el: 52 },
+  steps: [
+    { t: 0.0, text: 'A card is built for each curated table from dbt docs, column names and types, join keys and grain, and example questions from past analyst tickets.' },
+    { t: 1.8, text: 'Column profiles are computed in code (type, null rate, distinct count, value lists only for safe columns such as region). Sample rows are never copied in.' },
+    { t: 3.4, text: 'Policy tags mark PII columns, such as email in dim_customer. The card says the column exists and is PII; it never shows a value.' },
+    { t: 5.0, text: 'A question is embedded and matched against the cards. Deprecated tables such as dim_cust_legacy are excluded, so they can’t be picked.' },
+    { t: 6.6, text: 'The top cards go to the model, which picks fct_orders and dim_region and the join between them.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const dbt = c.obj('gitRepo', -10, -4.2, 'dbt docs', 'descriptions · tests');
+    const meta = c.obj(c.SHAPES.database(C.kb, { r: 1.1, th: 0.4 }), -10, 1.2, 'Warehouse metadata', 'columns · types · policy tags');
+    const prof = c.obj(c.SHAPES.server({ color: 0x55606d }), -4.6, -1.4, 'Card builder', 'profiles in code');
+    const idx = c.obj(c.SHAPES.database(C.kb, { r: 1.3, th: 0.45 }), 1.4, -1.4, 'Schema index', '~100 table cards');
+    const legacy = c.obj('tray', 1.4, 4.6, 'Excluded', 'dim_cust_legacy · deprecated');
+    const q = c.obj('person', 7.6, 4.2, 'Question', '“revenue by region”');
+    const llm = c.obj('modelGem', 7.6, -1.4, 'SQL writer', 'picks tables + join');
+    c.lane([V(-10, -4.2), V(-7.4, -4.2), V(-7.4, -1.4), V(-4.6, -1.4)]);
+    c.lane([V(-10, 1.2), V(-7.4, 1.2), V(-7.4, -1.4)]);
+    c.lane([V(-4.6, -1.4), V(7.6, -1.4)]);
+    c.lane([V(7.6, 4.2), V(7.6, -1.4)]);
+    c.packet({ pts: [V(-10, -4.2), V(-7.4, -4.2), V(-7.4, -1.4), V(-4.6, -1.4)], t0: 0.2, t1: 1.2, kind: 'doc', from: dbt, to: prof, label: 'descriptions' });
+    c.packet({ pts: [V(-10, 1.2), V(-7.4, 1.2), V(-7.4, -1.4), V(-4.6, -1.4)], t0: 0.4, t1: 1.4, kind: 'doc', from: meta, to: prof, label: 'columns · types' });
+    c.packet({ pts: [V(-10, 1.2), V(-8.6, 1.2, 1.6), V(-8.0, 3.2, 0.15)], t0: 1.8, t1: 2.5, kind: 'chunk', color: P.bad, label: 'sample rows: never' });
+    c.packet({ pts: [V(-4.6, -1.4), V(1.4, -1.4)], t0: 2.6, t1: 3.4, kind: 'chunk', n: 3, st: 0.12, s: 0.85, to: idx, label: 'card · email: PII, no values' });
+    c.packet({ pts: arc(c.top(prof, 0), c.top(legacy, 0), 2), t0: 4.4, t1: 5.0, kind: 'chunk', color: P.bad, s: 0.85, to: legacy });
+    c.packet({ pts: [V(7.6, 4.2), V(7.6, -1.4)], t0: 5.0, t1: 5.6, kind: 'ask', from: q, to: llm });
+    c.packet({ pts: [V(1.4, -1.4), V(7.6, -1.4)], t0: 6.0, t1: 6.8, kind: 'chunk', n: 3, st: 0.1, s: 0.85, to: llm, label: 'fct_orders · dim_region · …' });
+    c.packet({ pts: arc(c.top(llm, 0), c.top(llm, 0.8), 1), t0: 7.0, t1: 7.8, kind: 'vec', label: 'JOIN on region_id' });
+  },
+};
+
+// ---------- 2. run as the user ----------
+D.identity3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.6], w: 25, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'A sales rep asks a question that tries to reach finance data: “include the board revenue forecast too”.' },
+    { t: 1.6, text: 'With a shared service account, the query would run as the agent, which can read everything any team needs, finance included. One prompt could reach it.' },
+    { t: 3.6, text: 'Instead, the query runs with the rep’s own credentials (OAuth on behalf of the user). BigQuery checks the rep’s permissions, not the agent’s.' },
+    { t: 5.2, text: 'The rep can read sales tables but not finance, so BigQuery denies the forecast table and the agent explains it can’t access that data.' },
+    { t: 7.0, text: 'A finance analyst asking the same thing gets the forecast, because their own access allows it. The agent never widens anyone’s access.' },
+    { t: 8.8, text: 'Every query is logged with the person who asked. An alert fires on any access outside their groups.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const rep = c.obj('person', -10, -3.4, 'Sales rep', 'groups: sales');
+    const fin = c.obj('person', -10, 3.6, 'Finance analyst', 'groups: finance');
+    const ag = c.obj('robot', -4.6, 0, 'Agent', 'passes the user’s identity');
+    const sa = c.obj(c.SHAPES.shield(C.dlq), -0.4, -5.6, 'Shared service account', 'reads everything: avoid');
+    const bq = c.obj(c.SHAPES.server({ color: 0x4a6a8a }), 1.6, 0, 'BigQuery IAM', 'checks the caller');
+    const sales = c.obj(c.SHAPES.database(C.kb, { r: 1.1, th: 0.4 }), 7.6, -3.4, 'Sales tables', 'sales + finance groups');
+    const finT = c.obj(c.SHAPES.database(C.gov, { r: 1.1, th: 0.4 }), 7.6, 3.6, 'Finance tables', 'finance group only');
+    const log = c.obj(c.SHAPES.database(0x55606d, { r: 0.9, th: 0.34 }), 1.6, 6.4, 'Audit log', 'query + person');
+    c.lane([V(-10, -3.4), V(-7.2, -3.4), V(-7.2, 0), V(1.6, 0)]);
+    c.lane([V(-10, 3.6), V(-7.2, 3.6), V(-7.2, 0)]);
+    c.lane([V(1.6, 0), V(4.6, 0), V(4.6, -3.4), V(7.6, -3.4)]);
+    c.lane([V(4.6, 0), V(4.6, 3.6), V(7.6, 3.6)]);
+    c.packet({ pts: [V(-10, -3.4), V(-7.2, -3.4), V(-7.2, 0), V(-4.6, 0)], t0: 0, t1: 1.0, kind: 'doc', from: rep, to: ag, label: '…and the board forecast' });
+    c.packet({ pts: arc(c.top(ag, 0), c.top(sa, 0), 1.6), t0: 1.6, t1: 2.2, kind: 'env', color: P.bad, to: sa });
+    c.packet({ pts: arc(c.top(sa, 0), c.top(finT, 0), 4), t0: 2.3, t1: 3.3, kind: 'env', color: P.bad, to: finT, label: 'would succeed: the risk' });
+    c.packet({ pts: [V(-4.6, 0), V(1.6, 0)], t0: 3.6, t1: 4.4, kind: 'env', to: bq, label: 'as sales rep' });
+    c.packet({ pts: [V(1.6, 0), V(4.6, 0), V(4.6, -3.4), V(7.6, -3.4)], t0: 4.6, t1: 5.2, kind: 'env', color: P.ship, to: sales });
+    c.packet({ pts: [V(1.6, 0), V(4.6, 0), V(4.6, 2.0, 1.4), V(5.4, 2.4, 0.15)], t0: 5.2, t1: 5.8, kind: 'env', color: P.bad, label: 'denied: finance' });
+    c.packet({ pts: [V(-10, 3.6), V(-7.2, 3.6), V(-7.2, 0), V(1.6, 0)], t0: 7.0, t1: 7.8, kind: 'env', from: fin, to: bq, label: 'as finance analyst' });
+    c.packet({ pts: [V(1.6, 0), V(4.6, 0), V(4.6, 3.6), V(7.6, 3.6)], t0: 7.9, t1: 8.5, kind: 'env', color: P.ship, to: finT });
+    c.packet({ pts: [V(1.6, 0), V(1.6, 5.0)], t0: 8.8, t1: 9.4, kind: 'span', n: 2, st: 0.2, s: 1.4, to: log });
+  },
+};
+
+// ---------- 3. guards in code ----------
+D.guards3d = {
+  loop: 12,
+  view: { target: [0, 0, 1.2], w: 27, d: 15, el: 54 },
+  steps: [
+    { t: 0.0, text: 'The model proposes SQL for “revenue by region, last quarter vs a year ago”. Code checks it before anything runs.' },
+    { t: 1.2, text: '1 Read only: the SQL parses to a single SELECT; no INSERT, DELETE, DDL or scripting. 2 No unaggregated PII: email appears nowhere outside COUNT.' },
+    { t: 2.8, text: '3 Cost cap: a BigQuery dry run reports 18 GB to scan, under the cap. 4 Row limit and timeout are set by the runner. The query runs.' },
+    { t: 5.4, text: 'A second question, “all orders ever, by customer”, produces SQL that would scan 4 TB.' },
+    { t: 6.8, text: 'Checks 1 and 2 pass; the dry run fails the cost cap. Nothing is executed or billed.' },
+    { t: 8.2, text: 'The agent asks the user to narrow it (“which months?”) instead of guessing. The model proposes; code decides.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const llm = c.obj('modelGem', -12.6, 0, 'SQL writer', 'proposes a query');
+    const T = tiles(c, ['1 read only', '2 no raw PII', '3 bytes cap', '4 row limit'], -7.8, 0, 5.0);
+    const bq = c.obj(c.SHAPES.database(C.kb, { r: 1.4, th: 0.5 }), 12.4, 0, 'BigQuery', 'runs as the user');
+    const ask = c.obj('person', 1.4, 5.4, 'User', '“which months?”');
+    c.lane([V(-12.6, 0), V(12.4, 0)]);
+    const X = (i) => -7.8 + i * 5.0;
+    c.tick((t) => {
+      T.forEach((m, i) => {
+        const p1 = t >= 1.2 + i * 0.6 && t < 5.2;
+        const p2 = i < 2 && t >= 6.0 + i * 0.4 && t < 11.5;
+        const f2 = i === 2 && t >= 6.8 && t < 11.5;
+        light(m, f2 ? P.bad : C.ok, t, p1 || p2 || f2);
+      });
+    });
+    c.packet({ pts: [V(-12.6, 0), V(X(0), 0)], t0: 0.2, t1: 1.2, kind: 'env', from: llm, label: 'SELECT region, SUM(revenue) …' });
+    c.packet({ pts: [V(X(0), 0), V(X(3), 0)], t0: 1.2, t1: 3.2, kind: 'env' });
+    c.packet({ pts: [V(X(3), 0), V(10.6, 0)], t0: 3.6, t1: 4.4, kind: 'env', color: P.ship, to: bq, label: 'dry run: 18 GB' });
+    c.packet({ pts: [V(-12.6, 0), V(X(0), 0)], t0: 5.4, t1: 6.0, kind: 'env', from: llm, label: 'SELECT * … all orders' });
+    c.packet({ pts: [V(X(0), 0), V(X(2), 0)], t0: 6.0, t1: 6.8, kind: 'env' });
+    c.packet({ pts: [V(X(2), 0, 0.9), V(X(2) + 0.6, 2.6, 1.4), V(1.4, 5.4, 0.6)], t0: 8.2, t1: 9.2, kind: 'env', color: P.bad, to: ask, label: 'dry run: 4 TB > cap' });
+  },
+};
+
+// ---------- 4. evals before launch ----------
+D.evals3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.6], w: 26, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'The golden set comes from the backlog: about 500 past analyst tickets with the question, the SQL that answered it and the number sent back, stratified by team and question type.' },
+    { t: 1.6, text: 'Each question goes through the agent. Step checks score table selection (recall@5 of the analyst’s tables) and whether the SQL parses, passes the guards and runs.' },
+    { t: 3.6, text: 'Execution accuracy: the agent’s SQL and the analyst’s SQL both run, and the results are compared, ignoring row order and allowing rounding.' },
+    { t: 5.4, text: 'Different SQL, same rows: correct. Similar-looking SQL with a different number: wrong. Judging the SQL text would get both of these backwards.' },
+    { t: 7.2, text: 'Bars: table recall ≥ 95%, valid SQL ≥ 98%, execution accuracy ≥ 90%, correct declines ≥ 95%, zero successful access outside a user’s rights.' },
+    { t: 8.8, text: 'The full set runs on every change to prompts, models or the schema index; a change ships only if no score drops.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const gold = c.obj('cards', -10.6, 0, 'Analyst tickets', '~500 · question + SQL + number');
+    const ag = c.obj('robot', -5, 0, 'Agent', 'candidate version');
+    const step = c.obj(c.SHAPES.server({ color: 0x55606d }), -5, -5.2, 'Step checks', 'tables · SQL valid');
+    const run = c.obj(c.SHAPES.database(C.kb, { r: 1.3, th: 0.45 }), 1.2, 0, 'Run both queries', 'agent SQL · analyst SQL');
+    const cmp = c.obj(c.SHAPES.server({ color: 0x3f6b55, emi: C.ok }), 6.6, 0, 'Compare results', 'rows · values · tolerance');
+    const mon = c.obj(c.SHAPES.monitor([C.kb, C.ingest, C.ok]), 6.6, -5.4, 'Scores', 'recall · valid · execution');
+    const gate = c.obj(c.SHAPES.signpost(C.ok), 11.6, 0, 'Regression gate', 'no score drops', { lift: 0.5 });
+    gate.userData.pivot.rotation.z = 0.25;
+    c.lane([V(-10.6, 0), V(11.6, 0)]);
+    c.lane([V(-5, 0), V(-5, -3.8)]);
+    c.packet({ pts: [V(-10.6, 0), V(-5, 0)], t0: 0.2, t1: 1.2, kind: 'ask', n: 3, st: 0.12, from: gold, to: ag });
+    c.packet({ pts: [V(-5, 0), V(-5, -3.8)], t0: 1.6, t1: 2.3, kind: 'chunk', s: 0.85, to: step, label: 'recall@5 · runs?' });
+    c.packet({ pts: [V(-5, 0), V(-0.4, 0)], t0: 3.6, t1: 4.2, kind: 'env', to: run, label: 'agent SQL' });
+    c.packet({ pts: arc(c.top(gold, 0), c.top(run, 0), 5), t0: 3.7, t1: 4.5, kind: 'env', to: run, label: 'analyst SQL' });
+    c.packet({ pts: [V(2.8, 0), V(6.6, 0)], t0: 4.6, t1: 5.3, kind: 'chunk', n: 2, st: 0.15, s: 0.85, to: cmp });
+    c.packet({ pts: arc(c.top(cmp, 0), c.top(cmp, 0.8), 1), t0: 5.4, t1: 6.2, kind: 'span', color: P.ship, s: 1.4, label: 'same rows → correct' });
+    c.packet({ pts: arc(c.top(cmp, 0), c.top(mon, 0), 1.6), t0: 7.2, t1: 7.9, kind: 'span', n: 3, st: 0.12, to: mon });
+    c.packet({ pts: arc(c.top(step, 0), c.top(mon, 0), 3), t0: 7.3, t1: 8.1, kind: 'span', to: mon });
+    c.packet({ pts: [V(6.6, 0), V(11.6, 0)], t0: 8.8, t1: 9.6, kind: 'span', s: 1.6, color: P.ship, to: gate, label: 'ship: no drop' });
+    c.tick((t) => { const g = Math.min(1, Math.max(0, (t - 7.9) / 0.6)); mon.userData.setBar(0, 0.1 + 0.86 * g); mon.userData.setBar(1, 0.1 + 0.88 * g); mon.userData.setBar(2, 0.1 + 0.81 * g); });
+  },
+};
+
+// ---------- 5. production without labels ----------
+D.prod3d = {
+  loop: 14,
+  view: { target: [0, 0, 0.6], w: 26, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'Live answers have no golden label, so correctness can’t be measured directly. Each answer still leaves proxy signals.' },
+    { t: 1.6, text: 'Proxies: 👍/👎, a rephrase within 2 minutes, SQL errors and empty results, declines, p95 latency, and model plus BigQuery cost per question.' },
+    { t: 3.6, text: 'Real accuracy: every week analysts grade 50 random answers. That number is compared with the offline 90%, and each wrong answer joins the golden set.' },
+    { t: 5.6, text: 'Safety: every query is logged with the user, and any access outside their groups raises an alert.' },
+    { t: 7.4, text: '👎 has been above 15% for 3 days. The trigger pulls the agent back to the pilot team while the cause is found.' },
+    { t: 9.4, text: 'An access violation would skip the pilot step: the kill switch stops the agent at once and questions go back to analysts.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const users = c.obj('person', -11, 0, 'All users', '2,000 · after a pilot');
+    const ag = c.obj('robot', -6, 0, 'Agent', 'live answers');
+    const dash = c.obj(c.SHAPES.monitor([C.dlq, C.serve, C.ok]), 0.6, -4.6, 'Proxy signals', '👎 · rephrase · errors · cost');
+    const grade = c.obj('cards', 0.6, 4.6, 'Weekly graded sample', '50 answers · analysts');
+    const log = c.obj(c.SHAPES.database(0x55606d, { r: 1.0, th: 0.36 }), -6, -6.2, 'Query audit log', 'user + tables');
+    const gold = c.obj('cards', 6.6, 6.6, 'Golden set', 'grows from failures');
+    const ks = c.obj(c.SHAPES.signpost(C.dlq), 7.2, -1.2, 'Triggers', '👎 > 15% · 3 days · < 85%', { lift: 0.5 });
+    ks.userData.pivot.rotation.z = -0.25;
+    const pilot = c.obj('person', 11.6, -1.2, 'Pilot team', 'fallback group');
+    c.lane([V(-11, 0), V(-6, 0)]);
+    c.packet({ pts: [V(-11, 0), V(-6, 0)], t0: 0, t1: 0.8, kind: 'doc', n: 3, st: 0.15, from: users, to: ag });
+    c.packet({ pts: arc(c.top(ag, 0), c.top(dash, 0), 2.5), t0: 1.6, t1: 2.6, kind: 'span', n: 4, st: 0.12, to: dash, label: 'rephrased in 90 s' });
+    c.packet({ pts: arc(c.top(ag, 0), c.top(grade, 0), 2.5), t0: 3.6, t1: 4.6, kind: 'doc', n: 3, st: 0.12, to: grade, label: '50 random answers' });
+    c.packet({ pts: arc(c.top(grade, 0), c.top(gold, 0), 2), t0: 4.8, t1: 5.6, kind: 'span', color: P.bad, s: 1.4, to: gold, label: 'wrong ones → golden set' });
+    c.packet({ pts: [V(-6, 0), V(-6, -4.8)], t0: 5.6, t1: 6.2, kind: 'span', n: 2, st: 0.15, s: 1.4, to: log });
+    c.packet({ pts: arc(c.top(dash, 0), c.top(ks, 0), 2), t0: 7.4, t1: 8.2, kind: 'span', color: P.bad, s: 1.6, to: ks, label: '👎 17% for 3 days' });
+    c.packet({ pts: arc(c.top(ks, 0), c.top(pilot, 0), 2), t0: 8.4, t1: 9.2, kind: 'env', color: P.bad, to: pilot, label: 'back to pilot' });
+    c.packet({ pts: arc(c.top(log, 0), c.top(ks, 0), 5), t0: 9.6, t1: 10.8, kind: 'env', color: P.bad, to: ks, label: 'access violation → kill' });
+    c.tick((t) => { dash.userData.setBar(0, t > 6.8 ? 0.62 : 0.3); dash.userData.setBar(1, 0.4); dash.userData.setBar(2, 0.25); });
+  },
+};
+
+boot(D);
+
+</script>
+</body>
+</html>
