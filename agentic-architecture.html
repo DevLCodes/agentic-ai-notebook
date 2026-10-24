@@ -408,6 +408,16 @@
   <p class="muted" style="font-size:16px">CLI: name a session with <code>-n/--name</code>, resume with <code>--resume &lt;name&gt;</code>, or use <code>-c/--continue</code> for the most recent one. <code>fork_session</code> is used together with resume.</p>
   <h3>✎ Try it: resume, fork or fresh? <span class="tally" id="t-sess"></span></h3>
   <div class="cards" id="sort-sess"></div>
+  <!-- ============ real world ============ -->
+  <h2 id="real-world">In the real world</h2>
+  <table class="hand">
+    <tr><th>pattern</th><th>where you’ll meet it</th></tr>
+    <tr><td>Subagents and handoffs</td><td>Claude Agent SDK subagents, OpenAI Agents SDK handoffs, LangGraph supervisor and swarm</td></tr>
+    <tr><td>Hooks and gates</td><td>Claude Code and Agent SDK hooks (PreToolUse, PostToolUse), OpenAI Agents SDK guardrails</td></tr>
+    <tr><td>Sessions and durable runs</td><td>OpenAI Agents SDK sessions, LangGraph checkpointers, Temporal and Restate for durable workflows</td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p>
+
 
   <!-- ============ Quiz ============ -->
   <h2 id="quiz">✎ Pop quiz</h2>

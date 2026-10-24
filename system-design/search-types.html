@@ -166,7 +166,7 @@
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · retrieval</p><h1>Search Types</h1><p class="lead">Keyword, dense, hybrid and filtered search: how each matches, where each fails, and when to use which.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#types">The search types</a></li><li><a href="#keyword">Keyword search</a></li><li><a href="#dense">Dense search</a></li><li><a href="#hybrid">Hybrid search and fusion</a></li><li><a href="#when">When to use which</a></li><li><a href="#rewrite">Query rewriting</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#types">The search types</a></li><li><a href="#keyword">Keyword search</a></li><li><a href="#dense">Dense search</a></li><li><a href="#hybrid">Hybrid search and fusion</a></li><li><a href="#when">When to use which</a></li><li><a href="#rewrite">Query rewriting</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="types"><h2>The search types</h2>
 <div class="table"><table><thead><tr><th>Type</th><th>How it matches</th><th>Strong at</th><th>Weak at</th></tr></thead><tbody>
 <tr><td>Keyword (BM25)</td><td>Shared words, weighted by rarity</td><td>IDs, names, codes, exact phrases</td><td>Synonyms and paraphrases</td></tr>
@@ -184,7 +184,14 @@
 <li><strong>Support answers over conversational questions:</strong> dense or hybrid.</li>
 <li><strong>Anything with permissions:</strong> metadata filter applied inside every search, never after.</li>
 </ul></section><section id="rewrite"><h2>Query rewriting</h2>
-<p>Search quality often improves more from fixing the query than the index. Use a small model to turn a follow-up ("what about contractors?") into a standalone question, pull out filters (region = India), expand acronyms from a glossary, and sometimes generate two or three alternative phrasings to search in parallel.</p></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="embeddings.html">Embeddings</a></li><li><a href="vector-databases.html">Vector databases</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="enterprise-search.html#query-path">Enterprise search: query path</a></li></ul></section></article>
+<p>Search quality often improves more from fixing the query than the index. Use a small model to turn a follow-up ("what about contractors?") into a standalone question, pull out filters (region = India), expand acronyms from a glossary, and sometimes generate two or three alternative phrasings to search in parallel.</p></section><section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Keyword / BM25</td><td>Elasticsearch, OpenSearch, Apache Solr (Lucene), Postgres full-text search (tsvector) and ParadeDB pg_search, Tantivy, Typesense</td><td>The baseline for exact terms, IDs and rare words</td></tr>
+<tr><td>Learned sparse</td><td>SPLADE, Elastic ELSER</td><td>Keyword-style index with learned term weights</td></tr>
+<tr><td>Hybrid built in</td><td>Weaviate hybrid search, Qdrant hybrid (sparse + dense), Elasticsearch and OpenSearch hybrid queries with RRF, Vespa, Azure AI Search, Vertex AI Search</td><td>Fusion handled by the engine</td></tr>
+<tr><td>Hybrid by hand</td><td>pgvector + tsvector in Postgres, fused with reciprocal rank fusion in SQL</td><td>One database; full control over weights</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="embeddings.html">Embeddings</a></li><li><a href="vector-databases.html">Vector databases</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="enterprise-search.html#query-path">Enterprise search: query path</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
