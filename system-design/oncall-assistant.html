@@ -1,0 +1,1515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI On-Call Assistant · Agentic System Designs</title>
+<meta name="description" content="A system design for an AI on-call assistant that investigates production alerts, posts a root cause with evidence in Slack within 3 minutes and suggests or takes fixes with approval: dedup without an LLM, parallel investigation, an evidence gate in code, approval and post-fix monitoring, and evals with real numbers, a shadow gate and a kill switch, with interactive 3D diagrams.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: an animated 3D system as the hero, then one reading column of design sections, each with its own interactive 3D scene. Single deliberate light look, shared with the other walkthroughs. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef;
+    --paper: #f7f8f9;
+    --ink: #1c2530;
+    --muted: #586473;
+    --line: #cdd4dc;
+    --card: rgba(248, 249, 251, 0.9);
+    --accent: #4255d4;
+    --accent-ink: #ffffff;
+    --track: #d3d9e0;
+    --code-bg: #eef1f4;
+    --c-src: #8795a3; --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #7c5cff; --c-gov: #b2456e; --c-cross: #4a5562;
+    --line-strong: #9aa5b1; --wire: #7d8996; --c-dlq: #b23a3a;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  .wrap {
+    max-width: 1240px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* ---------- hero ---------- */
+  .intro { padding-block: 40px 20px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 48px); line-height: 1.05; text-wrap: balance; }
+  .prompt { margin: 0; font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .prompt q { font-style: italic; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .stage-wrap {
+    position: relative; height: clamp(440px, 72vh, 780px);
+    border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee;
+  }
+  #stage { position: absolute; inset: 0; }
+  #stage canvas { display: block; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .hint { position: absolute; left: 14px; top: 12px; margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  #reset { position: absolute; top: 12px; right: 12px; }
+
+  .lbl {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 3px 8px 4px; border-radius: 7px;
+    background: rgba(250, 251, 252, 0.84); border: 1px solid var(--line);
+    font-family: var(--font-body); font-size: 12px; line-height: 1.2; color: var(--ink);
+    white-space: nowrap; transition: background .2s, border-color .2s, transform .2s;
+  }
+  .lbl b { font-weight: 600; }
+  .lbl span { display: none; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .lbl.on span { display: block; }
+  .lbl.on { background: var(--ink); border-color: var(--ink); color: #fff; transform: translateY(-3px); }
+  .lbl.on span { color: #c9d2dc; }
+  .plate-lbl { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .lane-lbl { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+
+  .cap {
+    margin-top: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px 14px; display: grid; gap: 10px;
+  }
+  .cap-top { display: flex; align-items: center; gap: 12px; }
+  .meta { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .cap-top .meta:last-child { margin-left: auto; }
+  button {
+    font: 600 13px var(--font-body); color: var(--accent-ink); background: var(--accent);
+    border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer; min-width: 72px;
+  }
+  button.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+  button:focus-visible, #bar:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #caption { margin: 0; font-size: 16px; line-height: 1.45; min-height: 2.9em; }
+  #bar { position: relative; height: 8px; border-radius: 4px; background: var(--track); cursor: pointer; touch-action: none; }
+  #fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 4px; background: var(--ink); }
+  #bar .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--paper); }
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  #chips a {
+    display: inline-block; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); text-decoration: none; transition: background .2s, color .2s, border-color .2s;
+  }
+  #chips a:hover { border-color: var(--ink); color: var(--ink); }
+  #chips li.on a { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.6; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg rect.k-serve[height="16"], .dg rect.k-kb[height="16"], .dg rect.k-model[height="16"], .dg rect.k-gov[height="16"], .dg rect.k-cross[height="16"] { stroke-width: 0; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-cross { fill: #b8c0c9; }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .deeper-k { margin: 20px 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+
+
+  /* ---------- 3D figures ---------- */
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(300px, 50vh, 450px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .fig3d.hero .stage3d { height: clamp(440px, 74vh, 800px); border-radius: 18px; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .reset3 { position: absolute; top: 10px; right: 10px; z-index: 2; }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .fig3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.88); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.pk { font-family: var(--font-mono); font-size: 10.5px; background: var(--ink); border-color: var(--ink); color: #fff; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.sc.ok { background: #dcf3e4; border-color: var(--c-ok); }
+  .l3.miss { font-family: var(--font-mono); font-size: 11px; background: #f6dddb; border-color: var(--c-dlq); color: #8c2b2b; }
+  .l3.cap { background: none; border: 0; padding: 0 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted); }
+  .l3.scr { background: none; border: 0; padding: 0; font-family: var(--font-mono); font-size: 10px; color: #c9d2dc; }
+  .l3.id { padding: 0 5px; font-family: var(--font-mono); font-size: 10.5px; }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k, .ctl3 .meta3 { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 .meta3 { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12px; }
+  .steps3 { display: flex; flex-wrap: wrap; gap: 4px; }
+  .steps3 button { min-width: 30px; padding: 4px 0; background: var(--paper); color: var(--ink); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .steps3 button:hover { border-color: var(--ink); }
+  .steps3 button[aria-current="step"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .track3 { position: relative; height: 4px; margin-top: 10px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .fill3 { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--ink); }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 4.6em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; }
+  .fig3d.hero .out3 { font-size: 16px; min-height: 3.6em; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .hero-chips { margin-top: 10px; }
+  .legend i.pk-doc { background: #fff; border: 1px solid var(--line-strong); }
+  .legend i.pk-env { background: #ffc857; height: 7px; }
+  .legend i.pk-chunk { background: #5fd3c3; }
+  .legend i.pk-vec { background: #8f9bff; transform: rotate(45deg) scale(.85); }
+  .legend i.pk-bad { background: #e0413a; }
+  .legend i.pk-span { background: #75859a; border-radius: 50%; width: 8px; height: 8px; }
+  :root { --c-ok: #46b06a; }
+  @media (max-width: 760px) {
+    .stage3d { height: min(78vh, 600px); }
+    .fig3d.hero .stage3d { height: min(82vh, 680px); }
+    .l3.pk, .l3.cap, .lane-lbl { display: none; }
+    .l3 { font-size: 10px; }
+    .out3 { font-size: 14px; }
+    .ctl3 .meta3 { display: none; }
+  }
+
+  /* ---------- article ---------- */
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 48px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 40px; margin-bottom: 40px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 28px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; color: var(--ink); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .tags li { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .say { font-style: italic; }
+  .budget { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 6px 0 6px; font-family: var(--font-mono); font-size: 11px; color: #fff; }
+  .budget div { display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; min-width: 0; }
+  .budget-key { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  footer { padding-block: 0 48px; font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 32px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+  }
+  @media (max-width: 760px) {
+    .lbl span, .plate-lbl, .lane-lbl, .hint { display: none; }
+    .lbl { font-size: 10.5px; padding: 2px 6px; }
+    #caption { font-size: 14.5px; }
+    #chips a { font-size: 11.5px; }
+    .prompt, .lead { font-size: 16.5px; }
+    h2 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<header class="wrap"><div class="intro">
+  <p class="eyebrow">Agentic system design walkthrough</p>
+  <h1>AI On-Call Assistant</h1>
+  <p class="prompt"><q>When a production alert fires, for example “checkout-service error rate is 12%”, an AI assistant investigates. It reads the alert, recent logs, metrics, recent deploys and the team’s runbooks, then posts a likely root cause with evidence in the incident Slack channel within 3 minutes. It can suggest or take fixes such as restarting a pod or rolling back a deploy.</q></p>
+  <ul class="legend" aria-label="Colour key">
+    <li><i style="background:var(--c-src)"></i>Alert sources</li>
+    <li><i style="background:var(--c-ingest)"></i>Investigation</li>
+    <li><i style="background:var(--c-kb)"></i>Telemetry and runbooks</li>
+    <li><i style="background:var(--c-model)"></i>Models</li>
+    <li><i style="background:var(--c-gov)"></i>Gates and approvals</li>
+    <li><i style="background:var(--c-cross)"></i>Evals and operations</li>
+  </ul>
+  <ul class="legend" aria-label="What the moving shapes mean">
+    <li><i class="pk-doc"></i>Alert or message</li>
+    <li><i class="pk-env"></i>Query or action</li>
+    <li><i class="pk-chunk"></i>Evidence</li>
+    <li><i class="pk-vec"></i>Hypothesis</li>
+    <li><i class="pk-bad"></i>Rejected or blocked</li>
+    <li><i class="pk-span"></i>Trace or rating</li>
+  </ul>
+</div></header>
+
+<div class="wrap">
+<figure class="fig3d hero" id="hero">
+  <div class="stage3d" role="img" aria-label="Animated 3D view of the whole system: alerts arrive from monitoring, are deduplicated in code, and start an investigation that queries logs, metrics, deploys and runbooks in parallel; hypotheses pass an evidence gate in code before a root cause is posted to Slack; a suggested rollback waits for an engineer's approval, runs, and a monitor checks the error rate afterwards; ratings and postmortems feed evals"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <ul id="chips" class="hero-chips">
+      <li data-k="picture"><a href="#picture">The one-minute picture</a></li>
+      <li data-k="dedup"><a href="#dedup">Alert intake and dedup</a></li>
+      <li data-k="investigate"><a href="#investigate">Investigation</a></li>
+      <li data-k="evidence"><a href="#evidence">Evidence gate</a></li>
+      <li data-k="fixes"><a href="#fixes">Fixes and approval</a></li>
+      <li data-k="evals"><a href="#evals">Evals</a></li>
+    </ul>
+</figure>
+</div>
+
+<div class="wrap doc">
+  <nav class="toc" aria-label="Sections">
+    <p>The solution</p>
+    <ol>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#success">Success metrics</a></li>
+      <li><a href="#picture">The one-minute picture</a></li>
+      <li><a href="#dedup">Alert intake and dedup</a></li>
+      <li><a href="#investigate">Investigation</a></li>
+      <li><a href="#evidence">The evidence gate</a></li>
+      <li><a href="#fixes">Fixes and approval</a></li>
+      <li><a href="#evals">Evals: offline</a></li>
+      <li><a href="#ship">The ship gate and production</a></li>
+      <li><a href="#metrics">Metrics that mislead</a></li>
+      <li><a href="#scale">Latency and cost</a></li>
+      <li><a href="#mistakes">Common weak answers</a></li>
+      <li><a href="#risks">Risks and v2</a></li>
+      <li><a href="#presenting">Presenting it in 45 minutes</a></li>
+      <li><a href="#numbers">Numbers to remember</a></li>
+      <li><a href="glossary.html">Glossary</a></li>
+    </ol>
+  </nav>
+
+  <article>
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul class="tags"><li>Clarify</li></ul>
+      <p class="lead">Ask about the non-functional requirements first: how fast, how much per investigation, and how sure it must be before it says anything. Then ask what it is allowed to change.</p>
+      <div class="table"><table>
+        <thead><tr><th>Question</th><th>Answer</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td>Latency</td><td class="num">First post in the incident channel within 3 minutes at p95</td><td>Queries must run in parallel; one slow log search can’t hold up the post</td></tr>
+          <tr><td>Volume</td><td class="num">A few hundred alerts a day; bursts of hundreds in a minute during an outage</td><td>Most alerts in a burst are the same incident, so dedup comes before any model call</td></tr>
+          <tr><td>Data</td><td>Alerts (PagerDuty, Alertmanager, Datadog monitors), logs, metrics, traces, deploy history, runbooks, past postmortems</td><td>The tools the agent gets, and the history evals are built from</td></tr>
+          <tr><td>Groundedness</td><td>Every claim must point to a real query result</td><td>An on-call engineer acts on this; an unsupported claim costs time in the worst moment</td></tr>
+          <tr><td>Actions</td><td>Suggest, or take with approval: restart a pod, roll back a deploy, scale out</td><td>Production changes need a human in the loop and a way back</td></tr>
+          <tr><td>Cost</td><td class="num">Under $0.50 per investigation</td><td>Bounds the number of model calls and the size of log samples</td></tr>
+          <tr><td>Never</td><td>Change production without approval, or state a cause it can’t show</td><td>Decides which rules are code and which are measured</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="success">
+      <h2>Success metrics</h2>
+      <ul class="tags"><li>Measure</li></ul>
+      <p>The headline metric is whether the root cause was right. Tool calls, cost and speed matter, but they are health metrics: none of them says whether the answer was correct.</p>
+      <div class="table"><table>
+        <thead><tr><th>Metric</th><th>Target</th><th>Measured by</th></tr></thead>
+        <tbody>
+          <tr><td>Root cause accuracy@1</td><td class="num">&gt; 70%</td><td>Top-ranked cause matches the postmortem’s root cause</td></tr>
+          <tr><td>Root cause accuracy@3</td><td class="num">&gt; 90%</td><td>The real cause is among the three posted</td></tr>
+          <tr><td>Evidence-citation rate</td><td class="num">100%</td><td>Every claim links to a real query and its result</td></tr>
+          <tr><td>Says “low confidence” when no cause was found</td><td class="num">≥ 80%</td><td>On incidents the gold set marks as unexplained by the available data</td></tr>
+          <tr><td>Time to first post</td><td class="num">&lt; 3 min at p95</td><td>Alert received → message posted</td></tr>
+          <tr><td>Cost per investigation</td><td class="num">&lt; $0.50</td><td>Model and query costs per trace</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="picture">
+      <h2>The one-minute picture</h2>
+      <ul class="tags"><li>Start here</li></ul>
+      <p class="lead">One alert, end to end, before any deep dive.</p>
+      <ol class="plain">
+        <li><strong>Intake:</strong> alerts arrive by webhook from the monitoring system.</li>
+        <li><strong>Dedup, in code:</strong> alerts for the same service and symptom within a window join one incident. No model call.</li>
+        <li><strong>Investigation:</strong> an agent queries logs, metrics, recent deploys and the runbooks in parallel, then ranks hypotheses.</li>
+        <li><strong>Evidence gate, in code:</strong> a hypothesis is posted only if its claims point to real query results and it clears a confidence bar; otherwise the post says “low confidence”.</li>
+        <li><strong>Slack post:</strong> the likely cause, the evidence links and a suggested fix, within 3 minutes.</li>
+        <li><strong>Fix with approval:</strong> an engineer approves a rollback or restart in Slack; it runs, and a monitor watches the error rate afterwards.</li>
+        <li><strong>Evals around it:</strong> past postmortems replayed offline, a shadow period, ratings in production and a kill switch.</li>
+      </ol>
+      <div class="note"><p><strong>In one breath:</strong> “Webhook intake, code dedup into incidents, a parallel investigation over logs, metrics, deploys and runbooks, an evidence gate in code, a Slack post in under three minutes, fixes only with approval and a monitor afterwards, and replayed postmortems plus shadow mode deciding whether it ships.”</p></div>
+    </section>
+
+    <section id="dedup">
+      <h2>Alert intake and dedup</h2>
+      <ul class="tags"><li>No LLM</li></ul>
+<figure class="fig3d" id="dedup3d">
+  <div class="stage3d" role="img" aria-label="A burst of alerts from several services arrives; code groups them by service, symptom and time window into two incidents, and only one investigation starts for each"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Grey envelopes are duplicates that join an existing incident instead of starting a new investigation.</figcaption>
+</figure>
+      <p>During an outage, dozens of alerts fire for one cause: error rate, latency, failed health checks, downstream services. Investigating each one would cost money, flood the channel and post contradicting causes.</p>
+      <ul class="plain">
+        <li><strong>Fingerprint</strong> each alert: service, symptom (error rate, latency, saturation), environment.</li>
+        <li><strong>Group</strong> alerts with the same fingerprint within a window (say 10 minutes) into one incident; related services that share a dependency join the same incident.</li>
+        <li><strong>One investigation per incident.</strong> New alerts are added to its context instead of starting another.</li>
+      </ul>
+      <p>This is deterministic code. Monitoring tools already do much of it (PagerDuty and Opsgenie alert grouping, Alertmanager grouping); the assistant reuses their incident ID when one exists.</p>
+    </section>
+
+    <section id="investigate">
+      <h2>Investigation</h2>
+      <ul class="tags"><li>Parallel tools</li><li>Runbooks as RAG</li></ul>
+<figure class="fig3d" id="investigate3d">
+  <div class="stage3d" role="img" aria-label="The investigator queries logs, metrics, recent deploys and runbooks in parallel; results come back as evidence; the model ranks three hypotheses with the deploy that shipped eight minutes before the spike first"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Each evidence chunk carries the query that produced it.</figcaption>
+</figure>
+      <div class="table"><table>
+        <thead><tr><th>Tool</th><th>Query</th><th>Real systems</th></tr></thead>
+        <tbody>
+          <tr><td>Logs</td><td>Top error signatures for the service in the last 30 minutes vs the hour before</td><td>Datadog Logs, Splunk, Elasticsearch / OpenSearch, Grafana Loki</td></tr>
+          <tr><td>Metrics</td><td>Error rate, latency, saturation, and the same for direct dependencies</td><td>Prometheus, Datadog, CloudWatch</td></tr>
+          <tr><td>Deploys and config</td><td>Deploys and flag changes for the service and its dependencies in the last 2 hours</td><td>Argo CD, Spinnaker, GitHub deployments, LaunchDarkly</td></tr>
+          <tr><td>Traces</td><td>Slowest and failing spans across services</td><td>Jaeger, Grafana Tempo, Datadog APM</td></tr>
+          <tr><td>Runbooks and postmortems</td><td>Retrieval over the team’s runbooks and past incidents for this symptom</td><td>The team’s wiki, indexed for search</td></tr>
+        </tbody>
+      </table></div>
+      <p>The queries run in parallel with timeouts, so one slow search can’t miss the 3-minute target. Runbooks retrieved for the symptom are fed in as context: they tell the model which checks this team trusts and which causes recur. The model then ranks up to three hypotheses, each listing the query results it relies on.</p>
+      <p>The investigator is an agent rather than a fixed workflow because the next query depends on what the last one showed: an error signature pointing at the payments client leads to the payments-service metrics. A step limit and a time budget keep it bounded.</p>
+    </section>
+
+    <section id="evidence">
+      <h2>The evidence gate</h2>
+      <ul class="tags"><li>In code, not in the prompt</li></ul>
+<figure class="fig3d" id="evidence3d">
+  <div class="stage3d" role="img" aria-label="Three hypotheses reach the evidence gate; one cites real queries and passes; one cites a query that was never run and is rejected; one has too little support and is marked low confidence"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. The gate is ordinary code that reads the investigation’s query log.</figcaption>
+</figure>
+      <p class="lead">“Have the model say when it doesn’t know” leaves the judgement to the model. A model under pressure to answer will often answer. Put the check in code.</p>
+      <div class="table"><table>
+        <thead><tr><th>Check</th><th>How</th></tr></thead>
+        <tbody>
+          <tr><td>Every claim cites a query</td><td>The hypothesis is structured output: each claim carries a query ID. The gate looks the ID up in the investigation’s own query log; an ID that was never run rejects the claim</td></tr>
+          <tr><td>The cited result supports the claim</td><td>Deterministic checks where possible: the deploy’s timestamp is before the spike, the error signature’s count actually rose, the metric crossed its threshold</td></tr>
+          <tr><td>Enough support</td><td>A minimum of independent evidence (for example a deploy that lines up in time and an error signature that changed with it)</td></tr>
+          <tr><td>Confidence bar</td><td>Below the bar, the post says “low confidence” and lists what was checked and ruled out, instead of naming a cause</td></tr>
+        </tbody>
+      </table></div>
+      <p>The model’s own confidence is one input, not the decision. Calibrate the bar offline: on the replay set, pick the threshold that keeps precision above target.</p>
+    </section>
+
+    <section id="fixes">
+      <h2>Fixes and approval</h2>
+      <ul class="tags"><li>Human in the loop</li></ul>
+<figure class="fig3d" id="fixes3d">
+  <div class="stage3d" role="img" aria-label="The assistant posts a root cause and suggests a rollback; an on-call engineer approves it in Slack; the deploy system rolls back; a monitor watches the error rate; if it does not recover, the change is reverted and the incident escalates"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Dashboard bars: error rate, latency, request volume.</figcaption>
+</figure>
+      <ul class="plain">
+        <li><strong>Suggest first.</strong> Each fix comes from an allow-list (restart pods of a deployment, roll back to the previous release, scale out) with its exact command shown.</li>
+        <li><strong>Approval in Slack.</strong> An on-call engineer approves with one click; the approval is logged with who and when.</li>
+        <li><strong>Execute through the normal deploy system</strong> (Argo CD rollback, a Kubernetes rollout restart) with the assistant’s narrow service account, never with broad cluster access.</li>
+        <li><strong>Monitor after the fix.</strong> Watch the error rate for a few minutes. If it doesn’t recover, say so in the channel, revert the action if that is safe, and escalate.</li>
+      </ul>
+      <p>Fix suggestions come after root causes in the rollout: first prove the diagnosis is right, then let it suggest, and only much later consider pre-approved automatic actions for narrow, reversible cases.</p>
+    </section>
+
+    <section id="evals">
+      <h2>Evals: offline</h2>
+      <ul class="tags"><li>Source · metric · number</li></ul>
+<figure class="fig3d" id="evals3d">
+  <div class="stage3d" role="img" aria-label="Past incidents with known root causes are replayed against the logs and metrics snapshot from that time; the assistant's posted causes are compared with the postmortem labels; scores are checked against targets before shadow mode"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The text below covers the same steps.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. Dashboard bars: accuracy@1, accuracy@3, evidence-citation rate.</figcaption>
+</figure>
+      <p class="lead">An eval answer needs three things: where the data comes from, what is measured, and the number it must reach. “A golden set” with none of those isn’t an answer.</p>
+      <h3>The data</h3>
+      <p>About 300 past incidents taken from postmortems. Each is replayed against a snapshot of the logs, metrics and deploy history from that time, so the assistant sees what an engineer would have seen. The label is the root cause the postmortem settled on. Include incidents where the cause wasn’t in the data at all; those test whether it can say “low confidence”.</p>
+      <h3>The metrics and the bars</h3>
+      <div class="table"><table>
+        <thead><tr><th>Metric</th><th>Bar</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Root cause accuracy@1</td><td class="num">&gt; 70%</td><td>The first cause posted is what the engineer checks first</td></tr>
+          <tr><td>Root cause accuracy@3</td><td class="num">&gt; 90%</td><td>The real cause is on the list</td></tr>
+          <tr><td>Evidence-citation rate</td><td class="num">100%</td><td>Every claim links to a real query</td></tr>
+          <tr><td>“Low confidence” on unexplained incidents</td><td class="num">≥ 80%</td><td>It knows when it doesn’t know</td></tr>
+          <tr><td>Time to first post</td><td class="num">&lt; 3 min p95</td><td>The requirement</td></tr>
+          <tr><td>Cost per investigation</td><td class="num">&lt; $0.50</td><td>The budget</td></tr>
+        </tbody>
+      </table></div>
+      <p>Matching a posted cause to the postmortem’s cause needs a grader: exact matches on structured fields (service, change ID, error class) where possible, and an LLM judge with a rubric for the rest, calibrated against engineers’ labels on a sample.</p>
+      <div class="note"><p><strong>The incident monitor is not the bot’s monitor.</strong> The monitoring that fired the alert watches checkout. Evaluating the assistant means measuring <em>its</em> outputs against labelled answers.</p></div>
+    </section>
+
+    <section id="ship">
+      <h2>The ship gate and production</h2>
+      <ul class="tags"><li>Shadow</li><li>Ratings</li><li>Kill switch</li></ul>
+      <h3>Ship gate: two weeks in shadow mode</h3>
+      <p>The assistant investigates every real incident but posts privately to the on-call engineers, who rate each post 👍 or 👎. It must meet the offline targets on these live incidents before it posts in the public incident channel. Fix suggestions are switched on later, after root causes have proved themselves.</p>
+      <h3>In production</h3>
+      <div class="table"><table>
+        <thead><tr><th>Signal</th><th>What it tells you</th></tr></thead>
+        <tbody>
+          <tr><td>👍 rate on posts</td><td>Whether engineers found it useful, every incident</td></tr>
+          <tr><td>Accuracy@1 on a weekly sample, checked against new postmortems</td><td>Whether it is still right as systems change</td></tr>
+          <tr><td>Fix-acceptance rate and fix-reverted rate</td><td>Read together: accepted and kept is good; accepted and reverted is a bad suggestion</td></tr>
+          <tr><td>Cost and latency per investigation</td><td>Budget and the 3-minute target</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Kill switch</h3>
+      <p>If the 👍 rate drops below 60% for a week, or any suggested fix makes an incident worse, the assistant goes back to read-only: it can still post evidence, but suggests and takes no actions until the cause is understood. New postmortems join the replay set every week.</p>
+    </section>
+
+    <section id="metrics">
+      <h2>Metrics that mislead</h2>
+      <ul class="tags"><li>Goodhart’s law</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Tempting metric</th><th>Why it misleads</th><th>Use instead</th></tr></thead>
+        <tbody>
+          <tr><td>Conversion to execution (fixes run ÷ fixes suggested)</td><td>Rewards pushing fixes. A system tuned on it learns to suggest rollbacks too often, because a rollback usually “works”</td><td>Fix-reverted rate and incidents made worse, next to acceptance</td></tr>
+          <tr><td>Number of tool calls</td><td>A health metric; more queries isn’t a better diagnosis</td><td>Accuracy, with tool calls as a cost guardrail</td></tr>
+          <tr><td>Cost and latency alone</td><td>Fast and cheap and wrong scores well</td><td>Accuracy first; cost and latency as constraints</td></tr>
+          <tr><td>Mean time to resolve, credited to the bot</td><td>Moves with incident mix and team, not just the assistant</td><td>A comparison against a shadow-period baseline</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="scale">
+      <h2>Latency and cost</h2>
+      <ul class="tags"><li>Back of the envelope</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Stage</th><th>Budget</th></tr></thead>
+        <tbody>
+          <tr><td>Intake and dedup</td><td class="num">&lt; 5 s</td></tr>
+          <tr><td>Parallel queries (logs, metrics, deploys, runbooks)</td><td class="num">30–60 s, each with a timeout</td></tr>
+          <tr><td>Follow-up queries and ranking (3–5 model calls)</td><td class="num">40–80 s</td></tr>
+          <tr><td>Evidence gate and post</td><td class="num">&lt; 5 s</td></tr>
+          <tr><td>Total at p95</td><td class="num">&lt; 3 min</td></tr>
+        </tbody>
+      </table></div>
+      <p>Illustrative. Cost per investigation ≈ model calls × tokens × price, plus log-query costs. Summarise log samples in code (top signatures and counts) before they reach the model; raw log lines are the main way the budget gets blown.</p>
+    </section>
+
+    <section id="mistakes">
+      <h2>Common weak answers</h2>
+      <ul class="tags"><li>What interviewers probe</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Weak answer</th><th>Strong answer</th></tr></thead>
+        <tbody>
+          <tr><td>“We’ll have a golden set”</td><td>300 postmortems replayed against that time’s data, labelled with the real root cause</td></tr>
+          <tr><td>Tool calls, cost and conversion as the eval metrics</td><td>Root cause accuracy@1 and @3, citation rate, “low confidence” rate, with numbers; cost and latency as constraints</td></tr>
+          <tr><td>“The model will say when it doesn’t know”</td><td>An evidence gate in code: cited queries must exist and support the claim, below a bar it posts “low confidence”</td></tr>
+          <tr><td>Treating the alerting system as the bot’s monitoring</td><td>Measuring the bot’s own outputs: ratings, weekly accuracy against postmortems, fix-reverted rate</td></tr>
+          <tr><td>Shipping straight to the incident channel</td><td>Two weeks in shadow mode with ratings, then public posts, then fix suggestions</td></tr>
+          <tr><td>Skipping a question to come back to it later</td><td>Answer every question when it is asked, even briefly; come back to deepen it</td></tr>
+        </tbody>
+      </table></div>
+      <p>Strong signals worth keeping: non-functional requirements first, the end-to-end picture early, dedup without a model, human approval before any production change, runbooks as retrieval context, and a monitor after every fix.</p>
+    </section>
+
+    <section id="risks">
+      <h2>Risks and v2</h2>
+      <ul class="tags"><li>Failure modes</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Risk</th><th>Detected by</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Confident wrong cause sends engineers the wrong way</td><td>👎 ratings, weekly accuracy</td><td>Evidence gate, top 3 not top 1, “low confidence” posts</td></tr>
+          <tr><td>A fix makes the incident worse</td><td>Post-fix monitor, fix-reverted rate</td><td>Approval, allow-listed reversible actions, kill switch</td></tr>
+          <tr><td>Telemetry outage during the incident</td><td>Query errors</td><td>Say which sources were unavailable; never fill gaps with guesses</td></tr>
+          <tr><td>Secrets or personal data in logs reach the model</td><td>Log scrubbing checks</td><td>Redact in code before summarising</td></tr>
+          <tr><td>Prompt injection through log lines</td><td>Red-team cases in the replay set</td><td>Treat log text as data; actions only from the allow-list with approval</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>v2:</strong> pre-approved automatic actions for narrow, reversible cases; drafting the postmortem timeline from the incident channel; learning which runbooks actually helped.</p>
+    </section>
+
+    <section id="presenting">
+      <h2>Presenting it in 45 minutes</h2>
+      <ul class="tags"><li>Interview script</li></ul>
+      <div class="table"><table>
+        <thead><tr><th>Step</th><th>Time</th><th>What to cover</th></tr></thead>
+        <tbody>
+          <tr><td>1. Clarify</td><td class="num">5 min</td><td>Latency, cost, groundedness, volume and bursts, data sources, allowed actions</td></tr>
+          <tr><td>2. The one-minute picture</td><td class="num">3 min</td><td>Intake, dedup, investigation, evidence gate, Slack post, approval, monitor, evals</td></tr>
+          <tr><td>3. Investigation and evidence</td><td class="num">10 min</td><td>Parallel tools with timeouts, runbooks as context, hypotheses, the gate in code</td></tr>
+          <tr><td>4. Fixes</td><td class="num">5 min</td><td>Allow-list, approval, narrow permissions, monitor and revert</td></tr>
+          <tr><td>5. Evals</td><td class="num">12 min</td><td>Replay set with labels, metrics with bars, graders, shadow gate, production signals, kill switch, misleading metrics</td></tr>
+          <tr><td>6. Latency, cost, risks</td><td class="num">7 min</td><td>The 3-minute budget, log summarising, failure modes</td></tr>
+          <tr><td>7. Questions</td><td class="num">3 min</td><td>Answer each when asked</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note"><p><strong>The eval shape that fits every design:</strong> data (where it comes from and what the label is), offline metrics with numbers, a ship gate (shadow mode and a bar to beat), production signals, and a kill switch.</p></div>
+    </section>
+
+    <section id="numbers">
+      <h2>Numbers to remember</h2>
+      <ul class="tags"><li>Cheat sheet</li></ul>
+      <div class="table"><table>
+        <tbody>
+          <tr><td>First post</td><td class="num">&lt; 3 min p95</td></tr>
+          <tr><td>Cost</td><td class="num">&lt; $0.50 per investigation</td></tr>
+          <tr><td>Replay set</td><td class="num">~300 postmortems, replayed on that time’s data</td></tr>
+          <tr><td>Accuracy</td><td class="num">@1 &gt; 70%, @3 &gt; 90%</td></tr>
+          <tr><td>Citations</td><td class="num">100% of claims</td></tr>
+          <tr><td>“Low confidence” on unexplained incidents</td><td class="num">≥ 80%</td></tr>
+          <tr><td>Shadow period</td><td class="num">2 weeks, 👍/👎 by on-call</td></tr>
+          <tr><td>Kill switch</td><td class="num">👍 &lt; 60% for a week, or any fix makes things worse</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </article>
+</div>
+
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. The 3D views use Three.js loaded from a CDN, so they need a connection; the text and tables cover the same ground. Figures show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarse = window.matchMedia('(pointer: coarse)').matches;
+const BG = 0xe6eaee;
+const V3 = THREE.Vector3;
+
+// ---------- palette ----------
+const C = {
+  source: 0x8795a3, ingest: 0x2a9d8f, kb: 0x4d5fd8, serve: 0xe3a13b, model: 0x7c5cff,
+  gov: 0xb2456e, cross: 0x4a5562, dlq: 0xa9443c, ok: 0x46b06a, glass: 0xc9e2f2,
+  rack: 0x3c4652, git: 0xe8603c, canary: 0xf2c230, v2: 0x2f9e6b, steel: 0x9aa5b1,
+};
+const P = {
+  env: 0xffc857, doc: 0xffffff, chunk: 0x5fd3c3, vec: 0x8f9bff, bad: 0xe0413a, span: 0x75859a,
+  ask: 0xffd27a, acl: 0xe27ab0, ans: 0xff9f86, ship: 0x46b06a, same: 0xb8c0c9,
+};
+
+// ---------- primitives ----------
+function mat(color, o = {}) {
+  const m = new THREE.MeshStandardMaterial({
+    color, roughness: o.rough ?? 0.55, metalness: o.metal ?? 0,
+    emissive: new THREE.Color(o.emi ?? color), emissiveIntensity: o.glow ?? 0,
+    transparent: o.opacity != null, opacity: o.opacity ?? 1,
+    side: o.side ?? THREE.FrontSide, flatShading: !!o.flat,
+    depthWrite: o.opacity == null || o.opacity > 0.6,
+  });
+  m.userData.base = o.glow ?? 0;
+  return m;
+}
+function mesh(geo, color, o = {}) {
+  const m = new THREE.Mesh(geo, mat(color, o));
+  m.castShadow = o.cast ?? true;
+  m.receiveShadow = true;
+  return m;
+}
+function rb(w, h, d, color, o = {}) {
+  const r = Math.max(0.002, Math.min(o.r ?? 0.12, h / 2 - 0.001, w / 2 - 0.001, d / 2 - 0.001));
+  return mesh(new RoundedBoxGeometry(w, h, d, o.seg ?? 3, r), color, o);
+}
+function grp() { const g = new THREE.Group(); g.userData.glow = []; g.userData.h = 1; return g; }
+function put(g, m, x = 0, y = 0, z = 0, glow = true) {
+  m.position.set(x, y, z);
+  g.add(m);
+  if (glow) g.userData.glow.push(m);
+  return m;
+}
+function rod(a, b, r, color, o) {
+  const m = mesh(new THREE.CylinderGeometry(r, r, a.distanceTo(b), 14), color, o);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new V3(0, 1, 0), b.clone().sub(a).normalize());
+  return m;
+}
+function label(parent, html, cls, pos, center = [0.5, 1]) {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.innerHTML = html;
+  const obj = new CSS2DObject(el);
+  obj.position.copy(pos);
+  obj.center.set(center[0], center[1]);
+  parent.add(obj);
+  return obj;
+}
+
+// ---------- shapes: each returns a group standing on y = 0 ----------
+function database(color, o = {}) {
+  const r = o.r ?? 1.2, n = o.tiers ?? 3, th = o.th ?? 0.5, gap = 0.08;
+  const g = grp();
+  const light = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55).getHex();
+  for (let i = 0; i < n; i++) put(g, mesh(new THREE.CylinderGeometry(r, r, th, 48), color, { rough: 0.42 }), 0, th / 2 + i * (th + gap), 0);
+  for (let i = 1; i < n; i++) put(g, mesh(new THREE.CylinderGeometry(r * 0.95, r * 0.95, gap + 0.01, 48), light, { cast: false }), 0, i * (th + gap) - gap / 2, 0, false);
+  const H = n * th + (n - 1) * gap;
+  put(g, mesh(new THREE.CylinderGeometry(r * 0.8, r * 0.8, 0.012, 48), light, { cast: false }), 0, H + 0.006, 0, false);
+  g.userData.h = H;
+  g.userData.r = r;
+  return g;
+}
+function topic(o = {}) {
+  const n = o.parts ?? 3, len = o.len ?? 6, gap = o.gap ?? 0.9, rr = o.rad ?? 0.3, color = o.color ?? C.ingest;
+  const segs = o.segs ?? Math.round(len * 1.4);
+  const g = grp();
+  const y = rr + 0.14;
+  for (let p = 0; p < n; p++) {
+    const z = (p - (n - 1) / 2) * gap;
+    const tube = mesh(new THREE.CylinderGeometry(rr, rr, len, 28, 1, true), C.glass, { opacity: 0.32, side: THREE.DoubleSide, cast: false, rough: 0.15 });
+    tube.rotation.z = Math.PI / 2;
+    put(g, tube, 0, y, z, false);
+    for (let k = 0; k <= segs; k++) {
+      const ring = mesh(new THREE.TorusGeometry(rr + 0.012, k === 0 || k === segs ? 0.06 : 0.03, 8, 28), color, { cast: false });
+      ring.rotation.y = Math.PI / 2;
+      put(g, ring, -len / 2 + (k * len) / segs, y, z);
+    }
+    put(g, rb(len + 0.2, 0.1, rr * 1.5, 0xc3cbd4, { cast: false, r: 0.04 }), 0, 0.05, z, false);
+    if (o.labels !== false && n > 1) label(g, `P${p}`, 'l3 cap', new V3(-len / 2 - 0.3, y, z), [1, 0.5]);
+  }
+  g.userData.h = 2 * rr + 0.2;
+  g.userData.y = y;
+  g.userData.len = len;
+  g.userData.lane = (p) => (p - (n - 1) / 2) * gap;
+  return g;
+}
+function server(o = {}) {
+  const w = o.w ?? 1.2, h = o.h ?? 1.7, d = o.d ?? 1.0;
+  const g = grp();
+  put(g, rb(w, h, d, o.color ?? C.rack, { r: 0.1, emi: o.emi ?? C.ingest }), 0, h / 2, 0);
+  for (let i = 0; i < 3; i++) {
+    const y = h * (0.24 + i * 0.26);
+    put(g, rb(w * 0.82, h * 0.18, 0.05, 0x6b7684, { cast: false, r: 0.02 }), 0, y, d / 2, false);
+    put(g, mesh(new THREE.SphereGeometry(0.05, 10, 8), o.led ?? 0x46d27a, { glow: 1.4, cast: false }), w * 0.3, y, d / 2 + 0.04, false);
+    put(g, rb(w * 0.4, 0.03, 0.02, 0x9aa5b1, { cast: false, r: 0.01 }), -w * 0.12, y, d / 2 + 0.03, false);
+  }
+  g.userData.h = h;
+  return g;
+}
+function sheet(color = 0xffffff) {
+  const g = grp();
+  put(g, rb(0.9, 0.05, 1.2, color, { r: 0.02 }), 0, 0.025, 0);
+  for (let i = 0; i < 4; i++) put(g, rb(i === 0 ? 0.42 : 0.66, 0.012, 0.07, 0xaeb7c2, { cast: false, r: 0.005 }), i === 0 ? -0.12 : 0, 0.056, -0.38 + i * 0.24, false);
+  g.userData.h = 0.06;
+  return g;
+}
+function stand(g, h) {
+  put(g, mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.1, 32), C.steel), 0, 0.05, 0, false);
+  put(g, mesh(new THREE.CylinderGeometry(0.06, 0.06, h, 12), C.steel), 0, h / 2, 0, false);
+}
+function browser(accent = 0x4255d4) {
+  const g = grp();
+  stand(g, 0.7);
+  put(g, rb(2.4, 1.6, 0.14, 0xf4f6f8, { r: 0.08 }), 0, 1.5, 0);
+  put(g, rb(2.4, 0.28, 0.16, accent, { r: 0.07 }), 0, 2.18, 0.005);
+  [0xe2674f, 0xe3a13b, 0x46b06a].forEach((c, i) => put(g, mesh(new THREE.SphereGeometry(0.05, 10, 8), c, { cast: false }), -1.0 + i * 0.15, 2.18, 0.09, false));
+  put(g, rb(0.8, 0.62, 0.03, 0xcfd8f0, { cast: false, r: 0.02 }), -0.6, 1.42, 0.08, false);
+  for (let i = 0; i < 4; i++) put(g, rb(i === 0 ? 0.6 : 0.9, 0.07, 0.03, 0xb8c0c9, { cast: false, r: 0.01 }), i === 0 ? 0.3 : 0.45, 1.72 - i * 0.2, 0.08, false);
+  g.userData.h = 2.35;
+  return g;
+}
+function wiki() {
+  const g = grp();
+  for (let i = 0; i < 5; i++) {
+    const s = rb(1.4, 0.08, 1.8, i % 2 ? 0xf7f8f9 : 0xe9edf1, { r: 0.03 });
+    s.rotation.y = (i - 2) * 0.07;
+    put(g, s, (i - 2) * 0.03, 0.05 + i * 0.1, 0);
+  }
+  for (let k = 0; k < 4; k++) put(g, rb(k === 0 ? 0.6 : 1.0, 0.012, 0.08, 0x9aa5b1, { cast: false, r: 0.005 }), k === 0 ? -0.2 : 0, 0.5, -0.55 + k * 0.32, false);
+  put(g, rb(0.16, 0.02, 0.55, C.gov, { cast: false, r: 0.01 }), 0.45, 0.51, -0.85, false);
+  g.userData.h = 0.55;
+  return g;
+}
+function gitRepo() {
+  const g = grp();
+  put(g, rb(1.8, 0.12, 1.3, 0x2b3440, { r: 0.05 }), 0, 0.06, 0, false);
+  const A = new V3(-0.4, 0.5, 0), B = new V3(-0.4, 1.95, 0), Cn = new V3(0.45, 1.45, 0);
+  g.add(rod(A, B, 0.07, 0x55606d));
+  g.add(rod(A.clone().add(new V3(0, 0.25, 0)), Cn, 0.07, 0x55606d));
+  for (const p of [A, B, Cn]) put(g, mesh(new THREE.SphereGeometry(0.22, 24, 16), C.git, { rough: 0.4 }), p.x, p.y, p.z);
+  g.userData.h = 2.2;
+  return g;
+}
+function bucket() {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.9, 0.68, 1.1, 40, 1, true), 0x7f93a8, { side: THREE.DoubleSide, rough: 0.45 }), 0, 0.55, 0);
+  put(g, mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.05, 40), 0x6c7f93), 0, 0.025, 0, false);
+  const rim = mesh(new THREE.TorusGeometry(0.9, 0.05, 10, 40), 0x6c7f93);
+  rim.rotation.x = Math.PI / 2;
+  put(g, rim, 0, 1.1, 0, false);
+  put(g, mesh(new THREE.TorusGeometry(0.9, 0.03, 8, 40, Math.PI), 0x6c7f93), 0, 1.1, 0, false);
+  for (let i = 0; i < 2; i++) {
+    const s = rb(0.6, 0.8, 0.03, 0xffffff, { r: 0.02 });
+    s.rotation.z = i ? -0.22 : 0.2;
+    const stripe = rb(0.6, 0.14, 0.035, 0xd04a3a, { r: 0.01, cast: false });
+    stripe.position.set(0, 0.3, 0);
+    s.add(stripe);
+    put(g, s, i ? 0.25 : -0.2, 1.15, i ? 0.12 : -0.15, false);
+  }
+  g.userData.h = 2.0;
+  return g;
+}
+function modelGem(color = C.model) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.7, 0.85, 0.3, 6), 0x3b3f58), 0, 0.15, 0, false);
+  const gem = put(g, mesh(new THREE.IcosahedronGeometry(0.72, 0), color, { flat: true, rough: 0.3 }), 0, 1.12, 0);
+  g.userData.spin = gem;
+  g.userData.h = 1.85;
+  return g;
+}
+function tray(color = C.dlq) {
+  const g = grp();
+  const w = 1.8, d = 1.3, h = 0.5, t = 0.08;
+  put(g, rb(w, t, d, color, { r: 0.03 }), 0, t / 2, 0);
+  put(g, rb(w, h, t, color, { r: 0.03 }), 0, h / 2, -d / 2 + t / 2);
+  put(g, rb(w, h, t, color, { r: 0.03 }), 0, h / 2, d / 2 - t / 2);
+  put(g, rb(t, h, d, color, { r: 0.03 }), -w / 2 + t / 2, h / 2, 0);
+  put(g, rb(t, h, d, color, { r: 0.03 }), w / 2 - t / 2, h / 2, 0);
+  g.userData.h = h;
+  return g;
+}
+function robot(color = C.serve) {
+  const g = grp();
+  put(g, rb(1.2, 1.0, 0.9, color, { r: 0.2 }), 0, 0.5, 0);
+  put(g, rb(1.0, 0.72, 0.82, 0xf3f4f6, { r: 0.2 }), 0, 1.42, 0);
+  put(g, rb(0.78, 0.3, 0.04, 0x1c2530, { r: 0.08, cast: false }), 0, 1.45, 0.41, false);
+  for (const x of [-0.18, 0.18]) put(g, mesh(new THREE.SphereGeometry(0.07, 12, 10), 0x7fe3ff, { glow: 1.2, cast: false }), x, 1.45, 0.44, false);
+  g.add(rod(new V3(0, 1.78, 0), new V3(0, 2.08, 0), 0.03, C.steel));
+  put(g, mesh(new THREE.SphereGeometry(0.09, 14, 10), color), 0, 2.12, 0);
+  g.userData.h = 2.25;
+  return g;
+}
+function person(color = 0xdfe6ee) {
+  const g = grp();
+  put(g, mesh(new THREE.CapsuleGeometry(0.38, 0.7, 6, 16), color, { rough: 0.7 }), 0, 0.76, 0);
+  put(g, mesh(new THREE.SphereGeometry(0.3, 24, 16), 0xf1d3b8, { rough: 0.7 }), 0, 1.82, 0);
+  g.userData.h = 2.1;
+  return g;
+}
+function monitor(colors = [C.ingest, C.serve]) {
+  const g = grp();
+  stand(g, 0.8);
+  put(g, rb(2.9, 1.8, 0.14, 0x2b3440, { r: 0.08, emi: 0x4255d4 }), 0, 1.65, 0);
+  put(g, rb(2.62, 1.52, 0.02, 0x16202b, { cast: false, r: 0.02 }), 0, 1.65, 0.08, false);
+  const bars = [];
+  const n = colors.length, span = 2.1, bw = Math.min(0.42, (span / n) * 0.6);
+  colors.forEach((c, i) => {
+    const b = rb(bw, 1, 0.04, c, { cast: false, r: 0.01, glow: 0.45 });
+    b.position.set(-span / 2 + (span / n) * (i + 0.5), 1.0, 0.11);
+    g.add(b);
+    bars.push(b);
+  });
+  const thr = rb(2.4, 0.03, 0.03, 0xff5a4e, { cast: false, r: 0.01, glow: 1 });
+  thr.position.set(0, 1.0 + 0.9, 0.12);
+  g.add(thr);
+  g.userData.setBar = (i, v) => { const b = bars[i]; v = Math.max(0.02, v); b.scale.y = v; b.position.y = 1.0 + v / 2; };
+  bars.forEach((_, i) => g.userData.setBar(i, 0.1));
+  g.userData.thr = thr;
+  g.userData.h = 2.6;
+  return g;
+}
+function bird() {
+  const g = grp();
+  const body = mesh(new THREE.SphereGeometry(0.5, 24, 16), C.canary, { rough: 0.6 });
+  body.scale.set(1.15, 0.85, 0.8);
+  put(g, body, 0, 0.62, 0);
+  put(g, mesh(new THREE.SphereGeometry(0.3, 24, 16), C.canary, { rough: 0.6 }), 0.45, 1.02, 0);
+  const beak = mesh(new THREE.ConeGeometry(0.1, 0.26, 12), 0xf08a24);
+  beak.rotation.z = -Math.PI / 2;
+  put(g, beak, 0.83, 1.0, 0, false);
+  for (const z of [-0.2, 0.2]) put(g, mesh(new THREE.SphereGeometry(0.05, 10, 8), 0x1c2530, { cast: false }), 0.62, 1.1, z, false);
+  const tail = rb(0.4, 0.08, 0.32, 0xd9a514, { r: 0.03 });
+  tail.rotation.z = 0.5;
+  put(g, tail, -0.62, 0.78, 0, false);
+  for (const z of [-0.14, 0.14]) g.add(rod(new V3(0, 0.3, z), new V3(0, 0.0, z), 0.03, 0xf08a24));
+  g.userData.h = 1.35;
+  return g;
+}
+function signpost(color = C.serve) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.12, 24), C.steel), 0, 0.06, 0, false);
+  put(g, mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.5, 12), C.steel), 0, 1.25, 0, false);
+  const pivot = new THREE.Group();
+  pivot.position.y = 2.15;
+  g.add(pivot);
+  const board = rb(1.6, 0.5, 0.12, color, { r: 0.06 });
+  board.position.x = 0.85;
+  pivot.add(board);
+  const tip = mesh(new THREE.ConeGeometry(0.4, 0.5, 4), color);
+  tip.rotation.z = -Math.PI / 2;
+  tip.scale.set(1, 1, 0.3);
+  tip.position.x = 1.88;
+  pivot.add(tip);
+  g.userData.glow.push(board, tip);
+  g.userData.pivot = pivot;
+  g.userData.h = 2.5;
+  return g;
+}
+function shield(color = C.gov) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.12, 24), C.steel), 0, 0.06, 0, false);
+  put(g, mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.2, 12), C.steel), 0, 0.6, 0, false);
+  const hex = mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.16, 6), color, { rough: 0.4 });
+  hex.rotation.x = Math.PI / 2;
+  hex.rotation.y = Math.PI / 6;
+  put(g, hex, 0, 1.95, 0);
+  put(g, rb(0.46, 0.38, 0.12, 0xf3f4f6, { r: 0.05 }), 0, 1.86, 0.12, false);
+  put(g, mesh(new THREE.TorusGeometry(0.14, 0.045, 8, 18, Math.PI), 0xf3f4f6), 0, 2.05, 0.12, false);
+  g.userData.hex = hex;
+  g.userData.h = 2.8;
+  return g;
+}
+function flag(color) {
+  const g = grp();
+  put(g, mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.2, 8), 0x6b7684), 0, 0.6, 0, false);
+  put(g, rb(0.55, 0.34, 0.03, color, { r: 0.02 }), 0.29, 1.02, 0);
+  g.userData.h = 1.2;
+  return g;
+}
+function cards() {
+  const g = grp();
+  for (let i = 0; i < 6; i++) {
+    const c = rb(1.2, 0.05, 0.85, i % 2 ? 0xfff3dc : 0xffe3ad, { r: 0.03 });
+    c.rotation.y = (i - 3) * 0.06;
+    put(g, c, 0, 0.03 + i * 0.07, 0);
+  }
+  put(g, mesh(new THREE.SphereGeometry(0.09, 12, 10), C.ok, { cast: false }), 0.4, 0.48, 0.2, false);
+  g.userData.h = 0.45;
+  return g;
+}
+function tile(color) { return rb(0.36, 0.22, 0.36, color, { r: 0.05, glow: 0.15 }); }
+
+const SHAPES = { database, topic, server, sheet, browser, wiki, gitRepo, bucket, modelGem, tray, robot, person, monitor, bird, signpost, shield, flag, cards };
+
+// ---------- paths ----------
+const V = (x, z, y = 0.9) => new V3(x, y, z);
+function arc(a, b, h, n = 32) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const s = i / n;
+    const p = new V3().lerpVectors(a, b, s);
+    p.y += h * Math.sin(Math.PI * s);
+    pts.push(p);
+  }
+  return pts;
+}
+function poly(pts) {
+  const segs = [];
+  let L = 0;
+  for (let i = 0; i < pts.length - 1; i++) { const l = pts[i].distanceTo(pts[i + 1]); segs.push(l); L += l; }
+  return (f, out) => {
+    let d = f * L;
+    for (let i = 0; i < segs.length; i++) {
+      if (d <= segs[i] || i === segs.length - 1) return out.lerpVectors(pts[i], pts[i + 1], segs[i] ? Math.min(1, d / segs[i]) : 1);
+      d -= segs[i];
+    }
+    return out;
+  };
+}
+function packetMesh(kind, color) {
+  switch (kind) {
+    case 'env': return rb(0.62, 0.16, 0.44, color ?? P.env, { r: 0.05, glow: 0.3 });
+    case 'doc': return rb(0.5, 0.06, 0.66, color ?? P.doc, { r: 0.02, glow: 0.2 });
+    case 'vec': return mesh(new THREE.OctahedronGeometry(0.27), color ?? P.vec, { glow: 0.35, flat: true });
+    case 'span': return mesh(new THREE.SphereGeometry(0.13, 10, 8), color ?? P.span, { glow: 0.3 });
+    case 'ask': return mesh(new THREE.SphereGeometry(0.24, 16, 12), color ?? P.ask, { glow: 0.35 });
+    default: return rb(0.38, 0.38, 0.38, color ?? P.chunk, { r: 0.09, glow: 0.3 });
+  }
+}
+
+// ---------- one interactive stage ----------
+const live = [];
+
+function makeStage(fig, def) {
+  const host = fig.querySelector('.stage3d');
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+  } catch (e) {
+    return null;
+  }
+  const big = !!def.hero;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.appendChild(renderer.domElement);
+  const lr = new CSS2DRenderer();
+  lr.domElement.className = 'labels3';
+  host.appendChild(lr.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(BG);
+  scene.fog = new THREE.Fog(BG, 100, 200);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 400);
+  const view = def.view;
+  const target = new V3(...view.target);
+
+  scene.add(new THREE.HemisphereLight(0xf3f6ff, 0x8e98a3, 1.15));
+  const sun = new THREE.DirectionalLight(0xfff2df, 2.4);
+  sun.position.set(target.x - 14, 30, target.z + 18);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(big ? 2048 : 1024, big ? 2048 : 1024);
+  const ext = Math.max(view.w, view.d) * 0.62;
+  Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 100 });
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.03;
+  sun.shadow.radius = 5;
+  sun.target.position.copy(target);
+  scene.add(sun, sun.target);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshStandardMaterial({ color: 0xdce1e6, roughness: 0.95 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const ctx = {
+    scene, C, P, V, V3, arc, SHAPES, THREE, rb, mesh, tile, label, LOOP: def.loop,
+    packets: [], glowers: [], shows: [], tickers: [],
+  };
+  // place a shape with a name label
+  ctx.obj = (shape, x, z, name, sub, o = {}) => {
+    const g = typeof shape === 'string' ? SHAPES[shape](...(o.args ?? [])) : shape;
+    g.position.set(x, o.y ?? 0, z);
+    if (o.rot) g.rotation.y = o.rot;
+    scene.add(g);
+    g.userData.arrivals = [];
+    if (name) {
+      g.userData.lab = label(g, `<b>${name}</b>${sub ? `<span>${sub}</span>` : ''}`, 'lbl', new V3(0, g.userData.h + (o.lift ?? 0.35), 0));
+      g.userData.el = g.userData.lab.element;
+    }
+    ctx.glowers.push(g);
+    return g;
+  };
+  ctx.top = (g, lift = 0.3) => new V3(g.position.x, g.position.y + g.userData.h + lift, g.position.z);
+  ctx.pulse = (g, ...ts) => g.userData.arrivals.push(...ts);
+  ctx.show = (g, t0, t1 = 1e9, mode = 'pop') => {
+    const css = [];
+    g.traverse((o) => { if (o.isCSS2DObject) css.push(o); });
+    ctx.shows.push({ g, t0, t1, mode, css, y0: g.position.y, s0: g.scale.clone() });
+  };
+  ctx.tick = (fn) => ctx.tickers.push(fn);
+  ctx.lane = (pts) => {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 0.01) continue;
+      const m = rb(len + 0.22, 0.05, 0.22, 0xb4bcc6, { r: 0.02, seg: 2, cast: false, rough: 0.8 });
+      m.position.set((a.x + b.x) / 2, 0.03, (a.z + b.z) / 2);
+      m.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+      scene.add(m);
+    }
+  };
+  ctx.note = (html, x, z, y = 0.3, center = [0.5, 0]) => label(scene, html, 'lane-lbl', new V3(x, y, z), center);
+  ctx.packet = (sp) => {
+    const n = sp.n ?? 1;
+    const at = poly(sp.pts);
+    for (let k = 0; k < n; k++) {
+      const t0 = sp.t0 + k * (sp.st ?? 0.12), t1 = sp.t1 + k * (sp.st ?? 0.12);
+      const m = packetMesh(sp.kind ?? 'chunk', sp.color);
+      const sc = (sp.s ?? 1) * (def.ps ?? 1.3);
+      m.visible = false;
+      scene.add(m);
+      let lab = null;
+      if (sp.label && k === 0) lab = label(m, sp.label, 'l3 pk', new V3(0, 0.35, 0));
+      ctx.packets.push({ m, at, t0, dur: t1 - t0, lab, s: sc });
+      if (sp.to && k === n - 1) sp.to.userData.arrivals.push(t1);
+    }
+    if (sp.from) sp.from.userData.arrivals.push(sp.t0 + 0.05);
+  };
+
+  const built = def.build(ctx);
+  const steps = def.steps;
+
+  // ---------- camera ----------
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(target);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI * 0.47;
+  controls.enableZoom = false;
+  controls.enablePan = false;
+  if (coarse) { controls.enabled = false; renderer.domElement.style.touchAction = 'auto'; }
+  let userCam = false, dist = 40, portrait = false;
+  const resetBtn = fig.querySelector('.reset3');
+  controls.addEventListener('start', () => { userCam = true; if (resetBtn) resetBtn.hidden = false; });
+  resetBtn?.addEventListener('click', () => { userCam = false; resetBtn.hidden = true; controls.target.copy(target); });
+
+  function placeCamera(t) {
+    // portrait screens look down the long axis, so the flow runs top to bottom
+    const az = THREE.MathUtils.degToRad(view.az ?? 0) + (portrait ? Math.PI / 2 : 0) + (reduceMotion ? 0 : 0.08 * Math.sin((2 * Math.PI * t) / def.loop));
+    const el = THREE.MathUtils.degToRad(portrait ? Math.min(66, (view.el ?? 45) + 14) : view.el ?? 45);
+    camera.position.set(
+      target.x + Math.sin(az) * Math.cos(el) * dist,
+      target.y + Math.sin(el) * dist,
+      target.z + Math.cos(az) * Math.cos(el) * dist
+    );
+    camera.lookAt(target);
+  }
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    const vf = THREE.MathUtils.degToRad(camera.fov);
+    const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+    portrait = camera.aspect < 0.85;
+    dist = portrait
+      ? Math.max((view.d / 2) / Math.tan(hf / 2), (view.w / 2) / Math.tan(vf / 2))
+      : Math.max((view.w / 2) / Math.tan(hf / 2), (view.d / 2) / Math.tan(vf / 2));
+    scene.fog.near = dist + 25;
+    scene.fog.far = dist + 120;
+    renderer.setSize(w, h);
+    lr.setSize(w, h);
+  }
+  new ResizeObserver(resize).observe(host);
+  resize();
+
+  // ---------- controls: play, steps, caption ----------
+  const playBtn = fig.querySelector('.pp');
+  const stepsEl = fig.querySelector('.steps3');
+  const capEl = fig.querySelector('.out3');
+  const metaEl = fig.querySelector('.meta3');
+  const fillEl = fig.querySelector('.fill3');
+  const stepBtns = steps.map((s, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = String(i + 1);
+    b.setAttribute('aria-label', `Step ${i + 1}`);
+    b.addEventListener('click', () => { simT = s.t + 0.001; setPlaying(false); });
+    stepsEl.appendChild(b);
+    return b;
+  });
+  let playing = !reduceMotion;
+  let simT = reduceMotion ? (def.still ?? steps[steps.length - 1].t + 0.6) : 0;
+  function setPlaying(p) { playing = p; playBtn.textContent = p ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(!p)); }
+  setPlaying(playing);
+  playBtn.addEventListener('click', () => setPlaying(!playing));
+  let cur = -1;
+  function setStep(i) {
+    if (i === cur) return;
+    cur = i;
+    capEl.textContent = steps[i].text;
+    metaEl.textContent = `Step ${i + 1} of ${steps.length}`;
+    stepBtns.forEach((b, j) => b.setAttribute('aria-current', j === i ? 'step' : 'false'));
+    if (def.onStep) def.onStep(i, steps[i]);
+  }
+
+  const L = def.loop;
+  const mod = (a) => ((a % L) + L) % L;
+  const tmp = new V3();
+  function update(t) {
+    for (const p of ctx.packets) {
+      const rel = mod(t - p.t0);
+      const on = rel <= p.dur;
+      if (on) {
+        const f = rel / p.dur;
+        p.at(f, tmp);
+        p.m.position.copy(tmp);
+        p.m.scale.setScalar(p.s * Math.max(0.001, Math.min(1, f / 0.12, (1 - f) / 0.12)));
+        p.m.rotation.y = f * Math.PI;
+      }
+      p.m.visible = on;
+      if (p.lab) p.lab.visible = on;
+    }
+    for (const g of ctx.glowers) {
+      let k = 0;
+      for (const ta of g.userData.arrivals) {
+        const rel = mod(t - ta);
+        if (rel < 1.6) k = Math.max(k, Math.exp(-rel / 0.38));
+      }
+      for (const m of g.userData.glow) m.material.emissiveIntensity = m.material.userData.base + 0.55 * k;
+      const on = k > 0.3;
+      if (g.userData.el && on !== g.userData.on) { g.userData.on = on; g.userData.el.classList.toggle('on', on); }
+      if (g.userData.spin) g.userData.spin.rotation.y = t * 0.6;
+    }
+    for (const s of ctx.shows) {
+      const on = t >= s.t0 && t < s.t1;
+      s.g.visible = on;
+      for (const c of s.css) c.visible = on;
+      if (!on) continue;
+      let k = Math.min(1, (t - s.t0) / 0.3);
+      let y = s.y0;
+      if (s.mode === 'drop' && s.t1 - t < 0.7) {
+        const f = 1 - (s.t1 - t) / 0.7;
+        y = s.y0 + 0.9 * f - 1.6 * f * f;
+        k = Math.min(k, 1 - f * 0.9);
+      }
+      s.g.position.y = y;
+      s.g.scale.copy(s.s0).multiplyScalar(Math.max(0.001, k));
+    }
+    for (const fn of ctx.tickers) fn(t);
+    let i = 0;
+    while (i + 1 < steps.length && t >= steps[i + 1].t) i++;
+    setStep(i);
+    if (fillEl) fillEl.style.width = `${(t / L) * 100}%`;
+  }
+
+  fig.classList.add('ready');
+  const clock = new THREE.Clock();
+  const st = {
+    visible: true,
+    frame() {
+      const dt = Math.min(clock.getDelta(), 0.1);
+      if (!st.visible) return;
+      if (playing) simT = mod(simT + dt);
+      update(simT);
+      if (userCam) controls.update(); else placeCamera(simT);
+      renderer.render(scene, camera);
+      lr.render(scene, camera);
+    },
+  };
+  new IntersectionObserver((es) => { st.visible = es[0].isIntersecting; }).observe(host);
+  return st;
+}
+
+function boot(defs) {
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) {
+      if (!e.isIntersecting) continue;
+      io.unobserve(e.target);
+      const def = defs[e.target.id];
+      if (!def) continue;
+      try {
+        const st = makeStage(e.target, def);
+        if (st) live.push(st);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, { rootMargin: '400px 0px' });
+  for (const id in defs) {
+    const el = document.getElementById(id);
+    if (el) io.observe(el);
+  }
+  (function loop() {
+    for (const st of live) st.frame();
+    requestAnimationFrame(loop);
+  })();
+}
+
+
+// ======================================================================
+// Scenes. Each one: a camera view, a loop length, captions, and a build()
+// that places shapes and schedules packets on the loop's timeline.
+// ======================================================================
+const D = {};
+
+const tiles = (c, labels, x0, z, gap) => labels.map((s, i) => {
+  const t = c.tile(0x9aa5b1);
+  t.scale.set(3.2, 1, 1.5);
+  t.position.set(x0 + i * gap, 0.12, z);
+  c.scene.add(t);
+  c.label(t, s, 'l3 id', new c.V3(0, 0.2, 0), [0.5, 1]);
+  return t;
+});
+const light = (m, color, t, on) => {
+  m.material.color.setHex(on ? color : 0x9aa5b1);
+  m.material.emissive.setHex(on ? color : 0x9aa5b1);
+  m.material.emissiveIntensity = on ? 0.35 + 0.12 * Math.sin(t * 6) : 0.1;
+};
+
+// ---------- hero: the whole system ----------
+D.hero = {
+  hero: true,
+  loop: 18,
+  ps: 1.7,
+  view: { target: [0.6, 0, -2.4], w: 47, d: 24, el: 50 },
+  steps: [
+    { t: 0.0, k: ['picture', 'dedup'], text: 'Monitoring fires “checkout-service error rate is 12%”. A burst of related alerts follows; code groups them into one incident by service, symptom and time window. No model call.' },
+    { t: 1.8, k: ['investigate'], text: 'The investigator queries logs, metrics, recent deploys and the runbooks in parallel, each with a timeout so one slow search can’t miss the 3-minute target.' },
+    { t: 4.0, k: ['investigate'], text: 'Evidence comes back: a deploy of payments-client v2.3 eight minutes before the spike, and a new “connection reset” error that started with it.' },
+    { t: 5.6, k: ['investigate'], text: 'The model ranks up to three hypotheses. Each claim carries the ID of the query that supports it.' },
+    { t: 6.8, k: ['evidence'], text: 'The evidence gate, in code, checks every cited query exists and supports its claim. One hypothesis cites a query that never ran and is dropped.' },
+    { t: 8.4, k: ['picture'], text: 'Within 3 minutes the incident channel gets the likely cause, links to the evidence, and a suggested fix: roll back payments-client to v2.2.' },
+    { t: 10.2, k: ['fixes'], text: 'An on-call engineer approves in Slack. The rollback runs through Argo CD with the assistant’s narrow service account.' },
+    { t: 12.2, k: ['fixes'], text: 'A monitor watches the error rate after the fix. It falls back under 1%, and the assistant posts that it recovered.' },
+    { t: 14.2, k: ['evals'], text: 'Ratings, postmortems and replayed past incidents feed the evals; the dashboard tracks accuracy, citations and the 👍 rate behind a kill switch.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const plate = (x0, x1, z0, z1, color, text) => {
+      const m = c.rb(x1 - x0, 0.12, z1 - z0, color, { r: 0.05, seg: 2, rough: 0.9, cast: false });
+      m.position.set((x0 + x1) / 2, 0.06, (z0 + z1) / 2);
+      c.scene.add(m);
+      c.label(c.scene, text, 'plate-lbl', new c.V3(x0 + 0.4, 0.2, z1 - 0.25), [0, 1]);
+    };
+    plate(-21.6, -10.4, -4.4, 4.4, 0xd7dde3, 'Alerts and incidents');
+    plate(-9.8, 6.4, -10.6, 7.6, 0xcde3df, 'Investigation');
+    plate(7.0, 21.6, -4.4, 7.6, 0xecd6df, 'Post, approve, act');
+    plate(-9.8, 15.4, -16.6, -12.8, 0xd3d9e0, 'Evals and operations');
+
+    const mon = c.obj(c.SHAPES.monitor([C.dlq, C.serve]), -19, 0, 'Monitoring', 'PagerDuty · Datadog · Alertmanager');
+    const dd = c.obj(c.SHAPES.server({ color: 0x55606d }), -13.4, 0, 'Dedup', 'fingerprint · window · no LLM');
+    const inv = c.obj('robot', -6.2, 0, 'Investigator', 'agent · step and time budget');
+    const logs = c.obj(c.SHAPES.database(C.kb, { r: 1.0, th: 0.36 }), -0.6, -8.2, 'Logs', 'Datadog · Splunk · Loki');
+    const met = c.obj(c.SHAPES.monitor([C.kb, C.ingest]), 2.8, -4.4, 'Metrics', 'Prometheus · Datadog');
+    const dep = c.obj('gitRepo', 2.8, 0.6, 'Deploys', 'Argo CD · GitHub');
+    const rb = c.obj('wiki', -0.6, 5.0, 'Runbooks', 'retrieved as context');
+    const gate = c.obj('shield', 9.8, 0, 'Evidence gate', 'in code · cited queries');
+    const slack = c.obj('browser', 15, 0, 'Incident channel', 'cause · evidence · fix');
+    const eng = c.obj('person', 15, 5.6, 'On-call engineer', 'approves in Slack');
+    const argo = c.obj(c.SHAPES.server({ color: 0x3f6b55, emi: C.ok }), 19.6, 5.6, 'Rollback', 'narrow service account');
+    const pm = c.obj('cards', -6.2, -14.6, 'Replayed postmortems', '~300 labelled incidents');
+    const db = c.obj(c.SHAPES.monitor([C.ok, C.kb, C.serve]), 2.2, -14.6, 'Bot metrics', 'accuracy · citations · 👍');
+    const ks = c.obj(c.SHAPES.signpost(C.dlq), 10.6, -14.6, 'Kill switch', '👍 < 60% → read-only', { lift: 0.5 });
+    ks.userData.pivot.rotation.z = -0.25;
+
+    c.lane([V(-19, 0), V(-6.2, 0)]);
+    c.lane([V(-6.2, 0), V(9.8, 0)]);
+    c.lane([V(-3.4, 0), V(-3.4, -8.2), V(-0.6, -8.2)]);
+    c.lane([V(-3.4, 0), V(-3.4, 5.0), V(-0.6, 5.0)]);
+    c.lane([V(9.8, 0), V(15, 0), V(15, 5.6), V(19.6, 5.6)]);
+
+    for (let i = 0; i < 4; i++) c.packet({ pts: [V(-19, 0), V(-13.4, 0)], t0: i * 0.25, t1: i * 0.25 + 0.6, kind: 'doc', color: i ? P.same : undefined, to: dd, label: i === 0 ? 'error rate 12%' : undefined });
+    c.packet({ pts: [V(-13.4, 0), V(-6.2, 0)], t0: 1.2, t1: 1.8, kind: 'doc', to: inv, label: 'one incident' });
+    const q = (g, t0, label) => c.packet({ pts: arc(c.top(inv, 0), c.top(g, 0), 2.5), t0, t1: t0 + 0.7, kind: 'env', to: g, label });
+    const back = (g, t0, label) => c.packet({ pts: arc(c.top(g, 0), c.top(inv, 0), 2.5), t0, t1: t0 + 0.7, kind: 'chunk', s: 0.85, to: inv, label });
+    q(logs, 1.9); q(met, 2.0); q(dep, 2.1); q(rb, 2.2);
+    back(dep, 4.0, 'payments-client v2.3 · 8 min before'); back(logs, 4.3, '“connection reset” · new'); back(met, 4.5); back(rb, 4.7);
+    c.packet({ pts: [V(-6.2, 0), V(9.8, 0)], t0: 5.6, t1: 6.6, kind: 'vec', n: 3, st: 0.15, to: gate, label: '3 hypotheses' });
+    c.pulse(gate, 6.8, 7.6);
+    c.packet({ pts: [V(9.8, 0), V(10.8, 0, 1.6), V(11.4, -2.0, 0.15)], t0: 7.0, t1: 7.6, kind: 'vec', color: P.bad, label: 'cites a query never run' });
+    c.packet({ pts: [V(9.8, 0), V(15, 0)], t0: 8.4, t1: 9.2, kind: 'doc', color: P.ans, to: slack, label: 'cause + evidence + fix' });
+    c.packet({ pts: [V(15, 0), V(15, 5.6)], t0: 10.2, t1: 10.8, kind: 'doc', to: eng });
+    c.packet({ pts: [V(15, 5.6), V(19.6, 5.6)], t0: 10.9, t1: 11.5, kind: 'env', color: P.ship, to: argo, label: 'approved: roll back to v2.2' });
+    c.packet({ pts: arc(c.top(argo, 0), c.top(mon, 0), 6), t0: 12.2, t1: 13.4, kind: 'span', s: 1.6, to: mon, label: 'watch error rate' });
+    c.packet({ pts: arc(c.top(mon, 0), c.top(slack, 0), 6), t0: 13.4, t1: 14.2, kind: 'span', s: 1.6, color: P.ship, to: slack, label: 'recovered: 0.8%' });
+    c.packet({ pts: arc(c.top(eng, 0), c.top(db, 0), 6), t0: 14.2, t1: 15.2, kind: 'span', to: db, label: '👍' });
+    c.packet({ pts: arc(c.top(pm, 0), c.top(inv, 0), 5), t0: 14.6, t1: 15.6, kind: 'ask', n: 3, st: 0.12, from: pm, to: inv });
+    c.packet({ pts: arc(c.top(db, 0), c.top(ks, 0), 2), t0: 16.0, t1: 16.8, kind: 'span', color: P.ship, to: ks, label: '👍 78% · armed, not tripped' });
+    c.tick((t) => {
+      const sick = t > 0 && t < 12.6;
+      mon.userData.setBar(0, sick ? 0.85 : 0.12);
+      mon.userData.setBar(1, sick ? 0.6 : 0.3);
+      db.userData.setBar(0, 0.72); db.userData.setBar(1, 1.0); db.userData.setBar(2, 0.78);
+    });
+  },
+};
+
+// ---------- 1. intake and dedup ----------
+D.dedup3d = {
+  loop: 10,
+  view: { target: [0, 0, 0.6], w: 24, d: 15, el: 52 },
+  steps: [
+    { t: 0.0, text: 'An outage starts. In one minute, checkout error rate, checkout latency, cart health checks and a separate disk alert all fire.' },
+    { t: 1.6, text: 'Code fingerprints each alert: service (or its shared dependency), symptom and environment.' },
+    { t: 3.0, text: 'Alerts with a matching fingerprint inside a 10-minute window join the same incident. Checkout and cart share the payments dependency, so they group together.' },
+    { t: 4.8, text: 'The unrelated disk alert gets its own incident. Two incidents, two investigations, instead of four.' },
+    { t: 6.6, text: 'An alert that arrives later for checkout joins the open incident as extra context. It doesn’t start a new investigation or a new Slack thread.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const mon = c.obj(c.SHAPES.monitor([C.dlq, C.serve]), -9.6, 0, 'Monitoring', 'webhooks');
+    const fp = c.obj(c.SHAPES.server({ color: 0x55606d }), -3.6, 0, 'Fingerprint + window', 'deterministic code');
+    const i1 = c.obj('robot', 4.4, -3.4, 'Incident A', 'checkout + cart · one investigation');
+    const i2 = c.obj(c.SHAPES.robot(C.ingest), 4.4, 3.8, 'Incident B', 'disk usage · one investigation');
+    c.lane([V(-9.6, 0), V(-3.6, 0)]);
+    c.lane([V(-3.6, 0), V(0.4, 0), V(0.4, -3.4), V(4.4, -3.4)]);
+    c.lane([V(0.4, 0), V(0.4, 3.8), V(4.4, 3.8)]);
+    const names = ['checkout errors 12%', 'checkout p95 4 s', 'cart health failing', 'disk 92% on db-3'];
+    names.forEach((n, i) => c.packet({ pts: [V(-9.6, 0), V(-3.6, 0)], t0: i * 0.35, t1: i * 0.35 + 0.8, kind: 'doc', to: fp, label: n }));
+    [0, 1, 2].forEach((i) => c.packet({ pts: [V(-3.6, 0), V(0.4, 0), V(0.4, -3.4), V(4.4, -3.4)], t0: 3.0 + i * 0.2, t1: 3.9 + i * 0.2, kind: 'doc', color: i ? P.same : undefined, to: i1, label: i === 0 ? 'same fingerprint' : undefined }));
+    c.packet({ pts: [V(-3.6, 0), V(0.4, 0), V(0.4, 3.8), V(4.4, 3.8)], t0: 4.8, t1: 5.7, kind: 'doc', to: i2 });
+    c.packet({ pts: [V(-9.6, 0), V(-3.6, 0)], t0: 6.6, t1: 7.3, kind: 'doc', to: fp, label: 'checkout errors 14%' });
+    c.packet({ pts: [V(-3.6, 0), V(0.4, 0), V(0.4, -3.4), V(4.4, -3.4)], t0: 7.4, t1: 8.3, kind: 'doc', color: P.same, to: i1, label: 'joins incident A' });
+  },
+};
+
+// ---------- 2. investigation ----------
+D.investigate3d = {
+  loop: 12,
+  view: { target: [0, 0, 0.6], w: 25, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'The investigator starts with the incident: service, symptom, start time. It retrieves the runbooks and past postmortems for this symptom first, as context.' },
+    { t: 1.4, text: 'Then it fans out in parallel: top error signatures in the logs, error rate and latency for checkout and its dependencies, and deploys or flag changes in the last two hours.' },
+    { t: 3.4, text: 'Results come back summarised in code (top signatures and counts, not raw log lines), each tagged with the query that produced it.' },
+    { t: 5.0, text: 'The error signature points at the payments client, so the next query depends on what it saw: payments-service metrics. That dependency is why this step is an agent, not a fixed workflow.' },
+    { t: 7.0, text: 'It ranks up to three hypotheses, each claim citing query IDs: the payments-client v2.3 deploy first, a payments-provider slowdown second, a cache eviction third.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const inv = c.obj('robot', -4.8, 0, 'Investigator', 'step limit · time budget');
+    const rb = c.obj('wiki', -9.8, -4, 'Runbooks + postmortems', 'retrieved first');
+    const logs = c.obj(c.SHAPES.database(C.kb, { r: 1.0, th: 0.36 }), 2.6, -5.2, 'Logs', 'top error signatures');
+    const met = c.obj(c.SHAPES.monitor([C.kb, C.ingest]), 2.6, -0.4, 'Metrics', 'checkout + dependencies');
+    const dep = c.obj('gitRepo', 2.6, 4.4, 'Deploys + flags', 'last 2 hours');
+    const pay = c.obj(c.SHAPES.monitor([C.dlq, C.kb]), 8.4, -2.8, 'payments-service metrics', 'follow-up query');
+    const hyp = c.obj('modelGem', -4.8, 5.6, 'Ranked hypotheses', 'each claim cites query IDs');
+    c.packet({ pts: arc(c.top(rb, 0), c.top(inv, 0), 2), t0: 0.2, t1: 1.0, kind: 'chunk', s: 0.85, from: rb, to: inv, label: 'runbook: check recent deploys first' });
+    [[logs, 'top errors, 30 min'], [met, 'error rate · p95'], [dep, 'deploys since 13:00']].forEach(([g, l], i) => c.packet({ pts: arc(c.top(inv, 0), c.top(g, 0), 2.5), t0: 1.4 + i * 0.15, t1: 2.2 + i * 0.15, kind: 'env', to: g, label: l }));
+    [[logs, 'q1 · “connection reset” ×4,180'], [met, 'q2 · errors 12% from 13:52'], [dep, 'q3 · payments-client v2.3 at 13:44']].forEach(([g, l], i) => c.packet({ pts: arc(c.top(g, 0), c.top(inv, 0), 2.5), t0: 3.4 + i * 0.3, t1: 4.2 + i * 0.3, kind: 'chunk', s: 0.85, to: inv, label: l }));
+    c.packet({ pts: arc(c.top(inv, 0), c.top(pay, 0), 3), t0: 5.0, t1: 5.8, kind: 'env', to: pay, label: 'q4 · follow-up' });
+    c.packet({ pts: arc(c.top(pay, 0), c.top(inv, 0), 3), t0: 5.9, t1: 6.7, kind: 'chunk', s: 0.85, to: inv, label: 'payments-service healthy' });
+    c.packet({ pts: arc(c.top(inv, 0), c.top(hyp, 0), 1.6), t0: 7.0, t1: 7.8, kind: 'vec', n: 3, st: 0.15, to: hyp, label: '1 deploy · 2 provider · 3 cache' });
+  },
+};
+
+// ---------- 3. evidence gate ----------
+D.evidence3d = {
+  loop: 12,
+  view: { target: [0, 0, 1.2], w: 26, d: 15, el: 54 },
+  steps: [
+    { t: 0.0, text: 'Three hypotheses reach the gate as structured output: each claim with the query IDs it relies on.' },
+    { t: 1.4, text: 'Hypothesis 1 cites q1 and q3. The gate finds both in the investigation’s query log, checks the deploy time (13:44) is before the spike (13:52), and that the error count rose. It passes.' },
+    { t: 4.2, text: 'Hypothesis 2 cites q7, a provider-status query that was never run. The claim is rejected, whatever the model’s stated confidence.' },
+    { t: 6.4, text: 'Hypothesis 3 cites one real query but nothing independent. Below the evidence bar, it is posted as “low confidence”, not as a cause.' },
+    { t: 8.4, text: 'The post leads with the hypothesis that passed, links each claim to its query, and lists what was checked and ruled out.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const hyp = c.obj('modelGem', -10.4, 0, 'Hypotheses', 'claims + query IDs');
+    const log = c.obj(c.SHAPES.database(0x55606d, { r: 1.0, th: 0.36 }), 0, -5.2, 'Query log', 'q1 … q4 were run');
+    const T = tiles(c, ['query exists', 'supports claim', 'enough evidence'], -5.4, 0, 5.0);
+    const post = c.obj('browser', 10.4, 0, 'Incident channel', 'cause first, evidence linked');
+    const low = c.obj('tray', 4, 5.2, 'Low confidence', 'listed, not asserted');
+    c.lane([V(-10.4, 0), V(10.4, 0)]);
+    const X = (i) => -5.4 + i * 5.0;
+    c.tick((t) => {
+      T.forEach((m, i) => {
+        const p1 = t >= 1.4 + i * 0.8 && t < 4.0;
+        const f2 = i === 0 && t >= 4.6 && t < 6.2;
+        const p3 = (i < 2 && t >= 6.6 + i * 0.6 && t < 8.2);
+        const f3 = i === 2 && t >= 7.8 && t < 8.2;
+        light(m, f2 || f3 ? P.bad : C.ok, t, p1 || f2 || p3 || f3);
+      });
+    });
+    c.packet({ pts: [V(-10.4, 0), V(X(0), 0)], t0: 0.4, t1: 1.4, kind: 'vec', from: hyp, label: '1 · deploy · cites q1, q3' });
+    c.packet({ pts: arc(c.top(log, 0), V(X(0), 0, 1.2), 2), t0: 1.5, t1: 2.1, kind: 'span', s: 1.6, from: log, label: 'q1, q3 found' });
+    c.packet({ pts: [V(X(0), 0), V(X(2), 0)], t0: 1.6, t1: 3.4, kind: 'vec' });
+    c.packet({ pts: [V(X(2), 0), V(10.4, 0)], t0: 3.4, t1: 4.0, kind: 'vec', color: P.ship, to: post });
+    c.packet({ pts: [V(-10.4, 0), V(X(0), 0)], t0: 4.2, t1: 4.8, kind: 'vec', label: '2 · provider · cites q7' });
+    c.packet({ pts: [V(X(0), 0), V(X(0) + 1, 0, 1.6), V(X(0) + 1.6, -2.2, 0.15)], t0: 4.9, t1: 5.5, kind: 'vec', color: P.bad, label: 'q7 never ran' });
+    c.packet({ pts: [V(-10.4, 0), V(X(0), 0)], t0: 6.0, t1: 6.6, kind: 'vec', label: '3 · cache · one weak signal' });
+    c.packet({ pts: [V(X(0), 0), V(X(2), 0)], t0: 6.6, t1: 7.8, kind: 'vec' });
+    c.packet({ pts: [V(X(2), 0, 0.9), V(X(2) + 0.6, 2.6, 1.4), V(4, 5.2, 0.6)], t0: 8.0, t1: 8.8, kind: 'vec', color: P.env, to: low, label: 'posted as low confidence' });
+  },
+};
+
+// ---------- 4. fixes and approval ----------
+D.fixes3d = {
+  loop: 13,
+  view: { target: [0, 0, 0.6], w: 25, d: 16, el: 52 },
+  steps: [
+    { t: 0.0, text: 'The post suggests a fix from the allow-list, with the exact command: roll back payments-client from v2.3 to v2.2.' },
+    { t: 1.6, text: 'An on-call engineer reads the evidence and approves with one click. Who approved, and when, is logged.' },
+    { t: 3.0, text: 'The rollback runs through the normal deploy system (Argo CD), using the assistant’s narrow service account: it can roll back this service, nothing else.' },
+    { t: 4.8, text: 'A monitor watches the error rate for the next few minutes, not just whether the command succeeded.' },
+    { t: 6.6, text: 'It drops from 12% to 0.8%. The assistant posts that the fix worked and links the graph.' },
+    { t: 8.6, text: 'Had it not recovered, it would say so at once, revert its own change if that is safe, and escalate. A fix that makes things worse trips the kill switch.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const slack = c.obj('browser', -9.6, 0, 'Incident channel', 'suggested fix + command');
+    const eng = c.obj('person', -4.4, 4.6, 'On-call engineer', 'approves · logged');
+    const allow = c.obj('shield', -4.4, 0, 'Allow-list', 'restart · rollback · scale');
+    const argo = c.obj(c.SHAPES.server({ color: 0x3f6b55, emi: C.ok }), 1.6, 0, 'Argo CD', 'narrow service account');
+    const svc = c.obj(c.SHAPES.server({ color: 0x4a6a8a }), 7, 0, 'checkout + payments-client', 'production');
+    const mon = c.obj(c.SHAPES.monitor([C.dlq, C.serve, C.kb]), 7, -5.2, 'Post-fix monitor', 'error rate · latency · traffic');
+    const ks = c.obj(c.SHAPES.signpost(C.dlq), 11.6, 4.6, 'Kill switch', 'fix made it worse → read-only', { lift: 0.5 });
+    ks.userData.pivot.rotation.z = -0.25;
+    c.lane([V(-9.6, 0), V(7, 0)]);
+    c.lane([V(-4.4, 0), V(-4.4, 4.6)]);
+    c.packet({ pts: [V(-9.6, 0), V(-4.4, 0)], t0: 0.2, t1: 1.0, kind: 'env', to: allow, label: 'rollback payments-client → v2.2' });
+    c.packet({ pts: [V(-4.4, 0), V(-4.4, 4.6)], t0: 1.6, t1: 2.2, kind: 'doc', to: eng });
+    c.packet({ pts: [V(-4.4, 4.6), V(-4.4, 0)], t0: 2.4, t1: 2.9, kind: 'env', color: P.ship, to: allow, label: 'approved' });
+    c.packet({ pts: [V(-4.4, 0), V(1.6, 0)], t0: 3.0, t1: 3.6, kind: 'env', color: P.ship, to: argo });
+    c.packet({ pts: [V(1.6, 0), V(7, 0)], t0: 3.7, t1: 4.4, kind: 'env', color: P.ship, to: svc, label: 'v2.2 rolling out' });
+    c.packet({ pts: arc(c.top(svc, 0), c.top(mon, 0), 1.6), t0: 4.8, t1: 5.6, kind: 'span', n: 3, st: 0.2, to: mon });
+    c.packet({ pts: arc(c.top(mon, 0), c.top(slack, 0), 5), t0: 6.6, t1: 7.8, kind: 'span', s: 1.6, color: P.ship, to: slack, label: 'recovered: 12% → 0.8%' });
+    c.tick((t) => {
+      const r = Math.min(1, Math.max(0, (t - 4.8) / 1.8));
+      mon.userData.setBar(0, 0.85 - 0.75 * r);
+      mon.userData.setBar(1, 0.6 - 0.35 * r);
+      mon.userData.setBar(2, 0.5);
+    });
+  },
+};
+
+// ---------- 5. evals ----------
+D.evals3d = {
+  loop: 13,
+  view: { target: [0, 0, 0.6], w: 26, d: 17, el: 52 },
+  steps: [
+    { t: 0.0, text: 'Data: about 300 past incidents from postmortems. The label is the root cause the postmortem settled on.' },
+    { t: 1.4, text: 'Each one is replayed against a snapshot of the logs, metrics and deploys from that time, so the assistant sees what the engineer saw.' },
+    { t: 3.0, text: 'Graders compare the posted causes with the labels: exact match on service, change ID and error class where possible, a calibrated LLM judge for the rest.' },
+    { t: 4.8, text: 'Offline bars: accuracy@1 above 70%, @3 above 90%, 100% of claims citing a real query, “low confidence” on at least 80% of unexplained incidents, under 3 minutes and $0.50.' },
+    { t: 6.8, text: 'Ship gate: two weeks in shadow mode. Posts go privately to on-call engineers, who rate them 👍 or 👎; it must beat the targets live before posting publicly.' },
+    { t: 9.0, text: 'In production: 👍 rate, accuracy@1 on a weekly sample against new postmortems, fix-acceptance and fix-reverted rates, cost and latency. New postmortems join the replay set every week.' },
+  ],
+  build(c) {
+    const { V, arc, P, C } = c;
+    const pm = c.obj('cards', -10.4, -2.4, 'Postmortems', '~300 · label = root cause');
+    const snap = c.obj(c.SHAPES.database(0x55606d, { r: 1.1, th: 0.36 }), -10.4, 3.6, 'Telemetry snapshots', 'logs · metrics · deploys then');
+    const bot = c.obj('robot', -4.4, 0.6, 'Assistant', 'replayed, read-only');
+    const gr = c.obj(c.SHAPES.server({ color: 0x3f6b55, emi: C.ok }), 1.6, -3.0, 'Graders', 'exact match · calibrated judge');
+    const sc = c.obj(c.SHAPES.monitor([C.ok, C.kb, C.serve]), 1.6, 3.8, 'Offline scores', '@1 · @3 · citations');
+    const sh = c.obj('person', 6.8, 0.6, 'Shadow raters', 'on-call · 2 weeks · 👍 / 👎');
+    const pub = c.obj(c.SHAPES.signpost(C.ok), 12.4, 0.6, 'Public posts', 'only after the gate', { lift: 0.5 });
+    pub.userData.pivot.rotation.z = 0.25;
+    c.packet({ pts: arc(c.top(pm, 0), c.top(bot, 0), 2), t0: 0.2, t1: 1.2, kind: 'ask', n: 3, st: 0.12, from: pm, to: bot });
+    c.packet({ pts: arc(c.top(snap, 0), c.top(bot, 0), 2), t0: 1.4, t1: 2.4, kind: 'chunk', n: 3, st: 0.12, s: 0.8, from: snap, to: bot, label: 'data as it was' });
+    c.packet({ pts: arc(c.top(bot, 0), c.top(gr, 0), 2), t0: 3.0, t1: 3.8, kind: 'vec', n: 3, st: 0.12, to: gr });
+    c.packet({ pts: arc(c.top(pm, 0), c.top(gr, 0), 4), t0: 3.1, t1: 4.0, kind: 'span', s: 1.4, to: gr, label: 'labels' });
+    c.packet({ pts: arc(c.top(gr, 0), c.top(sc, 0), 2), t0: 4.8, t1: 5.6, kind: 'span', n: 3, st: 0.1, to: sc });
+    c.packet({ pts: arc(c.top(sc, 0), c.top(sh, 0), 2), t0: 6.8, t1: 7.6, kind: 'span', s: 1.6, color: P.ship, to: sh, label: 'targets met → shadow' });
+    c.packet({ pts: arc(c.top(sh, 0), c.top(pub, 0), 2), t0: 8.4, t1: 9.0, kind: 'span', s: 1.6, color: P.ship, to: pub, label: '👍 82% · beats targets' });
+    c.packet({ pts: arc(c.top(sh, 0), c.top(pm, 0), 6), t0: 9.4, t1: 10.8, kind: 'span', s: 1.4, to: pm, label: 'new postmortems weekly' });
+    c.tick((t) => {
+      const g = Math.min(1, Math.max(0, (t - 5.6) / 0.8));
+      sc.userData.setBar(0, 0.1 + 0.64 * g); sc.userData.setBar(1, 0.1 + 0.82 * g); sc.userData.setBar(2, 0.1 + 0.9 * g);
+    });
+  },
+};
+
+boot(D);
+
+</script>
+</body>
+</html>
