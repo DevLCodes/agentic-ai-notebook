@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open-Weight Models: notebook</title>
+<meta name="description" content="What open-weight models are, how licences differ, how much GPU memory they need, and when to self-host versus call an API, with a VRAM calculator and a route picker.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Open-Weight Models">
+<meta property="og:description" content="What open-weight models are, how licences differ, how much GPU memory they need, and when to self-host versus call an API, with a VRAM calculator and a route picker.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/open-weight-models.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+<link rel="stylesheet" href="assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  :root { --fg: #222; --muted: var(--pencil); --card: #fffef8; --line: #c8c2ae; --code: #fffef8;
+          --accent: var(--red); --ok: var(--green); --bad: var(--red); }
+  .lede { color: var(--pencil); }
+  .grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .lab label.f { display: block; margin: 6px 0 2px; font-family: var(--title); color: var(--ink); font-size: 17px; }
+  .lab select { font: 16px var(--hand); padding: 2px 6px; border: 2px solid #444; border-radius: 6px; background: #fffef8; }
+  .lab output { font-family: var(--mono); font-size: 15px; margin-left: 8px; }
+  .meter { height: 22px; background: #eee8d4; border-radius: 4px; overflow: hidden; display: flex; margin: 6px 0 2px; }
+  .meter div { height: 100%; }
+  .meter .w { background: #1f3a93; } .meter .k { background: #8e44ad; } .meter .o { background: #b9b2a0; }
+  .key { font-size: 15px; color: var(--pencil); }
+  .key i { display: inline-block; width: 12px; height: 12px; margin: 0 4px 0 10px; vertical-align: -1px; border-radius: 2px; }
+  table.fits td:first-child { white-space: nowrap; }
+  .route { font-family: var(--title); font-size: 24px; color: var(--ink); margin: 2px 0 6px; }
+  .why-list { margin: 0; padding-left: 22px; font-size: 17px; line-height: 1.5; }
+  .lic .card .opts button { font-size: 15px; }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="confidence-scoring.html">← Confidence Scoring</a><a href="index.html">Back to the roadmap →</a></p>
+  <h1>Open-Weight Models</h1>
+  <p class="lede">A model you can download is a file of numbers. Whoever holds that file can run it on their own hardware, inside their own network, for as long as they like.
+    <span class="hl">You gain control, and you take on the work an API provider used to do.</span></p>
+
+  <!-- ============ 3D ============ -->
+  <h3>See it in 3D: running a model inside your own fence</h3>
+  <figure class="fig3d" id="weights3d">
+    <div class="stage3d" role="img" aria-label="Weight files download from the Hugging Face Hub into the company network, are quantized from 16 GB to about 5 GB, and load onto a GPU server; the app sends a prompt with private context to that server and gets an answer without data leaving the network; by contrast, a call to a hosted API sends the prompt and data outside the fence"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The sections below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. White slabs are weight files (bigger slab, bigger file), yellow spheres are prompts, the red sphere is a prompt that leaves your network.</figcaption>
+  </figure>
+
+  <!-- 1. what weights are -->
+  <h2>1 · What “the weights” actually are</h2>
+  <p>Training a model means adjusting billions of numbers until it predicts text well. Those numbers are the <b>weights</b> (or parameters).
+    “Llama 3.1 8B” means about 8 billion of them. Stored at 2 bytes each, that is roughly a 16 GB file.
+    The file does nothing on its own. A runtime such as vLLM or llama.cpp reads it, together with the architecture config and the tokenizer, and does the maths.</p>
+  <svg class="doodle" viewBox="0 0 900 230" role="img" aria-label="A model download is a folder with config.json, tokenizer.json, sharded safetensors weight files, a model card and a licence">
+    <rect x="20" y="20" width="860" height="190" rx="10" class="s" filter="url(#rough)"/>
+    <text x="40" y="48" class="t">meta-llama/Llama-3.1-8B-Instruct/</text>
+    <g transform="translate(40,70)"><rect width="150" height="56" rx="6" class="tan" filter="url(#rough)"/><text x="75" y="24" text-anchor="middle">config.json</text><text x="75" y="44" text-anchor="middle" class="p">32 layers, 4096 wide</text></g>
+    <g transform="translate(210,70)"><rect width="150" height="56" rx="6" class="tan" filter="url(#rough)"/><text x="75" y="24" text-anchor="middle">tokenizer.json</text><text x="75" y="44" text-anchor="middle" class="p">text ↔ token ids</text></g>
+    <g transform="translate(380,62)"><rect width="300" height="72" rx="6" class="sb" filter="url(#rough)"/><text x="150" y="26" text-anchor="middle">model-0000{1..4}-of-00004.safetensors</text><text x="150" y="50" text-anchor="middle" class="r">≈ 8 billion numbers · ≈ 16 GB</text></g>
+    <g transform="translate(700,70)"><rect width="160" height="56" rx="6" class="tan" filter="url(#rough)"/><text x="80" y="24" text-anchor="middle">README · LICENSE</text><text x="80" y="44" text-anchor="middle" class="p">model card, terms</text></g>
+    <text x="530" y="170" text-anchor="middle" class="p">the weights: this is what “open” releases</text>
+    <path class="s" d="M530,152 L530,140" marker-end="url(#arr)"/>
+    <text x="210" y="170" text-anchor="middle" class="p">not included: training data, training code</text>
+  </svg>
+  <p>“Open” gets used for three different things. The difference matters when legal or security ask what you are allowed to do.</p>
+  <table class="hand">
+    <tr><th></th><th>Closed / API-only</th><th>Open-weight</th><th>Open source (OSI definition)</th></tr>
+    <tr><td>You can download the weights</td><td class="fail">no</td><td class="pass">yes</td><td class="pass">yes</td></tr>
+    <tr><td>Training code and data details</td><td class="fail">no</td><td>rarely</td><td class="pass">yes</td></tr>
+    <tr><td>Use terms</td><td>provider’s API terms</td><td>a licence, from Apache-2.0 to custom with conditions</td><td>an OSI-approved licence</td></tr>
+    <tr><td>Examples</td><td>Claude, GPT-5, Gemini</td><td>Llama, Qwen, Mistral, Gemma, DeepSeek, gpt-oss, Phi</td><td>AI2 OLMo, which ships data, code and checkpoints</td></tr>
+  </table>
+  <p>The <a href="https://opensource.org/ai/open-source-ai-definition">OSI Open Source AI Definition</a> (v1.0, 2024) requires the parameters, the training code <i>and</i> enough information about the training data to rebuild the model.
+    By that bar, most models called “open” are open-weight, not open source.</p>
+
+  <h3>Sort the licences</h3>
+  <p class="lede">For each checkpoint, pick the kind of licence it ships under. These are typical cases. Always read the licence on the exact checkpoint you download, because one vendor can use different terms for different sizes.</p>
+  <div class="cards lic" id="lic"></div>
+
+  <h3>Base, instruct, fine-tuned, distilled</h3>
+  <table class="hand">
+    <tr><th>variant</th><th>what it is</th><th>use it for</th></tr>
+    <tr><td><b>Base</b></td><td>Pre-trained only: it continues text and doesn’t follow instructions</td><td>Your own fine-tuning starting point</td></tr>
+    <tr><td><b>Instruct / chat</b></td><td>Base plus instruction tuning and preference training</td><td>Almost every app; the default to download</td></tr>
+    <tr><td><b>Fine-tuned (often LoRA)</b></td><td>An instruct model further trained on your task; a LoRA adapter is a small add-on file (often under 1% of the size)</td><td>A narrow, repeated task such as extraction or a house style</td></tr>
+    <tr><td><b>Distilled</b></td><td>A small model trained to imitate a large one (for example, the DeepSeek-R1 distills into Qwen and Llama)</td><td>Most of the behaviour at a fraction of the memory</td></tr>
+  </table>
+
+  <!-- 2. VRAM -->
+  <h2>2 · Will it fit? The memory maths</h2>
+  <p>Three things share the GPU’s memory:</p>
+  <ul>
+    <li><b>Weights:</b> the number of parameters × the bytes per parameter.</li>
+    <li><b>The KV cache:</b> the attention keys and values kept for every token in every active request.</li>
+    <li><b>Overhead:</b> the runtime and activations.</li>
+  </ul>
+  <pre>weights_GB ≈ params_B × bytes_per_param           <span class="c">(BF16 2 · FP8/INT8 1 · 4-bit ≈ 0.55)</span>
+kv_GB      ≈ 2 × layers × kv_heads × head_dim × 2 bytes × context × batch / 1e9
+total      ≈ weights × 1.1 + kv + ~1 GB</pre>
+  <div class="box lab grid">
+    <div>
+      <label class="f" for="vm">Model</label>
+      <select id="vm"></select>
+      <label class="f" for="vp">Weight precision</label>
+      <select id="vp">
+        <option value="2">BF16 / FP16 (2 bytes)</option>
+        <option value="1">FP8 / INT8 (1 byte)</option>
+        <option value="0.55" selected>4-bit, e.g. GGUF Q4_K_M or AWQ (≈ 0.55 bytes)</option>
+      </select>
+      <label class="f" for="vc">Context per request <output id="vco"></output></label>
+      <input type="range" id="vc" min="0" max="7" value="3">
+      <label class="f" for="vb">Concurrent requests (batch) <output id="vbo"></output></label>
+      <input type="range" id="vb" min="1" max="64" value="1">
+      <p class="muted" id="vnote" style="font-size:16px;line-height:1.4;margin:10px 0 0"></p>
+    </div>
+    <div>
+      <p style="margin:0" class="big" id="vtot"></p>
+      <div class="meter" id="vbar"><div class="w"></div><div class="k"></div><div class="o"></div></div>
+      <p class="key"><i style="background:#1f3a93"></i>weights <span id="vw"></span><i style="background:#8e44ad"></i>KV cache <span id="vk"></span><i style="background:#b9b2a0"></i>overhead <span id="vo"></span></p>
+      <table class="hand fits" id="vfit"></table>
+    </div>
+  </div>
+  <div class="sticky blue">
+    <b>Mixture of experts (MoE): total vs active</b><br>
+    gpt-oss-120b has about 117B parameters in total, but routes each token through only about 5B of them.
+    <span class="hl">Speed follows the active count. Memory follows the total</span>, because every expert has to be loaded.
+    It ships natively in 4-bit (MXFP4), which is why it fits on one 80 GB GPU.
+  </div>
+
+  <h3>Quantization and serving</h3>
+  <p><b>Quantization</b> stores each weight in fewer bits, accepting a small quality loss in exchange for a model that is 2–4× smaller and usually faster.
+    Measure that loss on your own eval set, not on a leaderboard; see <a href="testing-and-evals.html">Testing &amp; Evals</a>.</p>
+  <table class="hand">
+    <tr><th>format</th><th>runs on</th><th>typical runtime</th></tr>
+    <tr><td><b>GGUF</b> (Q8_0, Q5_K_M, Q4_K_M…)</td><td>CPU, Apple Silicon, consumer GPUs</td><td>llama.cpp, Ollama, LM Studio</td></tr>
+    <tr><td><b>AWQ</b>, <b>GPTQ</b></td><td>NVIDIA / AMD GPUs</td><td>vLLM, SGLang, TGI</td></tr>
+    <tr><td><b>FP8</b></td><td>Hopper / Blackwell GPUs (H100, B200)</td><td>vLLM, SGLang, TensorRT-LLM</td></tr>
+    <tr><td><b>MLX</b> (4/8-bit)</td><td>Apple Silicon</td><td>mlx-lm, LM Studio</td></tr>
+  </table>
+  <p>For a laptop or a single developer machine, use <b>Ollama</b> or <b>llama.cpp</b>.
+    To serve many users, use <b>vLLM</b> or <b>SGLang</b>: they batch requests continuously and manage the KV cache in pages, so one GPU serves dozens of users at once.</p>
+
+  <!-- 3. decision -->
+  <h2>3 · API, hosted open-weight, or your own GPUs?</h2>
+  <p class="lede">There are three routes, not two. Many providers (Amazon Bedrock, Vertex AI Model Garden, Together, Fireworks, Groq) run open-weight models for you and charge per token.
+    Tick what is true for your project.</p>
+  <div class="box lab grid">
+    <div id="dq"></div>
+    <div aria-live="polite"><p class="muted" style="margin:0">recommended route</p><p class="route" id="dr"></p><ul class="why-list" id="dw"></ul></div>
+  </div>
+  <div class="cols">
+    <div class="box">
+      <b>Why teams choose open weights</b>
+      <ul>
+        <li>Data residency and privacy: prompts never leave the network</li>
+        <li>Cost at steady, high volume, once GPUs stay busy</li>
+        <li>Latency and offline or air-gapped use</li>
+        <li>Fine-tuning and LoRA on your own data</li>
+        <li>No surprise deprecations: the version you tested is the one you run, so results are reproducible</li>
+      </ul>
+    </div>
+    <div class="box">
+      <b>What it costs</b>
+      <ul>
+        <li>GPUs, and paying for them even when idle</li>
+        <li>Serving, scaling, upgrades and on-call</li>
+        <li>Safety tuning and guardrails become yours</li>
+        <li>Your own evals before every model swap</li>
+        <li>Usually a capability gap to the best closed models on the hardest tasks</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 4. where they win -->
+  <h2>4 · Where open weights already win: embeddings, rerankers, small jobs</h2>
+  <p>The most common production use isn’t a chat model at all. It is the small, quiet models in the retrieval pipeline:</p>
+  <ul>
+    <li><b>Embedding models</b> such as bge, e5 and nomic-embed, a few hundred MB each.</li>
+    <li><b>Cross-encoder rerankers</b> such as bge-reranker; see <a href="reranking-cross-encoders.html">Reranking</a>.</li>
+    <li><b>Small classifiers or routers</b>; see <a href="system-design/routing.html">Routing</a>.</li>
+  </ul>
+  <p>They run on a CPU, every document passes through them, and per-token API pricing adds up quickly at that volume.
+    FinSight, the running example in this notebook, embeds 50,000 10-K chunks with <code>bge-small-en-v1.5</code> (33M parameters, 384 dimensions) through FastEmbed on a laptop CPU.
+    Its numbers planner runs on a local model through Ollama. See <a href="system-design/embeddings.html">Embeddings</a>.</p>
+  <div class="sticky pink">
+    <b>Safety is now your job</b>
+    <ul>
+      <li>Once weights are released, they can’t be recalled or patched. If a jailbreak is found, the fix is your guardrails, not a provider update.</li>
+      <li>Read the model card: intended use, known limits, the safety evals the vendor ran.</li>
+      <li>Load <code>.safetensors</code>, not pickled <code>.bin</code> or <code>.pt</code> files from strangers. Unpickling can run arbitrary code.</li>
+      <li>Add input and output guardrails and log usage, exactly as you would for an API. See <a href="ai-governance.html">AI Governance</a>.</li>
+    </ul>
+  </div>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Remember</b>
+      <ul>
+        <li>Weights are the model: a file of learned numbers, plus a config and a tokenizer.</li>
+        <li>Open-weight ≠ open source ≠ “do anything”. The licence decides.</li>
+        <li>Memory ≈ params × bytes, plus a KV cache that grows with context × users.</li>
+        <li>Hosted open-weight is a middle route: open models, no GPUs.</li>
+      </ul>
+    </div>
+    <div class="sticky mint">
+      <b>Common mistakes</b>
+      <ol>
+        <li><span class="strike">“Apache on one size, so all sizes”</span>: check each checkpoint</li>
+        <li><span class="strike">sizing for weights only</span>: 32 users × 32k context can outgrow the weights</li>
+        <li><span class="strike">counting MoE active params</span> for memory</li>
+        <li><span class="strike">trusting leaderboard deltas</span> after quantizing: run your evals</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============ real world ============ -->
+  <h2 id="real-world">In the real world</h2>
+  <table class="hand">
+    <tr><th>pattern</th><th>where you’ll meet it</th></tr>
+    <tr><td>Finding models</td><td>Hugging Face Hub (model cards, licences, GGUF and AWQ conversions), Ollama library, Kaggle Models</td></tr>
+    <tr><td>Model families</td><td>Meta Llama, Alibaba Qwen, Mistral and Mixtral, Google Gemma, DeepSeek, OpenAI gpt-oss, Microsoft Phi, AI2 OLMo</td></tr>
+    <tr><td>Serving</td><td>Ollama, llama.cpp, LM Studio and mlx-lm on a laptop; vLLM, SGLang, Hugging Face TGI and NVIDIA TensorRT-LLM / NIM in production</td></tr>
+    <tr><td>Hosted open-weight</td><td>Amazon Bedrock, Vertex AI Model Garden, Azure AI Foundry, Together AI, Fireworks AI, Groq</td></tr>
+    <tr><td>Fine-tuning</td><td>Hugging Face PEFT (LoRA, QLoRA), Unsloth, Axolotl, TRL, provider fine-tuning APIs</td></tr>
+    <tr><td>Open-weight retrieval models</td><td>BAAI bge and bge-reranker, intfloat e5, Nomic Embed, mixedbread mxbai, served with sentence-transformers, FastEmbed or TEI</td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p>
+
+  <!-- 5. Quiz -->
+  <h2>5 · Check yourself</h2>
+  <div class="cards quiz" id="quiz" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— that’s the last notebook. Back to the roadmap</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+// ---------- licence sorter ----------
+const BUCKETS = ['Permissive (Apache-2.0 / MIT)', 'Custom licence with conditions', 'Fully open: data + code too'];
+const LIC = [
+  ['OpenAI gpt-oss-120b', 0, 'Apache-2.0, plus a usage policy. Commercial use and fine-tuning are allowed.'],
+  ['DeepSeek-R1', 0, 'MIT, including for the distilled checkpoints, although each distill also inherits its base model’s terms.'],
+  ['Meta Llama 3.3 70B', 1, 'Llama Community License: an acceptable-use policy, “Built with Llama” attribution, and a separate licence above 700M monthly active users.'],
+  ['Google Gemma 3', 1, 'Gemma Terms of Use plus a prohibited-use policy, which pass on to anything you build from it.'],
+  ['AI2 OLMo 2', 2, 'Apache-2.0 weights, and the training data, code and intermediate checkpoints are published too, so it meets the OSI open source bar.'],
+  ['Qwen3 (most sizes)', 0, 'Apache-2.0. Some earlier Qwen2.5 sizes used a custom Qwen licence, which is why you check the exact checkpoint.'],
+  ['Mistral Codestral 22B (2024)', 1, 'Mistral Non-Production Licence: research and testing only. The same vendor ships other models under Apache-2.0.'],
+];
+$('lic').innerHTML = LIC.map(([m], i) => `<div class="card" data-i="${i}"><p class="q"><b>${m}</b></p>
+  <div class="opts">${BUCKETS.map((b, j) => `<button data-j="${j}">${b}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('lic').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const [, a, w] = LIC[card.dataset.i], ok = +b.dataset.j === a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${w} Check the licence file on the exact checkpoint.`;
+};
+
+// ---------- VRAM calculator ----------
+const MODELS = [
+  { n: 'bge-small-en-v1.5 (embedding)', p: 0.033, L: 0, kvh: 0, hd: 0, note: 'An encoder: no generation, so no KV cache. Runs comfortably on a CPU.' },
+  { n: 'gpt-oss-20b (MoE, ~3.6B active)', p: 21, L: 24, kvh: 8, hd: 64, note: 'MoE: memory counts all ~21B parameters. It ships natively in about 4-bit (MXFP4), aimed at 16 GB machines.' },
+  { n: 'Llama 3.1 8B', p: 8, L: 32, kvh: 8, hd: 128, note: 'Grouped-query attention: 8 KV heads, not 32, keeps the cache at about 128 KB per token.' },
+  { n: 'Phi-4 14B', p: 14.7, L: 40, kvh: 10, hd: 128, note: 'A strong small model under the MIT licence.' },
+  { n: 'Qwen3 32B', p: 32.8, L: 64, kvh: 8, hd: 128, note: 'A common “largest that fits one GPU” choice at 4-bit.' },
+  { n: 'Llama 3.3 70B', p: 70.6, L: 80, kvh: 8, hd: 128, note: 'At BF16 it needs two 80 GB GPUs with tensor parallelism. At 4-bit it fits one.' },
+  { n: 'gpt-oss-120b (MoE, ~5.1B active)', p: 117, L: 36, kvh: 8, hd: 64, note: 'Fast like a ~5B model, sized like a 117B one. Native MXFP4 is about 63 GB.' },
+];
+const CTX = [512, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
+const HW = [['Laptop, 16 GB unified (~12 GB usable)', 12], ['RTX 4090, 24 GB', 24], ['Mac, 64 GB unified (~48 GB usable)', 48], ['H100, 80 GB', 80], ['Mac, 128 GB unified (~96 GB usable)', 96], ['2× H100, 160 GB', 160], ['8× H100, 640 GB', 640]];
+$('vm').innerHTML = MODELS.map((m, i) => `<option value="${i}"${i === 2 ? ' selected' : ''}>${m.n}</option>`).join('');
+const gb = x => x < 1 ? x.toFixed(2) + ' GB' : x < 10 ? x.toFixed(1) + ' GB' : Math.round(x) + ' GB';
+function vram() {
+  const m = MODELS[$('vm').value], bpp = +$('vp').value, ctx = CTX[$('vc').value], batch = +$('vb').value;
+  const w = m.p * bpp, kv = 2 * m.L * m.kvh * m.hd * 2 * ctx * batch / 1e9, o = w * 0.1 + (m.p < 1 ? 0.2 : 1), t = w + kv + o;
+  $('vco').textContent = ctx.toLocaleString() + ' tokens';
+  $('vbo').textContent = batch;
+  $('vtot').textContent = '≈ ' + gb(t);
+  $('vw').textContent = gb(w); $('vk').textContent = gb(kv); $('vo').textContent = gb(o);
+  const [a, b, c] = $('vbar').children;
+  a.style.width = w / t * 100 + '%'; b.style.width = kv / t * 100 + '%'; c.style.width = o / t * 100 + '%';
+  $('vnote').innerHTML = m.note + (m.L ? `<br>KV per token: 2 × ${m.L} × ${m.kvh} × ${m.hd} × 2 B = ${Math.round(2 * m.L * m.kvh * m.hd * 2 / 1024)} KB` : '');
+  $('vfit').innerHTML = '<tr><th>hardware</th><th>fits?</th></tr>' + HW.map(([h, cap]) => {
+    const r = t / cap, cls = r <= 0.9 ? 'pass' : r <= 1 ? '' : 'fail';
+    return `<tr><td>${h}</td><td class="${cls}">${r <= 0.9 ? '✓ fits' : r <= 1 ? '~ tight' : '✗ too big'}</td></tr>`;
+  }).join('');
+}
+['vm', 'vp', 'vc', 'vb'].forEach(id => $(id).addEventListener('input', vram));
+vram();
+
+// ---------- route decision ----------
+const REQ = [
+  ['prem', 'Data must stay inside our network (on-prem or our own VPC)'],
+  ['gap', 'Air-gapped: no internet at run time'],
+  ['top', 'Needs the best available reasoning quality'],
+  ['low', 'Low volume: under ~1M tokens a month'],
+  ['ft', 'We need to fine-tune on our own data'],
+  ['ops', 'No one to run GPUs or be on call for them'],
+];
+$('dq').innerHTML = REQ.map(([k, t]) => `<label class="chk" style="display:flex;margin:6px 0"><input type="checkbox" data-k="${k}"> ${t}</label>`).join('');
+function decide() {
+  const f = {}; $('dq').querySelectorAll('input').forEach(i => f[i.dataset.k] = i.checked);
+  let r, w = [];
+  if (f.gap) {
+    r = 'Open-weight, self-hosted';
+    w.push('Air-gapped means no API at all. Download the weights once, verify the checksums, and serve them inside the network.');
+    if (f.ops) w.push('You still need someone to run the GPUs. Budget for it, or a vendor appliance (for example NVIDIA NIM on-prem).');
+  } else if (f.prem) {
+    r = f.ops ? 'Open-weight, hosted inside your cloud account' : 'Open-weight, self-hosted';
+    w.push('Prompts and context must not leave your boundary, so a public API is out unless security has approved one in writing.');
+    w.push(f.ops ? 'Bedrock or Vertex Model Garden can run open models in your own cloud account and region, with no GPUs to manage. Confirm that “our account” satisfies the rule.'
+                 : 'Use vLLM or SGLang on your own GPUs. You control the version, the logs and the retention.');
+  } else if (f.top && !f.ft) {
+    r = 'Closed model via API';
+    w.push('The best closed models usually still lead on the hardest reasoning tasks. Check on your own eval set.');
+  } else if (f.low) {
+    r = f.ft ? 'Hosted open-weight with fine-tuning' : 'API (closed or hosted open-weight)';
+    w.push('At low volume, idle GPUs cost more than per-token pricing. Pay per token.');
+    if (f.ft) w.push('Together, Fireworks and Bedrock fine-tune open models (LoRA) and serve the adapter per token.');
+  } else if (f.ft) {
+    r = f.ops ? 'Hosted open-weight with fine-tuning' : 'Open-weight, fine-tuned and self-hosted';
+    w.push('Fine-tuning needs weights you can change. A LoRA adapter on an 8–32B instruct model is the usual start.');
+    if (f.top) w.push('Fine-tuned small models can beat big general ones on one narrow task, but not on broad reasoning. Eval both.');
+  } else {
+    r = f.ops ? 'Hosted open-weight (per token)' : 'Start hosted, self-host when GPUs stay busy';
+    w.push('With steady high volume, open weights are cheaper per token. Self-hosting only pays when the GPUs stay well utilised.');
+  }
+  w.push('Whatever the route: pin the model version, and rerun your evals before every swap.');
+  $('dr').textContent = r;
+  $('dw').innerHTML = w.map(x => `<li>${x}</li>`).join('');
+}
+$('dq').addEventListener('change', decide);
+decide();
+
+// ---------- quiz ----------
+const Q = [
+  ['What do you actually download when a model is “open-weight”?',
+   ['The training dataset', 'The learned parameters, plus config and tokenizer files', 'An API key', 'The source code used to train it'], 1,
+   'Weights are the trained numbers. Training data and training code are usually not included.'],
+  ['What separates an open-weight model from open source under the OSI Open Source AI Definition?',
+   ['Nothing, they mean the same', 'Open source also requires the training code and information about the training data', 'Open source means it’s free to call as an API', 'Open source requires fewer parameters'], 1,
+   'OSI asks for the parameters, the code and enough data information to rebuild the model. Most “open” models ship only the parameters.'],
+  ['Roughly how much memory do the weights of an 8B model take at BF16?',
+   ['~1 GB', '~4 GB', '~16 GB', '~64 GB'], 2,
+   '8 billion × 2 bytes ≈ 16 GB. At 4-bit, about 0.55 bytes each, that drops to about 4–5 GB.'],
+  ['gpt-oss-120b activates about 5B parameters per token. What does memory have to hold?',
+   ['Only the ~5B active parameters', 'All ~117B parameters, because any expert can be picked for the next token', 'Half of them', 'Only the KV cache'], 1,
+   'MoE saves compute, not memory. Every expert must be resident. Its 4-bit native format is what makes it fit on one 80 GB GPU.'],
+  ['A model fits with one user. With 32 concurrent users at 32k context, it runs out of memory. Why?',
+   ['The weights got bigger', 'The KV cache grows with context × concurrent requests', 'Quantization stopped working', 'The tokenizer leaks memory'], 1,
+   'The weights are loaded once. The KV cache is stored per token per request, so it scales with users × context.'],
+  ['Your team picks Llama for a product. What should legal check first?',
+   ['Nothing: open weights mean no terms', 'The Llama Community License: acceptable-use policy, attribution and the 700M MAU clause', 'Only the Python package licence', 'Whether the GPU vendor allows it'], 1,
+   'Open-weight doesn’t mean unrestricted. The licence on the exact checkpoint decides what you may do.'],
+  ['You want an open model, but nobody on the team can run GPUs. What is the simplest route?',
+   ['Buy an H100 anyway', 'A hosted open-weight provider (Bedrock, Vertex, Together, Fireworks, Groq), paid per token', 'Run it on the CI server', 'There is no option'], 1,
+   'The provider serves open weights for you. You keep the option to self-host later with the same model.'],
+  ['Why prefer `.safetensors` over a pickled `.bin` from an unknown uploader?',
+   ['It’s smaller', 'Unpickling can execute arbitrary code; safetensors is plain tensors', 'It’s faster to train', 'Licences require it'], 1,
+   'safetensors was designed to be safe to load. Pickle files are programs.'],
+  ['A jailbreak is published for an open-weight model you serve. What happens?',
+   ['The vendor recalls the weights', 'Nothing changes for you: guardrails, filters and monitoring are your responsibility', 'The model updates itself', 'The licence stops being valid'], 1,
+   'Released weights can’t be patched remotely. You own the input and output guardrails, just as for any model you serve.'],
+];
+Q.forEach((q, i) => { const n = q[1].length, r = (i * 3 + 2) % n; q[1] = q[1].map((_, j) => q[1][(j + r) % n]); q[2] = (q[2] - r + n) % n; });
+let qr = 0, qd = 0;
+$('quiz').innerHTML = Q.map(([q, opts], i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q)}</p>
+  <div class="opts">${opts.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quiz').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const [, , a, w] = Q[card.dataset.i], ok = +b.dataset.j === a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.weights3d = {
+  loop: 13.5,
+  view: { target: [0, 0, 0.2], w: 24, d: 15, el: 52 },
+  steps: [
+    { t: 0.0, text: 'The Hugging Face Hub hosts the weight files: Llama 3.1 8B Instruct in BF16 is four safetensors shards, about 16 GB. You download them once, into your own network.' },
+    { t: 2.2, text: 'Quantize to 4-bit (GGUF Q4_K_M or AWQ). The file shrinks to about 5 GB, small enough for one consumer GPU, with a small quality loss your evals should measure.' },
+    { t: 4.0, text: 'A FinSight question arrives. The app retrieves 10-K chunks from your private store and builds the prompt.' },
+    { t: 5.0, text: 'The prompt and the private context go to your own GPU server (vLLM or Ollama), and the answer comes back. Nothing crossed the fence.' },
+    { t: 8.0, text: 'The contrast: with a hosted closed API, the same prompt and the same private chunks leave your network, under the provider’s terms and retention.' },
+    { t: 11.0, text: 'The trade-off: inside the fence you own the GPUs, upgrades, guardrails and evals. Outside it, the provider does, and you get the strongest models with no servers.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, rb } = c;
+    const fx0 = -5.4, fx1 = 6.2, fz0 = -5.2, fz1 = 5.2, fc = 0xc9a86a;
+    for (const [x, z, w, d] of [[(fx0 + fx1) / 2, fz0, fx1 - fx0, 0.14], [(fx0 + fx1) / 2, fz1, fx1 - fx0, 0.14], [fx0, 0, 0.14, fz1 - fz0], [fx1, 0, 0.14, fz1 - fz0]]) {
+      const m = rb(w, 0.45, d, fc, { r: 0.04, cast: false }); m.position.set(x, 0.225, z); c.scene.add(m);
+    }
+    c.note('<b>Your network</b> · on-prem or your VPC', 0.4, fz1 + 0.8);
+    const hub = c.obj(c.SHAPES.database(0xffc94d, { r: 1.1 }), -9.6, -2.4, 'Hugging Face Hub', 'safetensors · GGUF · model cards');
+    const q = c.obj(c.SHAPES.server({ color: 0x4a3f6b, emi: C.model }), -2.6, -2.4, 'Quantize', 'BF16 16 GB → 4-bit ~5 GB');
+    const gpu = c.obj(c.SHAPES.server({ w: 1.6, h: 2.1, color: 0x2f3b48, emi: C.ok }), 3.0, -2.4, 'Your GPU server', 'vLLM · Ollama · llama.cpp');
+    const data = c.obj(c.SHAPES.database(C.kb, { r: 1.0 }), -2.6, 2.8, 'Private data', '10-K chunks · contracts');
+    const app = c.obj('browser', 3.0, 2.8, 'Your app', 'FinSight agent');
+    const api = c.obj('modelGem', 9.8, 0.4, 'Hosted closed API', 'outside your network');
+    c.lane([V(-9.6, -2.4), V(-2.6, -2.4), V(3.0, -2.4)]);
+    c.lane([V(-2.6, 2.8), V(3.0, 2.8), V(3.0, -2.4)]);
+    c.lane([V(3.0, 2.8), V(5.0, 2.8), V(5.0, 0.4), V(9.8, 0.4)]);
+    c.packet({ pts: arc(c.top(hub, 0), c.top(q, 0), 2.6), t0: 0.3, t1: 1.9, kind: 'doc', s: 2.4, from: hub, to: q, label: 'Llama 3.1 8B · BF16 · 16 GB' });
+    c.packet({ pts: [V(-2.6, -2.4, 1.2), V(3.0, -2.4, 1.2)], t0: 2.4, t1: 3.5, kind: 'doc', s: 1.0, from: q, to: gpu, label: '4-bit · ~5 GB' });
+    c.packet({ pts: [V(-2.6, 2.8), V(3.0, 2.8)], t0: 4.1, t1: 4.8, kind: 'chunk', n: 3, to: app, label: 'retrieved chunks' });
+    c.packet({ pts: [V(3.0, 2.8), V(3.0, -2.4)], t0: 5.0, t1: 5.9, kind: 'ask', from: app, to: gpu, label: 'prompt + private context' });
+    c.packet({ pts: [V(3.0, -2.4), V(3.0, 2.8)], t0: 6.3, t1: 7.2, kind: 'doc', color: P.ans, from: gpu, to: app, label: 'answer · stayed inside' });
+    c.packet({ pts: [V(3.0, 2.8), V(5.0, 2.8), V(5.0, 0.4), V(9.8, 0.4)], t0: 8.2, t1: 9.6, kind: 'ask', color: P.bad, from: app, to: api, label: 'prompt + data leave the network' });
+    c.packet({ pts: [V(9.8, 0.4), V(5.0, 0.4), V(5.0, 2.8), V(3.0, 2.8)], t0: 9.9, t1: 10.9, kind: 'doc', color: P.ans, to: app, label: 'answer' });
+    c.pulse(gpu, 11.2); c.pulse(api, 11.2);
+  },
+};
+boot(D);
+</script>
+</body>
+</html>

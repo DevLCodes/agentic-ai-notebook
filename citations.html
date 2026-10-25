@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Citations: notebook</title>
+<meta name="description" content="Why answers cite, at what grain, three ways to get citations out of a model, and how to verify every one in code, with a live citation verifier.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Citations">
+<meta property="og:description" content="Why answers cite, at what grain, three ways to get citations out of a model, and how to verify every one in code, with a live citation verifier.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/citations.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+<link rel="stylesheet" href="assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  :root { --fg: #222; --muted: var(--pencil); --card: #fffef8; --line: #c8c2ae; --code: #fffef8;
+          --accent: var(--red); --ok: var(--green); --bad: var(--red); }
+  .lede { color: var(--pencil); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+  .src { background: #fff; border: 1.5px solid #c8c2ae; border-radius: 6px; padding: 6px 10px; margin: 6px 0; font-size: 15.5px; line-height: 1.4; }
+  .src .id { font-family: var(--mono); font-size: 14px; color: var(--ink); font-weight: bold; }
+  .src .meta { font-family: var(--mono); font-size: 12.5px; color: var(--pencil); display: block; }
+  .src.calc { background: #f4f1ff; border-color: #b9a8e6; }
+  .sent { display: grid; grid-template-columns: 30px 1fr; gap: 4px 10px; align-items: start; background: #fff; border-left: 4px solid #bbb;
+          padding: 6px 10px; margin: 6px 0; font-size: 16px; line-height: 1.45; }
+  .sent.pass { border-left-color: var(--green); } .sent.fail { border-left-color: var(--red); background: #fff6f4; }
+  .sent .mk { font-family: var(--title); font-size: 22px; }
+  .sent.pass .mk { color: var(--green); } .sent.fail .mk { color: var(--red); }
+  .sent .cite { font-family: var(--mono); font-size: 13.5px; color: var(--ink); background: rgba(31,58,147,.08); padding: 0 4px; border-radius: 3px; }
+  .sent .why { grid-column: 2; font-size: 14.5px; color: var(--pencil); }
+  .sent .why .x { color: var(--red); } .sent .why .ok { color: var(--green); }
+  .meter { height: 14px; background: #e3ddc8; border-radius: 7px; overflow: hidden; margin: 4px 0 10px; }
+  .meter div { height: 100%; background: var(--ink); transition: width .3s; }
+  .meter.good div { background: var(--green); } .meter.bad div { background: var(--red); }
+  .gview { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; font-size: 16px; line-height: 1.5; }
+  .gview mark { background: var(--hl); padding: 0 2px; }
+  .kv { display: grid; grid-template-columns: 170px 1fr; gap: 2px 12px; font-size: 16px; line-height: 1.45; }
+  .kv b { font-family: var(--title); font-weight: normal; color: var(--ink); }
+  pre.how { white-space: pre-wrap; }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="reranking-cross-encoders.html">← Reranking with Cross-Encoders</a><a href="confidence-scoring.html">⑫ Confidence Scoring →</a></p>
+  <h1>Citations</h1>
+  <p class="lede">A citation is a promise: <i>this sentence came from that source</i>. The model writes the promise.
+    <span class="hl"><b>Your code checks it</b></span> before anyone reads the answer.</p>
+
+  <!-- ============ 3D ============ -->
+  <h3>See it in 3D: every sentence tethered to its source</h3>
+  <figure class="fig3d" id="cite3d">
+    <div class="stage3d" role="img" aria-label="Four retrieved sources, each with a stable id, flow into the model. The model writes three sentences, each carrying the ids it used. A verifier checks each one: two pass and get green tethers back to their source chunks; the third cites c77, which was never retrieved, so its red tether is cut and the sentence is dropped before the answer reaches the reader."><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The labs below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Cubes are retrieved sources with their ids, flat cards are answer sentences, lines are citation tethers.</figcaption>
+  </figure>
+
+  <!-- 1. Why and grain -->
+  <h2>1 · Why cite, and at what grain</h2>
+  <p>An answer such as <i>“Apple’s FY2023 operating margin was 29.8%”</i> is only as useful as the reader’s ability to check it.
+    Citations do four jobs:</p>
+  <div class="cols">
+    <div class="box">
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Trust</b>: the reader sees where a claim came from.</li>
+        <li><b>Verification</b>: one click to the page, not a search through 90 pages.</li>
+        <li><b>Audit</b>: months later you can replay which source backed which sentence.</li>
+        <li><b>Catching hallucination</b>: a sentence whose citation fails a check is the cheapest hallucination signal you will ever get.</li>
+      </ul>
+    </div>
+    <div class="sticky blue">
+      <b>Citations start at ingestion</b>
+      <p style="margin:4px 0 0">You can only cite what you labelled. Each chunk needs a <b>stable id</b> and its source metadata
+        (filing, accession number, section, page, table) stored when it is written, not reconstructed at answer time.
+        If re-chunking changes the ids, every old citation breaks.</p>
+    </div>
+  </div>
+
+  <h3>Lab: the same sentence, five grains</h3>
+  <p class="lede">Pick a grain. The claim stays the same; what changes is how much a reader must read to check it, and what you had to store at ingestion.</p>
+  <div class="box">
+    <div class="chips" id="grains"></div>
+    <div id="gout" aria-live="polite"></div>
+  </div>
+  <p class="muted" style="font-size:16px">Finer is not always better. A span or cell citation is easy to check but can hide context
+    (the cell says 114,301, but is it in millions, and which fiscal year?). Show the span, and link to the page around it.</p>
+
+  <!-- 2. How models cite -->
+  <h2>2 · Three ways to get citations out of a model</h2>
+  <p class="lede">All three produce the same thing: answer text plus a pointer to a source for each claim. They differ in how much your code has to parse and trust.</p>
+  <div class="box">
+    <div class="chips" id="ways"></div>
+    <div id="wout" aria-live="polite"></div>
+  </div>
+  <p>Whichever way you choose, the model should cite <b>while it writes</b>, from the sources it was given. The alternative,
+    <i>post-hoc attribution</i>, writes the answer first and then searches for sources that look similar. It nearly always finds
+    something, and that is the problem: a chunk that shares words with a claim is not a chunk that supports it.
+    Use post-hoc matching as a <b>check</b> on generated citations, not as their source.</p>
+
+  <!-- 3. Verifier -->
+  <h2>3 · Verify every citation in code</h2>
+  <p class="lede">Question: <i>“What was Apple’s FY2023 operating margin, and how did it change from FY2022?”</i>
+    The model’s answer is below, with the sources it was given. Turn the checks on and off and watch what gets through.</p>
+  <div class="box">
+    <div class="row" id="checks">
+      <label class="chk"><input type="checkbox" data-k="id" checked> cited id was retrieved</label>
+      <label class="chk"><input type="checkbox" data-k="quote" checked> quote is in the source</label>
+      <label class="chk"><input type="checkbox" data-k="num" checked> every number is in the source</label>
+    </div>
+    <div class="cols" style="margin-top:8px">
+      <div>
+        <p style="margin:0"><b>Answer</b> <span class="muted" style="font-size:15px">(sentence → cited ids, quote)</span></p>
+        <div id="sents" aria-live="polite"></div>
+      </div>
+      <div>
+        <p style="margin:0"><b>Retrieved sources</b></p>
+        <div id="srcs"></div>
+      </div>
+    </div>
+    <div class="cols" style="margin-top:10px">
+      <div><p style="margin:0">Citation recall <span class="muted" style="font-size:14px">(sentences fully supported)</span>: <b id="rec"></b></p><div class="meter" id="recm"><div></div></div></div>
+      <div><p style="margin:0">Citation precision <span class="muted" style="font-size:14px">(citations that support something)</span>: <b id="pre"></b></p><div class="meter" id="prem"><div></div></div></div>
+    </div>
+    <p id="vnote" class="out" style="margin-bottom:0"></p>
+  </div>
+  <p>Each check is a few lines of deterministic code, and together they cost microseconds:</p>
+<pre><span class="c"># retrieved: {chunk_id: text}; calc: {call_id: output}. Sources the model may cite.</span>
+def verify(sentence, cites, quote, retrieved, calc):
+    sources = {**retrieved, **calc}
+    if not cites or any(c not in sources for c in cites):
+        return "fail: cited id was not retrieved"          <span class="c"># invented id</span>
+    text = " ".join(sources[c] for c in cites)
+    if norm(quote) not in norm(text):                      <span class="c"># or fuzzy, e.g. rapidfuzz partial_ratio ≥ 90</span>
+        return "fail: quote not found in source"
+    for n in re.findall(r"\d[\d,]*\.?\d*%?", sentence):
+        if n not in text:
+            return f"fail: {n} not in the cited source"     <span class="c"># numbers must be copied, or come from a tool</span>
+    return "pass"</pre>
+  <p>A fourth check needs a model: does the source <b>entail</b> the sentence? An NLI model or an LLM judge reads
+    (source, sentence) and answers supported / contradicted / not enough information. It catches what string matching cannot,
+    such as a quote that is real but a sentence that says the opposite. Run it on every answer if you can afford it, or on a sample plus
+    every answer the cheap checks already flagged.</p>
+  <div class="sticky mint">
+    <b>No source → don’t say it</b>
+    <p style="margin:4px 0 0">When a sentence fails, don’t show it with a warning. Drop it, regenerate it, or say
+      “the filing doesn’t state this”. In FinSight every number must come from either a cited chunk or a calculator tool output,
+      which is why 29.8% cites <code>calc-1</code> rather than the model’s own arithmetic.</p>
+  </div>
+
+  <!-- 4. Failures and metrics -->
+  <h2>4 · How citations fail, and how to measure them</h2>
+  <table class="hand">
+    <tr><th>failure</th><th>example</th><th>what catches it</th></tr>
+    <tr><td>Fabricated citation</td><td>cites <code>c77</code>, which was never retrieved</td><td>id check: exact, free</td></tr>
+    <tr><td>Right document, wrong claim</td><td>cites the income statement for a number that is not on it (30.1%)</td><td>number check, quote check</td></tr>
+    <tr><td>Citation laundering</td><td>“operating margin improved [c41]”, while c41’s numbers show it fell</td><td>only entailment (NLI or judge)</td></tr>
+    <tr><td>Over-citing</td><td>three ids on a sentence that one supports, to look thorough</td><td>citation precision</td></tr>
+    <tr><td>Post-hoc attribution</td><td>answer first, then the nearest-looking chunk is attached</td><td>generate with citations; entailment on a sample</td></tr>
+    <tr><td>Uncited claim</td><td>a sentence with no citation at all</td><td>“every sentence cites” rule; unsupported-claim rate</td></tr>
+  </table>
+  <div class="kv" style="margin-top:18px">
+    <b>Citation recall</b><span>Share of answer sentences fully supported by their citations taken together (the ALCE benchmark’s definition, judged by an NLI model).</span>
+    <b>Citation precision</b><span>Share of individual citations that actually support their sentence. Over-citing lowers it.</span>
+    <b>Faithfulness</b><span>Share of the answer’s claims that can be inferred from the retrieved context (RAGAS, DeepEval). Groundedness in TruLens is the same idea.</span>
+    <b>Unsupported-claim rate</b><span>In production: the share of sentences your verifier dropped or flagged. A rise after a prompt or model change is a regression alarm, no labels needed.</span>
+  </div>
+  <p style="margin-top:18px">Citation metrics measure whether the answer is <b>grounded</b>, not whether it is <b>right</b>. A sentence can faithfully cite
+    a wrong or out-of-date chunk. Keep answer-correctness evals (see <a href="testing-and-evals.html">⑥ Testing &amp; Evals</a> and
+    <a href="system-design/evals.html">RAG evals</a>) alongside them. And citations can only point at what retrieval found, so recall upstream
+    (<a href="system-design/vector-search.html">vector search</a>, <a href="reranking-cross-encoders.html">reranking</a>) still sets the ceiling.</p>
+  <p>On screen, make checking cheap: hover a marker to see the exact span highlighted, click to open the filing at that page
+    (an EDGAR document URL plus a page anchor), and keep the chunk id in the trace so an audit can replay it.</p>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Remember</b>
+      <ul>
+        <li>Stable chunk ids and source metadata are an <b>ingestion</b> decision.</li>
+        <li>The model may only cite ids it was given; check that in code.</li>
+        <li>Quotes and numbers must be found in the cited source, or come from a tool output.</li>
+        <li>Entailment catches the subtle failures; string checks catch the cheap ones.</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>Traps</b>
+      <ol>
+        <li><span class="strike">trusting the [n]</span>: a citation marker is model output like any other</li>
+        <li><span class="strike">post-hoc attribution</span> as the main way to cite</li>
+        <li><span class="strike">showing failed sentences</span> with a warning instead of dropping them</li>
+        <li><span class="strike">ids from list position</span> (“doc 3”), which change when re-ranking does</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============ real world ============ -->
+  <h2 id="real-world">In the real world</h2>
+  <table class="hand">
+    <tr><th>pattern</th><th>where you’ll meet it</th></tr>
+    <tr><td>Native citation APIs</td><td>Anthropic Citations (documents with <code>citations: {enabled: true}</code>; responses carry <code>cited_text</code> with char, page or content-block locations), OpenAI file search <code>file_citation</code> annotations, Gemini and Vertex AI grounding metadata (grounding chunks and supports), including Grounding with Google Search</td></tr>
+    <tr><td>Products built on citations</td><td>Perplexity, NotebookLM, ChatGPT search, Microsoft 365 Copilot references</td></tr>
+    <tr><td>Grounding evals</td><td>RAGAS faithfulness, DeepEval faithfulness, TruLens groundedness</td></tr>
+    <tr><td>Benchmarks</td><td>ALCE (citation recall and precision for long-form answers)</td></tr>
+    <tr><td>Entailment checkers</td><td>NLI cross-encoders (DeBERTa trained on MNLI), or an LLM judge with a supported / contradicted / not-enough-info rubric</td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p>
+
+  <!-- 5. Quiz -->
+  <h2>5 · Check yourself</h2>
+  <div class="cards quiz" id="quiz" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— next: ⑫ Confidence Scoring, knowing when the answer is too weak to show</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+// ---------- 1. granularity ----------
+const CLAIM = 'Apple’s FY2023 operating income was $114,301 million';
+const G = [
+  ['Document', 2, 'AAPL 10-K FY2023 (accession 0000320193-23-000106)', '~60,000 words: the whole filing',
+   'accession number, form, fiscal year', `${CLAIM} <span class="cite">[AAPL 10-K FY2023]</span>`],
+  ['Page', 25, 'AAPL 10-K FY2023 · p.28', '~600 words: one page',
+   'page numbers kept by the parser', `${CLAIM} <span class="cite">[10-K FY2023, p.28]</span>`],
+  ['Chunk', 45, 'chunk c41 · Item 8 · Consolidated Statements of Operations · p.28', '~300 words: one chunk',
+   'a stable chunk_id, plus section and page on the chunk row', `${CLAIM} <span class="cite">[c41]</span>`],
+  ['Span', 85, 'c41, characters 48–79: “Operating income: 2023 $114,301”', '~5 words, highlighted in place',
+   'chunk text stored verbatim, so character offsets stay valid', `${CLAIM} <span class="cite">[c41 · “<mark>Operating income: 2023 $114,301</mark>”]</span>`],
+  ['Table cell', 95, 'c41 · table “Statements of Operations” · row “Operating income” · column “2023”', '1 value, with its row and column labels',
+   'tables parsed to rows and columns, with units (“in millions”)', `${CLAIM} <span class="cite">[c41 · Operating income × 2023 = <mark>114,301</mark>]</span>`],
+];
+$('grains').innerHTML = G.map((g, i) => `<button data-i="${i}" aria-pressed="false">${g[0]}</button>`).join('');
+$('grains').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#grains button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  const [name, v, ptr, read, store, view] = G[b.dataset.i];
+  $('gout').innerHTML = `<div class="gview">${view}</div>
+    <div class="kv"><b>Points to</b><span>${ptr}</span><b>Reader checks</b><span>${read}</span><b>Store at ingestion</b><span>${store}</span></div>
+    <p style="margin:8px 0 0">How easy to verify</p><div class="meter ${v > 60 ? 'good' : v < 20 ? 'bad' : ''}"><div style="width:${v}%"></div></div>`;
+};
+$('grains').querySelectorAll('button')[2].click();
+
+// ---------- 2. three ways ----------
+const W = [
+  ['[n] markers in the prompt', `<pre class="how"><span class="c"># prompt</span>
+&lt;source id="c41"&gt;Total net sales: 2023 $383,285 · 2022 $394,328. Operating income: 2023 $114,301 ...&lt;/source&gt;
+&lt;source id="calc-1"&gt;114,301 / 383,285 = 29.8%&lt;/source&gt;
+Answer only from the sources. End every sentence with the ids it relies on, like [c41].
+
+<span class="c"># model output (plain text)</span>
+Operating income was $114,301 million [c41]. The operating margin was 29.8% [calc-1].</pre>`,
+   '<b>Cheapest to start.</b> You parse the markers with a regex. Use your own stable ids, not list positions, so reordering the context doesn’t change what [3] means. Nothing stops the model inventing <code>[c77]</code>, so the id check is mandatory.'],
+  ['Structured output', `<pre class="how"><span class="c"># JSON schema enforced by the API (or a constrained decoder)</span>
+{"sentences": [
+  {"text": "Operating income was $114,301 million.",
+   "cites": ["c41"], "quote": "Operating income: 2023 $114,301"},
+  {"text": "The operating margin was 29.8%.",
+   "cites": ["calc-1"], "quote": "= 29.8%"}
+]}</pre>`,
+   '<b>Easiest to verify.</b> One citation list and one quote per sentence, so the checks in section 3 are a loop over JSON. You can even make <code>cites</code> an enum of the retrieved ids, so an invented id cannot be produced at all.'],
+  ['Native citation APIs', `<pre class="how"><span class="c"># Anthropic Messages API: pass sources as document blocks</span>
+{"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": "..."},
+ "title": "AAPL 10-K FY2023 p.28", "citations": {"enabled": true}}
+
+<span class="c"># response: text blocks carry their citations</span>
+{"type": "text", "text": "Operating income was $114,301 million",
+ "citations": [{"type": "char_location", "cited_text": "Operating income: 2023 $114,301",
+                "document_index": 0, "start_char_index": 48, "end_char_index": 79}]}</pre>`,
+   '<b>The provider extracts the span.</b> Anthropic returns <code>cited_text</code> with character locations for text, page locations for PDFs, and content-block locations for documents you pre-chunk yourself. OpenAI’s file search returns <code>file_citation</code> annotations on the output text; Gemini returns grounding metadata linking text segments to grounding chunks. You still check numbers and entailment yourself.'],
+];
+$('ways').innerHTML = W.map((w, i) => `<button data-i="${i}" aria-pressed="false">${w[0]}</button>`).join('');
+$('ways').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#ways button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  const [, code, why] = W[b.dataset.i];
+  $('wout').innerHTML = code + `<p style="margin:0">${why}</p>`;
+};
+$('ways').querySelector('button').click();
+
+// ---------- 3. verifier ----------
+const SRC = {
+  c41: ['AAPL 10-K FY2023 · Item 8 · Statements of Operations · p.28', 'Total net sales: 2023 $383,285 · 2022 $394,328. Operating income: 2023 $114,301 · 2022 $119,437. (in millions)'],
+  c52: ['AAPL 10-K FY2023 · Item 7 · Operating expenses', 'Research and development expense was $29,915 million in 2023, up 14% from $26,251 million in 2022, driven primarily by headcount-related expenses.'],
+  c18: ['AAPL 10-K FY2023 · Item 7 · Segment operating performance', 'Greater China net sales decreased 2% in 2023 compared to 2022, due to the weakness in the renminbi relative to the U.S. dollar.'],
+  'calc-1': ['calculator tool output', 'operating_income / net_sales, FY2023 = 114,301 / 383,285 = 29.8%'],
+  'calc-2': ['calculator tool output', 'operating_income / net_sales, FY2022 = 119,437 / 394,328 = 30.3%'],
+};
+const ANS = [
+  ['Apple’s FY2023 operating income was $114,301 million on net sales of $383,285 million.', ['c41', 'c18'], 'Operating income: 2023 $114,301'],
+  ['That gives an operating margin of 29.8%.', ['calc-1'], '= 29.8%'],
+  ['In FY2022 the operating margin was 30.1%.', ['calc-2'], 'FY2022 = 119,437 / 394,328'],
+  ['The decline was driven mainly by lower iPhone sales in Greater China.', ['c77'], 'iPhone sales in Greater China declined'],
+  ['R&D spending rose sharply to $29,915 million.', ['c52'], 'R&D spending rose sharply'],
+];
+const norm = s => s.toLowerCase().replace(/\s+/g, ' ');
+const nums = s => (s.match(/\d[\d,]*\.?\d*%?/g) || []).filter(n => n.length > 1 || n.includes('%')).filter(n => !/^20\d\d$/.test(n));
+function check(sent, cites, quote, on) {
+  const why = [];
+  const known = cites.filter(c => SRC[c]);
+  if (on.id && known.length < cites.length) why.push(`<span class="x">✗</span> ${cites.filter(c => !SRC[c]).join(', ')} was never retrieved`);
+  const text = known.map(c => SRC[c][1]).join(' ');
+  if (on.quote && !norm(text).includes(norm(quote))) why.push(`<span class="x">✗</span> quote “${esc(quote)}” is not in the source`);
+  if (on.num) for (const n of nums(sent)) if (!text.includes(n)) why.push(`<span class="x">✗</span> ${n} is not in the cited source`);
+  const per = cites.map(c => {
+    if (!SRC[c]) return !on.id;
+    const t = SRC[c][1];
+    if (!on.quote && !on.num) return true;
+    return (on.quote && norm(t).includes(norm(quote))) || (on.num && nums(sent).some(n => t.includes(n)));
+  });
+  return { ok: why.length === 0, why, per };
+}
+$('srcs').innerHTML = Object.entries(SRC).map(([id, [meta, t]]) =>
+  `<div class="src ${id.startsWith('calc') ? 'calc' : ''}"><span class="id">${id}</span><span class="meta">${meta}</span>${esc(t)}</div>`).join('');
+function renderVerifier() {
+  const on = {};
+  document.querySelectorAll('#checks input').forEach(i => on[i.dataset.k] = i.checked);
+  let sup = 0, good = 0, total = 0;
+  $('sents').innerHTML = ANS.map(([s, cites, quote], i) => {
+    const r = check(s, cites, quote, on);
+    sup += r.ok; good += r.per.filter(Boolean).length; total += cites.length;
+    const cs = cites.map((c, k) => `<span class="cite" title="${r.per[k] ? 'supports' : 'does not support'}">${c}${r.per[k] ? '' : ' ✗'}</span>`).join(' ');
+    return `<div class="sent ${r.ok ? 'pass' : 'fail'}"><span class="mk">${r.ok ? '✓' : '✗'}</span><span>${esc(s)} ${cs}<br><span class="muted" style="font-size:13.5px">quote: “${esc(quote)}”</span></span>
+      <span class="why">${r.ok ? '<span class="ok">✓</span> passes the checks that are on' : r.why.join('<br>')}</span></div>`;
+  }).join('');
+  const rec = sup / ANS.length, pre = good / total;
+  $('rec').textContent = `${sup} / ${ANS.length} = ${Math.round(rec * 100)}%`;
+  $('pre').textContent = `${good} / ${total} = ${Math.round(pre * 100)}%`;
+  $('recm').firstElementChild.style.width = `${rec * 100}%`; $('recm').className = `meter ${rec > .8 ? 'good' : 'bad'}`;
+  $('prem').firstElementChild.style.width = `${pre * 100}%`; $('prem').className = `meter ${pre > .8 ? 'good' : 'bad'}`;
+  const n = Object.values(on).filter(Boolean).length;
+  $('vnote').className = `out ${n === 3 ? 'good' : 'bad'}`;
+  $('vnote').innerHTML = n === 0 ? 'With no checks, every sentence “has a citation”, so the answer looks 100% sourced. That is what showing raw [n] markers to users amounts to.'
+    : n === 3 ? 'All three checks on: only two sentences survive. The FY2022 sentence can be regenerated from calc-2 (30.3%), the R&amp;D one rewritten with the real quote, and the iPhone claim goes, because no source says it.'
+    : 'Some checks are off. Turn each one back on and see which failure it alone catches: the invented id, the wrong number, or the paraphrased quote.';
+}
+$('checks').onchange = renderVerifier;
+renderVerifier();
+
+// ---------- 5. quiz ----------
+const Q = [
+  ['The model cites `[c77]`, but the retrieved set was c41, c52 and c18. What should happen?',
+   ['Show the sentence with a warning icon', 'Drop or regenerate the sentence: the id was invented', 'Search the index for c77 and attach it', 'Nothing, a citation is present'], 1,
+   'An id outside the retrieved set is a fabricated citation. Searching for it afterwards is post-hoc attribution, and showing it with a warning still shows an unsupported claim.'],
+  ['Where do stable chunk ids and page numbers have to be created?',
+   ['At answer time, by the model', 'At ingestion, stored on each chunk', 'In the UI, when the user hovers', 'They are not needed if you cite documents'], 1,
+   'You can only cite what you labelled. Reconstructing the source at answer time is guesswork, and ids that change on re-chunking break old citations.'],
+  ['A sentence says 30.1%, and its cited calculator output says 30.3%. Which check catches it?',
+   ['The id check', 'The number check', 'Only a human reviewer', 'Citation precision'], 1,
+   'The id exists and the quote may even match. Only checking that every number in the sentence appears in the cited source catches a changed number.'],
+  ['“Operating margin improved [c41]”, while c41’s figures show it fell. The quote is a real line from c41. What catches this?',
+   ['The id check', 'Exact quote matching', 'An entailment check (NLI model or LLM judge)', 'Citation recall alone, without a judge'], 2,
+   'This is citation laundering: real source, real quote, opposite claim. String checks pass it. Only a check that the source supports the claim fails it.'],
+  ['What is post-hoc attribution, and why is it risky as the main way to cite?',
+   ['Citing after the user asks; too slow', 'Writing the answer first and then attaching similar-looking chunks; similar is not the same as supporting', 'Citing at page level; too coarse', 'Letting the provider extract spans; too expensive'], 1,
+   'Nearest-neighbour search always returns something. Generate with citations from the given sources, and use post-hoc matching only as a check.'],
+  ['A sentence cites three chunks, but only one supports it. Which metric drops?',
+   ['Citation recall', 'Citation precision', 'Retrieval recall', 'None'], 1,
+   'The sentence is still supported, so recall is unaffected. Two of its three citations support nothing, which is what precision measures.'],
+  ['All citations in an answer pass every check. Is the answer correct?',
+   ['Yes, by definition', 'Not necessarily: it is grounded in the sources, which may be wrong, stale or incomplete', 'Only if it cites more than one source', 'Only for numeric answers'], 1,
+   'Citation metrics measure groundedness. Keep correctness evals alongside them, and remember retrieval sets the ceiling on what can be cited.'],
+  ['Why should the model cite your own ids such as c41 rather than “[3]” for the third source in the prompt?',
+   ['Shorter tokens', 'List positions change when retrieval or reranking reorders the context; stable ids don’t', 'The API requires it', 'It improves the model’s accuracy'], 1,
+   'Position numbers only mean something for one prompt. Stable ids survive reranking, logging and audits.'],
+  ['In production you have no labels. Which citation signal can you still track every day?',
+   ['ALCE citation recall', 'The unsupported-claim rate: sentences your verifier dropped or flagged', 'Human accuracy ratings on every answer', 'Nothing until you label data'], 1,
+   'The verifier runs on every answer, so its drop rate is a free, label-free metric. A jump after a model or prompt change is a regression alarm.'],
+];
+Q.forEach((q, i) => { const n = q[1].length, r = (i * 3 + 2) % n; q[1] = q[1].map((_, j) => q[1][(j + r) % n]); q[2] = (q[2] - r + n) % n; });
+let qr = 0, qd = 0;
+$('quiz').innerHTML = Q.map(([q, opts], i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q)}</p>
+  <div class="opts">${opts.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quiz').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const [, , a, w] = Q[card.dataset.i], ok = +b.dataset.j === a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.cite3d = {
+  loop: 14,
+  view: { target: [0.6, 0, 0.8], w: 25, d: 16, el: 50 },
+  steps: [
+    { t: 0.0, text: 'Retrieval hands the model four sources, each carrying a stable id set at ingestion: c41 (income statement, p.28), c52, c18, and calc-1, a calculator tool output.' },
+    { t: 2.4, text: 'The model writes the answer one sentence at a time, and each sentence carries the ids it relied on.' },
+    { t: 4.4, text: 'Before anyone sees it, a verifier in code checks each sentence: was the cited id retrieved, is the quote in that source, does every number appear there?' },
+    { t: 6.0, text: 'Two sentences pass. Each gets a tether back to its exact source, which is what the reader’s hover and click will follow.' },
+    { t: 8.4, text: 'The third sentence cites c77, which was never retrieved. Its tether has nothing to land on, so it is cut and the sentence is dropped.' },
+    { t: 11.0, text: 'The reader gets two sentences, each sourced: “29.8% [c41][calc-1]”. The verifier’s drop rate is logged as the unsupported-claim rate.' },
+  ],
+  build(c) {
+    const { V, V3, arc, P, C, THREE, mesh } = c;
+    const SZ = [-4.5, -1.5, 1.5, 4.5];
+    const srcs = [
+      c.obj(c.SHAPES.sheet(0xfdfbf3), -9, SZ[0], 'c41', 'Item 8 · p.28'),
+      c.obj(c.SHAPES.sheet(0xfdfbf3), -9, SZ[1], 'c52', 'Item 7 · opex'),
+      c.obj(c.SHAPES.sheet(0xfdfbf3), -9, SZ[2], 'c18', 'Item 7 · segments'),
+      c.obj(c.SHAPES.server({ color: 0x5b4b8a, emi: C.model }), -9, SZ[3], 'calc-1', 'tool output'),
+    ];
+    srcs.slice(0, 3).forEach(g => g.scale.setScalar(1.7));
+    const llm = c.obj('modelGem', -3.2, 0, 'Model', 'writes sentences + ids');
+    const ver = c.obj('shield', 2.2, 0, 'Verifier', 'id · quote · numbers');
+    const sz = [-3.2, 0, 3.2];
+    const outs = sz.map((z, i) => c.obj(c.SHAPES.sheet(i === 2 ? 0xffd9d3 : 0xe6f6ea), 7.4, z, ['s1 ✓', 's2 ✓', 's3 ✗'][i], ['c41', 'calc-1', 'c77 · dropped'][i]));
+    outs.forEach(g => g.scale.setScalar(1.7));
+    const rdr = c.obj('person', 11.4, 0, 'Reader', 'hover → source span');
+    c.note('c77 ?  never retrieved', -9, 7.2);
+    for (const z of SZ) c.lane([V(-9, z), V(-6, z), V(-6, 0), V(-3.2, 0)]);
+    c.lane([V(-3.2, 0), V(2.2, 0)]);
+    for (const z of sz) c.lane([V(2.2, 0), V(4.8, 0), V(4.8, z), V(7.4, z)]);
+    c.lane([V(7.4, 0), V(11.4, 0)]);
+    ['c41', 'c52', 'c18', 'calc-1'].forEach((id, i) =>
+      c.packet({ pts: [V(-9, SZ[i]), V(-6, SZ[i]), V(-6, 0), V(-3.2, 0)], t0: 0.3 + i * 0.35, t1: 1.6 + i * 0.35, from: srcs[i], to: llm, label: id }));
+    ['s1 [c41]', 's2 [calc-1]', 's3 [c77]'].forEach((l, i) =>
+      c.packet({ pts: [V(-3.2, 0), V(2.2, 0)], t0: 2.6 + i * 0.55, t1: 3.6 + i * 0.55, kind: 'doc', from: llm, to: ver, label: l }));
+    c.pulse(ver, 4.6, 5.2, 5.8);
+    c.packet({ pts: [V(2.2, 0), V(4.8, 0), V(4.8, sz[0]), V(7.4, sz[0])], t0: 6.0, t1: 6.8, kind: 'doc', color: P.ship, to: outs[0], label: '✓ s1' });
+    c.packet({ pts: [V(2.2, 0), V(4.8, 0), V(4.8, sz[1]), V(7.4, sz[1])], t0: 6.4, t1: 7.2, kind: 'doc', color: P.ship, to: outs[1], label: '✓ s2' });
+    c.packet({ pts: [V(2.2, 0), V(4.8, 0), V(4.8, sz[2]), V(7.4, sz[2])], t0: 8.0, t1: 8.6, kind: 'doc', color: P.bad, to: outs[2], label: '✗ s3 · c77' });
+    c.show(outs[0], 6.8); c.show(outs[1], 7.2); c.show(outs[2], 8.6, 10.8, 'drop');
+    const tether = (a, b, h, color) => {
+      const m = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(arc(a, b, h, 40)), 64, 0.045, 6, false), color, { glow: 0.6, cast: false });
+      c.scene.add(m); m.visible = false; return m;
+    };
+    const t1 = tether(new V3(7.4, 0.2, sz[0]), new V3(-9, 0.2, SZ[0]), 3.4, P.ship);
+    const t2 = tether(new V3(7.4, 0.2, sz[1]), new V3(-9, 1.4, SZ[3]), 2.8, P.ship);
+    const t3 = tether(new V3(7.4, 0.2, sz[2]), new V3(-9, 0.2, 7.2), 2.6, P.bad);
+    c.packet({ pts: [V(7.4, 0), V(11.4, 0)], t0: 11.0, t1: 12.0, kind: 'doc', color: P.ans, to: rdr, label: '2 sentences · each sourced' });
+    c.pulse(srcs[0], 7.4); c.pulse(srcs[3], 7.8);
+    c.tick((t) => {
+      t1.visible = t >= 6.9; t2.visible = t >= 7.3;
+      t3.visible = t >= 8.7 && t < 10.6;
+      t3.position.y = t > 9.8 ? -2.2 * Math.pow((t - 9.8) / 0.8, 2) : 0;
+    });
+  },
+};
+boot(D);
+</script>
+</body>
+</html>

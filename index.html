@@ -157,7 +157,7 @@
 <div class="page">
   <h1>Agentic AI: a learning roadmap</h1>
   <p class="muted">Free, interactive notes for engineers learning to build AI agents, from the first loop to evals, observability and governance. Each page has labs to play with and a quiz at the end.<br>
-    Eight notebooks, one web. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
+    Eight core notebooks in one web, then a retrieval and model track (9–13) below it. <span class="hl">Click a topic to open its page, or a leaf to jump straight to that section.</span>
     Follow the red numbers for the suggested order. Tick "done" as you go (saved in this browser).</p>
 
   <svg class="doodle web" viewBox="0 0 1240 1085" role="img" aria-label="Roadmap web: Agentic AI in the centre, linked to eight topic pages in learning order">
@@ -184,10 +184,9 @@
     <div class="sticky">
       <b>Coming next</b>
       <ul>
-        <li>Retrieval: chunking, hybrid search, reranking, RAG evals</li>
         <li>Agent memory: short-term context, long-term stores, summarisation</li>
         <li>Production: latency, caching, cost and model routing</li>
-        <li>Model layer: fine-tuning vs prompting, when to buy vs build</li>
+        <li>Model layer: fine-tuning vs prompting</li>
       </ul>
     </div>
   </div>
@@ -201,6 +200,14 @@
     <li><a href="testing-and-evals.html">Testing &amp; Evals</a>: prove it works</li>
     <li><a href="llm-observability.html">LLM Observability</a>: watch it in production</li>
     <li><a href="ai-governance.html">AI Governance</a>: ship it safely</li>
+  </ol>
+  <h2>Retrieval and model track</h2>
+  <ol class="topic-list" start="9">
+    <li><a href="retrieval-weights.html">Weights in Retrieval</a>: hybrid fusion, RRF, boosts and recency decay</li>
+    <li><a href="reranking-cross-encoders.html">Reranking with Cross-Encoders</a>: bi-encoder vs cross-encoder, the two-stage funnel</li>
+    <li><a href="citations.html">Citations</a>: cite every claim, then verify it in code</li>
+    <li><a href="confidence-scoring.html">Confidence Scoring</a>: answer, hedge or escalate, with calibrated thresholds</li>
+    <li><a href="open-weight-models.html">Open-Weight Models</a>: licences, VRAM math, quantization and self-hosting</li>
   </ol>
   <h2>System design walkthroughs</h2>
   <p>Worked designs that put these ideas together, with an animated architecture, illustrated deep dives and a glossary.

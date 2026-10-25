@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confidence Scoring: notebook</title>
+<meta name="description" content="How to turn retrieval, sampling, groundedness and tool signals into a calibrated confidence score, then use it to answer, hedge or escalate.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Confidence Scoring">
+<meta property="og:description" content="How to turn retrieval, sampling, groundedness and tool signals into a calibrated confidence score, then use it to answer, hedge or escalate.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/confidence-scoring.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+<link rel="stylesheet" href="assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  :root { --fg: #222; --muted: var(--pencil); --card: #fffef8; --line: #c8c2ae; --code: #fffef8;
+          --accent: var(--red); --ok: var(--green); --bad: var(--red); }
+  .lede { color: var(--pencil); }
+  .grid { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .slider { display: grid; grid-template-columns: 210px 1fr 54px; gap: 10px; align-items: center; font-size: 16px; margin: 4px 0; }
+  .slider input { width: 100%; }
+  .slider b { font-family: var(--mono); font-size: 15px; font-weight: normal; text-align: right; }
+  @media (max-width: 560px) { .slider { grid-template-columns: 1fr 54px; } .slider span { grid-column: 1 / -1; } }
+  .verdict { font-family: var(--title); font-size: 22px; }
+  .verdict.ans { color: var(--green); } .verdict.hedge { color: #b9770e; } .verdict.esc { color: var(--red); }
+  .meter { position: relative; height: 14px; background: #e3ddc8; border-radius: 7px; margin: 10px 0 4px; }
+  .meter div { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 7px; background: var(--ink); transition: width .2s; }
+  .meter i { position: absolute; top: -4px; bottom: -4px; border-left: 2px dashed var(--pencil); }
+  .scale { display: flex; justify-content: space-between; font-size: 13px; color: var(--pencil); }
+  .samples { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .samples span { background: #fff; border: 2px solid #bbb; border-radius: 8px; padding: 2px 10px; font-size: 16px; }
+  .samples span.c0 { border-color: var(--ink); } .samples span.c1 { border-color: #8e44ad; border-style: dashed; }
+  .samples span.c2 { border-color: #138d75; border-style: dotted; } .samples span.c3 { border-color: var(--red); border-style: double; border-width: 4px; }
+  .samples span.c4 { border-color: #b9770e; }
+  .samples span small { color: var(--pencil); font-size: 13px; margin-left: 4px; }
+  svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart text { font-family: var(--hand); font-size: 13px; fill: var(--pencil); }
+  .chart .ax { stroke: #8a8a80; stroke-width: 1; }
+  .chart .gr { stroke: #e3ddc8; stroke-width: 1; }
+  .chart .diag { stroke: #8a8a80; stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+  .chart .ln { stroke: var(--ink); stroke-width: 2; fill: none; }
+  .chart .dot { fill: var(--ink); stroke: var(--paper); stroke-width: 2; }
+  .chart .cur { fill: var(--red); stroke: #fff; stroke-width: 2; }
+  .chart .gap { stroke: var(--red); stroke-width: 2; }
+  .chart .lab { fill: #222; font-size: 14px; paint-order: stroke; stroke: #fffef8; stroke-width: 5px; }
+  .chips20 { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; margin: 10px 0; }
+  .chips20 span { text-align: center; font: 13px/1.3 var(--mono); padding: 3px 0; border-radius: 5px; border: 1.5px solid #bbb; background: #fff; }
+  .chips20 span.on { border-color: var(--ink); background: #e8edfb; }
+  .chips20 span.off { color: #9a9a90; border-style: dashed; background: transparent; }
+  .chips20 span b { display: block; font-weight: normal; }
+  .chips20 .y b { color: var(--green); } .chips20 .n b { color: var(--red); }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 8px 0; }
+  .stats div { background: #fff; border: 1.5px solid #d8d2bf; padding: 4px 8px; line-height: 1.3; }
+  .stats small { display: block; color: var(--pencil); font-size: 13px; }
+  .stats b { font-family: var(--title); font-weight: normal; font-size: 24px; color: var(--ink); }
+  @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, 1fr); } .chips20 { grid-template-columns: repeat(5, 1fr); } }
+  input.cost { width: 70px; font: 16px var(--mono); padding: 2px 4px; border: 1.5px solid #444; background: #fffef8; }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="citations.html">← Citations</a><a href="open-weight-models.html">⑬ Open-Weight Models →</a></p>
+  <h1>Confidence Scoring</h1>
+  <p class="lede">An answer with a number next to it is only useful if the number means something, and if something happens because of it.
+    <span class="hl">Confidence is a <b>decision input</b>: answer, hedge, hand it to a human, or try a bigger model.</span> It is not a badge for the UI.</p>
+
+  <h3>See it in 3D: three questions through the gate</h3>
+  <figure class="fig3d" id="conf3d">
+    <div class="stage3d" role="img" aria-label="Four signals (retrieval, self-consistency, groundedness and a tool check) feed a confidence scorer, which sends a calibrated probability to a policy gate. The first question is answered, the second gets a hedged answer, and the third goes to an analyst queue, whose labels flow back to retrain the scorer"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The labs below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Grey spheres are signal values, purple shapes are the scorer’s probability, flat cards are what the user or analyst receives.</figcaption>
+  </figure>
+
+  <div class="box">
+    <table class="hand">
+      <tr><th>the score says</th><th>the system does</th><th>FinSight example</th></tr>
+      <tr><td>high</td><td>answer, with citations</td><td>“Apple’s FY2023 operating margin was 29.8% (10-K, Item 8).”</td></tr>
+      <tr><td>middle</td><td>hedge: answer with the caveat, or ask a clarifying question</td><td>“Did you mean gross (44.1%), operating (29.8%) or net (25.3%) margin?”</td></tr>
+      <tr><td>low</td><td>abstain and escalate to a person</td><td>sent to the analyst queue with the evidence attached</td></tr>
+      <tr><td>low, but cheap to retry</td><td>route to a bigger model or a deeper search, then score again</td><td>see <a href="system-design/routing.html">routing</a></td></tr>
+    </table>
+  </div>
+
+  <!-- 1 -->
+  <h2>1 · Signals, then one number</h2>
+  <p class="lede">No single signal is enough. Each one measures something different, and each can be fooled.</p>
+  <table class="hand">
+    <tr><th>signal</th><th>what it measures</th><th>what fools it</th></tr>
+    <tr><td>Top reranker score</td><td>how well the best chunk matches the question (<a href="reranking-cross-encoders.html">cross-encoder</a>)</td><td>a confident match to the wrong year’s filing</td></tr>
+    <tr><td>Margin #1 − #2</td><td>whether one chunk clearly wins, or several near-ties compete</td><td>two copies of the same table look like a tie</td></tr>
+    <tr><td>Chunks above a threshold</td><td>how much evidence there is</td><td>boilerplate that repeats in every filing</td></tr>
+    <tr><td>Source agreement</td><td>whether the 10-K text and the XBRL facts say the same thing</td><td>both copied from one wrong source</td></tr>
+    <tr><td>Token logprobs</td><td>how likely the model finds its own <i>wording</i></td><td>fluent, confident wording of a wrong fact. Logprobs measure the text, not the truth</td></tr>
+    <tr><td>Self-consistency</td><td>whether N sampled answers agree (section 2)</td><td>a model that is consistently wrong</td></tr>
+    <tr><td>Verbalised confidence</td><td>the model saying “I’m 90% sure”</td><td>it is known to be overconfident; treat it as weak evidence</td></tr>
+    <tr><td>Groundedness</td><td>share of claims supported by the cited chunks (an LLM judge or an NLI model, see <a href="citations.html">Citations</a>)</td><td>a judge that is lenient with paraphrase</td></tr>
+    <tr><td>Tool outcome</td><td>the calculator’s result matches the XBRL value</td><td>hard to fool; good as a hard rule</td></tr>
+    <tr><td>Query signals</td><td>out of scope (“should I buy AAPL?”), ambiguous (“margin”)</td><td>a router that was never tested on rephrasings</td></tr>
+  </table>
+
+  <h3>Lab: combine the signals</h3>
+  <p class="lede">The scorer is a small <b>logistic regression</b> trained on a few hundred labelled answers, so its output is a probability that the answer is right. Hard rules run first. Move the sliders.</p>
+  <div class="grid">
+    <div class="box">
+      <div class="row"><span class="muted">Presets:</span><span id="presets"></span></div>
+      <div id="sliders"></div>
+      <div class="row"><span class="muted">Calculator vs XBRL:</span><span id="tool"></span></div>
+      <div class="row"><span class="muted">Query:</span><span id="scope"></span></div>
+    </div>
+    <div class="box" aria-live="polite">
+      <p style="margin:0">Probability the answer is right</p>
+      <p class="big" id="pval" style="margin:0"></p>
+      <div class="meter"><div id="pbar"></div><i style="left:50%"></i><i style="left:80%"></i></div>
+      <div class="scale"><span>0</span><span>escalate · 0.50 · hedge · 0.80 · answer</span><span>1</span></div>
+      <p style="margin:10px 0 0"><span class="verdict" id="pverdict"></span></p>
+      <p id="pwhy" style="margin:4px 0 8px; line-height:1.5; font-size:17px"></p>
+      <p class="muted" style="margin:0; font-size:15px; line-height:1.45" id="pavg"></p>
+    </div>
+  </div>
+  <pre id="lrcode"></pre>
+  <p>A hand-weighted rule (“average the scores”) is the usual first version. It is fine as a starting point, but the output is not a probability and the weights are guesses. Once you have labelled outcomes, fit the weights: a logistic regression has a handful of coefficients, trains in milliseconds, and the coefficients show you which signals actually predict correctness.</p>
+
+  <!-- 2 -->
+  <h2>2 · Ask again: self-consistency</h2>
+  <p class="lede">Sample the same question five times at a temperature above zero. If the model knows the answer, the samples agree. If it is guessing, they scatter.</p>
+  <div class="box">
+    <div class="row" id="scbtns"></div>
+    <p id="scq" style="margin:8px 0 0"><i></i></p>
+    <div class="samples" id="samples"></div>
+    <div class="cols3" aria-live="polite">
+      <div><span class="muted">Exact-string agreement</span><br><span class="big" id="scstr"></span></div>
+      <div><span class="muted">Agreement by meaning</span><br><span class="big" id="scsem"></span></div>
+      <div><span class="muted">Semantic entropy (bits)</span><br><span class="big" id="scent"></span></div>
+    </div>
+    <p id="scnote" class="out" style="margin-top:10px"></p>
+  </div>
+  <p>Group the samples by <b>meaning</b>, not by string: “29.8%” and “about 30% (29.8%)” are the same answer. Entropy over those meaning clusters is <b>semantic entropy</b> (Farquhar et al., <i>Nature</i>, 2024). It is 0 when every sample means the same thing and log₂ 5 ≈ 2.32 when all five differ. The cost is N model calls per question, so keep it for answers where a mistake is expensive, or run it on a sample.</p>
+
+  <!-- 3 -->
+  <h2>3 · A score is not a probability until you calibrate it</h2>
+  <p class="lede">A cosine similarity of 0.83 or a rerank logit of 7.2 orders results. Neither one means “83% likely to be right”. <span class="hl">Calibrated</span> means that of all answers scored 0.7, about 70% are correct.</p>
+  <div class="grid">
+    <div class="box">
+      <div class="row" id="calbtns"></div>
+      <svg class="chart" id="rel" viewBox="0 0 360 300" role="img" aria-label="Reliability diagram"></svg>
+      <p class="caption">Reliability diagram: 200 FinSight answers in 5 bins of the raw score. Dots on the dashed line are perfectly calibrated; red lines are the gaps.</p>
+    </div>
+    <div>
+      <p style="margin:0" aria-live="polite">Expected Calibration Error: <span class="big" id="ece"></span></p>
+      <table class="hand" id="bins"></table>
+      <p id="calnote" class="out" style="margin-top:10px"></p>
+    </div>
+  </div>
+  <p><b>ECE</b> is the average gap between confidence and accuracy, weighted by how many answers fall in each bin: <code>ECE = Σ (nᵢ / N) · |accᵢ − confᵢ|</code>.
+    Three common fixes, all fitted on a <b>held-out</b> labelled set, never on the data you report:</p>
+  <ul>
+    <li><b>Temperature scaling</b>: divide the logit by one number T. It keeps the ranking and can only squeeze or stretch scores around 50%.</li>
+    <li><b>Platt scaling</b>: a one-feature logistic regression, <code>p = σ(a · logit(s) + b)</code>. The bias term <code>b</code> lets it shift scores down, which is what an overconfident system needs.</li>
+    <li><b>Isotonic regression</b>: a monotone step function. It is the most flexible, but it needs more data (roughly a thousand labels or more) and overfits small sets.</li>
+  </ul>
+
+  <!-- 4 -->
+  <h2>4 · The threshold is a business decision</h2>
+  <p class="lede">Twenty labelled FinSight answers, sorted by calibrated confidence. Answer when the score is at or above the threshold; otherwise send the question to an analyst. Change the costs and see the best threshold move.</p>
+  <div class="box">
+    <div class="slider"><span>Answer if confidence ≥</span><input type="range" id="thr" min="0.30" max="1.00" step="0.01" value="0.80" aria-label="Threshold"><b id="thrv"></b></div>
+    <div class="row">
+      <label>Cost of a wrong answer $ <input class="cost" type="number" id="cw" value="50" min="0" step="5"></label>
+      <label>Cost of an escalation $ <input class="cost" type="number" id="ca" value="8" min="0" step="1"></label>
+      <button id="best">Jump to the cheapest threshold</button>
+    </div>
+    <div class="chips20" id="chips20"></div>
+    <div class="stats" aria-live="polite">
+      <div><small>coverage (answered)</small><b id="sCov"></b></div>
+      <div><small>accuracy when answered</small><b id="sAcc"></b></div>
+      <div><small>escalated to an analyst</small><b id="sAbs"></b></div>
+      <div><small>cost for these 20</small><b id="sCost"></b></div>
+    </div>
+    <svg class="chart" id="rc" viewBox="0 0 360 250" role="img" aria-label="Risk–coverage curve" style="max-width:560px"></svg>
+    <p class="caption">Risk–coverage curve: each dot is “answer the top k”. Further right answers more questions; higher up means more of them are wrong.</p>
+  </div>
+  <p>This is <b>selective prediction</b>: you trade coverage for accuracy. The right point depends on what a wrong answer costs compared with a human’s time. A wrong revenue figure in an analyst’s model costs far more than a wrong page number. Three refinements:</p>
+  <ul>
+    <li><b>A hedge band</b> between “answer” and “escalate”, where the answer ships with its caveat and sources.</li>
+    <li><b>Per-segment thresholds</b>: numeric questions, open-ended summaries and out-of-scope requests each get their own threshold, chosen on their own labelled slice.</li>
+    <li><b>A hard rule beats a score</b>: a calculator mismatch or a failed <a href="ai-governance.html">guardrail</a> escalates whatever the blend says.</li>
+  </ul>
+  <h3>Watching it in production</h3>
+  <p>Track the <b>escalation rate</b> per day and per segment. A sudden drop after a new embedding model, reranker or index usually means the score distribution moved, not that the system got better. <span class="hl">Re-fit the calibration on the labelled set after every model or index change</span>, and feed analyst decisions from the queue back in as new labels (see <a href="system-design/evals.html">evals</a> and <a href="testing-and-evals.html">Testing &amp; Evals</a>).</p>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Remember</b>
+      <ul>
+        <li>Confidence exists to drive a decision: answer, hedge, escalate or route.</li>
+        <li>Combine several signals with a model fitted on labelled outcomes.</li>
+        <li>Calibrate on held-out data and report ECE; re-fit after any model or index change.</li>
+        <li>Choose thresholds from costs, per segment, and let hard rules override.</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>Pitfalls</b>
+      <ol>
+        <li><span class="strike">Showing a cosine score as a percentage</span>: it is not a probability</li>
+        <li><span class="strike">Trusting logprobs as truth</span>: they score the wording</li>
+        <li><span class="strike">Asking the model “how sure are you?”</span> and using that number on its own</li>
+        <li><span class="strike">One global threshold, set once</span>, never revisited</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2 id="real-world">In the real world</h2>
+  <table class="hand">
+    <tr><th>pattern</th><th>where you’ll meet it</th></tr>
+    <tr><td>Token logprobs</td><td>OpenAI <code>logprobs</code> and <code>top_logprobs</code>; Gemini <code>responseLogprobs</code> and <code>logprobs</code>. At the time of writing, the Anthropic Messages API does not return logprobs, so use sampling- or judge-based signals with Claude.</td></tr>
+    <tr><td>Trust scores as a service</td><td>Cleanlab TLM trustworthiness score; Vectara HHEM, a hallucination evaluation model with open weights on Hugging Face</td></tr>
+    <tr><td>Groundedness metrics</td><td>RAGAS faithfulness, DeepEval faithfulness and hallucination metrics, NLI cross-encoders</td></tr>
+    <tr><td>Sampling-based</td><td>SelfCheckGPT; semantic entropy (Farquhar et al., <i>Nature</i>, 2024)</td></tr>
+    <tr><td>Calibration</td><td>scikit-learn <code>CalibratedClassifierCV</code> (sigmoid = Platt, isotonic) and <code>calibration_curve</code>; temperature scaling (Guo et al., 2017)</td></tr>
+    <tr><td>Human-in-the-loop queues</td><td>LangSmith and Langfuse annotation queues, Argilla, Label Studio</td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p>
+
+  <h2>5 · Check yourself</h2>
+  <div class="cards quiz" id="quiz" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— next: ⑬ Open-Weight Models, the models you can run yourself</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const pct = x => `${Math.round(x * 100)}%`;
+const sig = z => 1 / (1 + Math.exp(-z));
+
+// ---------- 1. combiner ----------
+const W = { b: -7.0, rr: 3.1, mg: 4.0, sc: 3.4, gr: 3.0, matched: 1.5 };
+const SL = [
+  ['rr', 'Top rerank score', 0, 1, 0.01],
+  ['mg', 'Margin #1 − #2', 0, 0.5, 0.01],
+  ['sc', 'Self-consistency (of 5)', 0, 1, 0.2],
+  ['gr', 'Claims supported', 0, 1, 0.05],
+];
+const PRE = [
+  ['Clean 10-K lookup', { rr: 0.94, mg: 0.32, sc: 1, gr: 1, tool: 'matched', scope: 'in' }],
+  ['Ambiguous: “margin”', { rr: 0.78, mg: 0.12, sc: 0.4, gr: 0.95, tool: 'none', scope: 'in' }],
+  ['Not in the corpus', { rr: 0.48, mg: 0.04, sc: 0.2, gr: 0.5, tool: 'none', scope: 'in' }],
+  ['Calculator mismatch', { rr: 0.9, mg: 0.3, sc: 1, gr: 1, tool: 'mismatch', scope: 'in' }],
+  ['“Should I buy AAPL?”', { rr: 0.6, mg: 0.1, sc: 0.8, gr: 0.6, tool: 'none', scope: 'out' }],
+];
+const S = { ...PRE[0][1] };
+$('sliders').innerHTML = SL.map(([k, l, lo, hi, st]) =>
+  `<div class="slider"><span>${l}</span><input type="range" id="s_${k}" min="${lo}" max="${hi}" step="${st}" aria-label="${l}"><b id="v_${k}"></b></div>`).join('');
+const seg = (el, key, opts) => {
+  $(el).innerHTML = opts.map(([v, l]) => `<button data-v="${v}" aria-pressed="false">${l}</button>`).join(' ');
+  $(el).onclick = e => { const b = e.target.closest('button'); if (b) { S[key] = b.dataset.v; renderP(); } };
+};
+seg('tool', 'tool', [['matched', 'matches ✓'], ['none', 'no number'], ['mismatch', 'mismatch ✗']]);
+seg('scope', 'scope', [['in', 'in scope'], ['out', 'investment advice']]);
+$('presets').innerHTML = PRE.map(([l], i) => `<button data-i="${i}">${l}</button>`).join(' ');
+$('presets').onclick = e => { const b = e.target.closest('button'); if (b) { Object.assign(S, PRE[b.dataset.i][1]); renderP(); } };
+SL.forEach(([k]) => $(`s_${k}`).oninput = e => { S[k] = +e.target.value; renderP(); });
+function renderP() {
+  SL.forEach(([k]) => { $(`s_${k}`).value = S[k]; $(`v_${k}`).textContent = k === 'sc' ? `${Math.round(S[k] * 5)}/5` : (+S[k]).toFixed(2); });
+  ['tool', 'scope'].forEach(k => $(k).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === S[k])));
+  const z = W.b + W.rr * S.rr + W.mg * S.mg + W.sc * S.sc + W.gr * S.gr + (S.tool === 'matched' ? W.matched : 0);
+  const p = sig(z);
+  let v, cls, why;
+  if (S.scope === 'out') { v = 'Decline'; cls = 'esc'; why = 'Hard rule: investment advice is out of scope, so the score is never consulted.'; }
+  else if (S.tool === 'mismatch') { v = 'Escalate to an analyst'; cls = 'esc'; why = 'Hard rule: the calculator’s result disagrees with the XBRL fact. The other signals look fine, which is exactly why a blended score must not decide this one.'; }
+  else if (p >= 0.8) { v = 'Answer, with citations'; cls = 'ans'; why = `About ${Math.round(p * 100)} in 100 answers with these signals were right in the labelled set.`; }
+  else if (p >= 0.5) { v = 'Hedge'; cls = 'hedge'; why = 'Answer with the caveat and sources, or ask a clarifying question.'; }
+  else { v = 'Escalate to an analyst'; cls = 'esc'; why = 'More likely wrong than right. A person looks at it, and their decision becomes a new label.'; }
+  $('pval').textContent = p.toFixed(2);
+  $('pbar').style.width = `${p * 100}%`;
+  $('pverdict').textContent = v; $('pverdict').className = `verdict ${cls}`;
+  $('pwhy').textContent = why;
+  $('pavg').textContent = `Hand-weighted average of the three scores: ${((S.rr + S.sc + S.gr) / 3).toFixed(2)}. It looks like a probability, but nobody checked that it is one.`;
+  $('lrcode').innerHTML = esc(`z = ${W.b} + ${W.rr}·rerank + ${W.mg}·margin + ${W.sc}·consistency + ${W.gr}·supported + ${W.matched}·tool_matched\n  = ${z.toFixed(2)}\np = 1 / (1 + e^-z) = ${p.toFixed(2)}`);
+}
+renderP();
+
+// ---------- 2. self-consistency ----------
+const SC = [
+  { q: 'What was Apple’s FY2023 operating margin?', s: [['29.8%', 0], ['29.8%', 0], ['about 30% (29.8%)', 0], ['29.8%', 0], ['29.8%', 0]],
+    note: 'One meaning, five times. String matching says 80% because of the rephrasing; clustering by meaning says 100%. Answer.' },
+  { q: 'What was Apple’s margin in 2023?', s: [['44.1% gross', 0], ['29.8% operating', 1], ['44.1% gross', 0], ['25.3% net', 2], ['29.8% operating', 1]],
+    note: 'Every sample is a correct number, for a different question. Low agreement here signals an ambiguous query: ask which margin.' },
+  { q: 'What was Apple’s FY2026 operating margin? (filing not ingested yet)', s: [['30.4%', 0], ['31.2%', 1], ['29.9%', 2], ['I can’t find a FY2026 10-K', 3], ['32.0%', 4]],
+    note: 'Five different answers: the model is guessing. Escalate, or answer that the filing isn’t indexed yet.' },
+];
+$('scbtns').innerHTML = SC.map((x, i) => `<button data-i="${i}" aria-pressed="false">Question ${i + 1}</button>`).join(' ');
+$('scbtns').onclick = e => { const b = e.target.closest('button'); if (b) renderSC(+b.dataset.i); };
+function renderSC(i) {
+  const x = SC[i];
+  $('scbtns').querySelectorAll('button').forEach((b, k) => b.setAttribute('aria-pressed', k === i));
+  $('scq').innerHTML = `<i>“${x.q}”</i>`;
+  $('samples').innerHTML = x.s.map(([t, c], k) => `<span class="c${c}">${t}<small>#${k + 1}</small></span>`).join('');
+  const cnt = (keyFn) => { const m = {}; x.s.forEach(s => { const k = keyFn(s); m[k] = (m[k] || 0) + 1; }); return Object.values(m); };
+  const str = cnt(s => s[0]), sem = cnt(s => s[1]);
+  $('scstr').textContent = pct(Math.max(...str) / 5);
+  $('scsem').textContent = pct(Math.max(...sem) / 5);
+  $('scent').textContent = sem.reduce((h, n) => h - (n / 5) * Math.log2(n / 5), 0).toFixed(2);
+  $('scnote').textContent = x.note;
+}
+renderSC(0);
+
+// ---------- 3. calibration ----------
+const BINS = [[0.12, 0.10, 10], [0.33, 0.20, 20], [0.52, 0.33, 40], [0.71, 0.48, 60], [0.92, 0.70, 70]];
+const logit = p => Math.log(p / (1 - p));
+const CAL = [
+  ['Raw score', c => c, 'Every bin sits below the line: the system says 0.92 and is right 70% of the time. It is overconfident everywhere.'],
+  ['Temperature (T = 2.72)', c => sig(logit(c) / 2.72), 'Better, but temperature can only squeeze scores toward 50%. It pushes the bottom bin up to 0.32 while that bin is right only 10% of the time.'],
+  ['Platt (a = 0.68, b = −0.76)', c => sig(0.677 * logit(c) - 0.764), 'The bias term shifts every score down, and the dots land on the line. The ranking of answers is unchanged; only the numbers now mean what they say.'],
+];
+$('calbtns').innerHTML = CAL.map(([l], i) => `<button data-i="${i}" aria-pressed="false">${l}</button>`).join(' ');
+$('calbtns').onclick = e => { const b = e.target.closest('button'); if (b) renderCal(+b.dataset.i); };
+const RX = v => 50 + v * 280, RY = v => 250 - v * 230;
+function axes(xl, yl, xt, yt, X, Y) {
+  let g = '';
+  yt.forEach(v => g += `<line class="gr" x1="${X(0)}" x2="${X(1)}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${X(0) - 6}" y="${Y(v) + 4}" text-anchor="end">${pct(v)}</text>`);
+  xt.filter(v => v).forEach(v => g += `<text x="${X(v)}" y="${Y(0) + 16}" text-anchor="middle">${pct(v)}</text>`);
+  g += `<line class="ax" x1="${X(0)}" x2="${X(1)}" y1="${Y(0)}" y2="${Y(0)}"/><line class="ax" x1="${X(0)}" x2="${X(0)}" y1="${Y(0)}" y2="${Y(1)}"/>`;
+  g += `<text x="${(X(0) + X(1)) / 2}" y="${Y(0) + 34}" text-anchor="middle">${xl}</text>`;
+  g += `<text transform="translate(12 ${(Y(0) + Y(1)) / 2}) rotate(-90)" text-anchor="middle">${yl}</text>`;
+  return g;
+}
+function renderCal(i) {
+  const [, f, note] = CAL[i];
+  $('calbtns').querySelectorAll('button').forEach((b, k) => b.setAttribute('aria-pressed', k === i));
+  const pts = BINS.map(([c, a, n]) => [f(c), a, n]);
+  const ece = pts.reduce((s, [c, a, n]) => s + n / 200 * Math.abs(a - c), 0);
+  let g = axes('confidence', 'accuracy', [0, 0.5, 1], [0, 0.5, 1], RX, RY);
+  g += `<line class="diag" x1="${RX(0)}" y1="${RY(0)}" x2="${RX(1)}" y2="${RY(1)}"/><text x="${RX(0.12)}" y="${RY(0.34)}" transform="rotate(-39 ${RX(0.12)} ${RY(0.34)})">perfectly calibrated</text>`;
+  g += pts.map(([c, a]) => `<line class="gap" x1="${RX(c)}" x2="${RX(c)}" y1="${RY(a)}" y2="${RY(c)}"/>`).join('');
+  g += `<polyline class="ln" points="${pts.map(([c, a]) => `${RX(c)},${RY(a)}`).join(' ')}"/>`;
+  g += pts.map(([c, a, n]) => `<circle class="dot" cx="${RX(c)}" cy="${RY(a)}" r="5"><title>${n} answers · confidence ${c.toFixed(2)} · accuracy ${a.toFixed(2)}</title></circle>`).join('');
+  $('rel').innerHTML = g;
+  $('ece').textContent = ece.toFixed(3);
+  $('bins').innerHTML = `<tr><th>bin</th><th>answers</th><th>confidence</th><th>accuracy</th><th>gap</th></tr>` +
+    pts.map(([c, a, n], k) => `<tr><td>${k + 1}</td><td>${n}</td><td>${c.toFixed(2)}</td><td>${a.toFixed(2)}</td><td class="${Math.abs(a - c) > 0.05 ? 'fail' : 'pass'}">${(a - c >= 0 ? '+' : '−') + Math.abs(a - c).toFixed(2)}</td></tr>`).join('');
+  $('calnote').textContent = note;
+}
+renderCal(0);
+
+// ---------- 4. threshold ----------
+const ANS = [[0.97, 1], [0.95, 1], [0.93, 1], [0.91, 1], [0.90, 0], [0.88, 1], [0.86, 1], [0.84, 1], [0.81, 0], [0.79, 1],
+             [0.76, 1], [0.72, 0], [0.70, 1], [0.66, 0], [0.63, 1], [0.58, 0], [0.54, 0], [0.49, 1], [0.42, 0], [0.35, 0]];
+function at(t) {
+  const on = ANS.filter(([c]) => c >= t), wrong = on.filter(([, y]) => !y).length, abs = ANS.length - on.length;
+  return { k: on.length, wrong, abs, cost: wrong * (+$('cw').value || 0) + abs * (+$('ca').value || 0) };
+}
+const CX = v => 50 + v * 290, CY = v => 210 - v * 2 * 190;
+function renderThr() {
+  const t = +$('thr').value, r = at(t);
+  $('thrv').textContent = t.toFixed(2);
+  $('chips20').innerHTML = ANS.map(([c, y]) => `<span class="${c >= t ? 'on' : 'off'} ${y ? 'y' : 'n'}" title="${y ? 'correct' : 'wrong'}">${c.toFixed(2)}<b>${y ? '✓' : '✗'}</b></span>`).join('');
+  $('sCov').textContent = pct(r.k / 20);
+  $('sAcc').textContent = r.k ? pct((r.k - r.wrong) / r.k) : '—';
+  $('sAbs').textContent = r.abs;
+  $('sCost').textContent = `$${r.cost}`;
+  const curve = ANS.map((_, i) => { const s = at(ANS[i][0]); return [s.k / 20, s.wrong / s.k, ANS[i][0]]; });
+  let g = '';
+  [0, 0.25, 0.5].forEach(v => g += `<line class="gr" x1="${CX(0)}" x2="${CX(1)}" y1="${CY(v)}" y2="${CY(v)}"/><text x="${CX(0) - 6}" y="${CY(v) + 4}" text-anchor="end">${pct(v)}</text>`);
+  [0.5, 1].forEach(v => g += `<text x="${CX(v)}" y="${CY(0) + 16}" text-anchor="middle">${pct(v)}</text>`);
+  g += `<line class="ax" x1="${CX(0)}" x2="${CX(1)}" y1="${CY(0)}" y2="${CY(0)}"/><line class="ax" x1="${CX(0)}" x2="${CX(0)}" y1="${CY(0)}" y2="${CY(0.5)}"/>`;
+  g += `<text x="${(CX(0) + CX(1)) / 2}" y="${CY(0) + 34}" text-anchor="middle">coverage: share of questions answered</text>`;
+  g += `<text transform="translate(12 ${(CY(0) + CY(0.5)) / 2}) rotate(-90)" text-anchor="middle">error rate</text>`;
+  g += `<polyline class="ln" points="${curve.map(([x, y]) => `${CX(x)},${CY(y)}`).join(' ')}"/>`;
+  g += curve.map(([x, y, c]) => `<circle class="dot" cx="${CX(x)}" cy="${CY(y)}" r="4"><title>threshold ${c.toFixed(2)} · coverage ${pct(x)} · error ${pct(y)}</title></circle>`).join('');
+  if (r.k) {
+    const x = CX(r.k / 20), y = CY(r.wrong / r.k);
+    g += `<circle class="cur" cx="${x}" cy="${y}" r="7"/><text class="lab" x="${x + (r.k > 14 ? -12 : 12)}" y="${y - 16}" text-anchor="${r.k > 14 ? 'end' : 'start'}">you are here · $${r.cost}</text>`;
+  }
+  $('rc').innerHTML = g;
+}
+$('thr').oninput = renderThr; $('cw').oninput = renderThr; $('ca').oninput = renderThr;
+$('best').onclick = () => {
+  const cand = [...ANS.map(([c]) => c), 1.0];
+  const best = cand.reduce((b, t) => at(t).cost < at(b).cost ? t : b, cand[cand.length - 1]);
+  $('thr').value = best; renderThr();
+};
+renderThr();
+
+// ---------- 5. quiz ----------
+const Q = [
+  ['A cross-encoder gives the top chunk a score of 0.92. What does that tell you?',
+   ['The answer is 92% likely to be right', 'That chunk ranks above the others; it is not a probability until calibrated', 'The chunk is 92% similar to the question', 'Nothing at all'], 1,
+   'Raw scores (cosine, rerank logits) order results. Only a calibration fitted on labelled outcomes turns a score into “right about 92% of the time”.'],
+  ['An answer has very high token logprobs. What do they measure?',
+   ['That the facts are true', 'How likely the model finds its own wording', 'How well retrieval worked', 'The judge’s verdict'], 1,
+   'Logprobs score the text. A fluent, confident sentence with a wrong number can still get high logprobs.'],
+  ['The model writes “I’m 95% sure”. How should you use that number?',
+   ['As the confidence score', 'As one weak signal at most: verbalised confidence tends to be overconfident', 'Ignore the answer', 'Raise the threshold to 95%'], 1,
+   'Self-reported confidence is poorly calibrated. If you use it, feed it into the scorer and calibrate it like any other signal.'],
+  ['Five samples: four say “29.8%”, one says “about 30% (29.8%)”. What is the agreement?',
+   ['80%, by exact string', '100%, by meaning', '20%', 'It can’t be measured'], 1,
+   'Cluster samples by meaning before measuring agreement. That is the idea behind semantic entropy.'],
+  ['The raw scores are too high in every bin. Why does Platt scaling fix it better than temperature scaling?',
+   ['It is a neural network', 'It has a bias term, so it can shift every score down; temperature can only squeeze scores toward 50%', 'It changes the ranking', 'It uses more data'], 1,
+   'Temperature divides the logit by one number. Platt fits σ(a·logit + b), and the b shifts scores.'],
+  ['A wrong answer costs $50 and an escalation costs $8. How do you choose the threshold?',
+   ['Pick the one with the highest accuracy', 'Pick the one with the lowest expected cost on a labelled set', 'Always 0.5', 'Always 0.9'], 1,
+   'Selective prediction trades coverage for accuracy. The costs, not a habit, decide where on the risk–coverage curve you sit.'],
+  ['All signals are high, but the calculator’s result doesn’t match the XBRL value. What should happen?',
+   ['Answer: the blended score is high', 'Escalate: a hard rule overrides the score', 'Hedge', 'Retry the same model'], 1,
+   'Some checks are decisive. Run hard rules before the blended score, so strong soft signals can’t outvote them.'],
+  ['After a new embedding model ships, the escalation rate drops from 18% to 6% overnight. What is most likely?',
+   ['The system got three times better', 'The score distribution shifted; re-fit the calibration before trusting the threshold', 'Analysts are slower', 'Nothing changed'], 1,
+   'Thresholds are tied to a score distribution. Re-calibrate on the labelled set after every model or index change.'],
+  ['Why fit the calibration on held-out data?',
+   ['It is faster', 'Fitting and measuring on the same answers makes ECE look better than it will be in production', 'scikit-learn requires it', 'Held-out data is cheaper'], 1,
+   'In-sample calibration flatters itself. Fit on one labelled split and report ECE on another.'],
+];
+// fixed rotation per question so the right answer isn't always the same letter, and it stays stable across reloads
+Q.forEach((q, i) => { const n = q[1].length, r = (i * 3 + 2) % n; q[1] = q[1].map((_, j) => q[1][(j + r) % n]); q[2] = (q[2] - r + n) % n; });
+let qr = 0, qd = 0;
+$('quiz').innerHTML = Q.map(([q, opts], i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q)}</p>
+  <div class="opts">${opts.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quiz').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const [, , a, w] = Q[card.dataset.i], ok = +b.dataset.j === a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.conf3d = {
+  loop: 13.5,
+  view: { target: [0, 0, 0], w: 24, d: 17, el: 54 },
+  steps: [
+    { t: 0.0, text: 'Question 1: “What was Apple’s FY2023 operating margin?” Four signals report: top rerank score 0.94 with a clear lead, 5 of 5 samples agree, every claim is supported by a cited chunk, and the calculator matches the XBRL fact.' },
+    { t: 1.5, text: 'The scorer, a logistic regression fitted on labelled answers, turns them into p = 0.99. Because it is calibrated, about 99 in 100 answers at this score are right.' },
+    { t: 2.3, text: 'p is at least 0.80, so the gate answers: 29.8%, with citations to the 10-K.' },
+    { t: 4.2, text: 'Question 2: “What was Apple’s margin in 2023?” Retrieval is weaker (0.78), and only 2 of 5 samples agree: they split between gross, operating and net margin.' },
+    { t: 5.8, text: 'p = 0.53 lands in the hedge band: show all three margins with sources and ask which one was meant.' },
+    { t: 8.4, text: 'Question 3: the calculator’s result does not match the XBRL value. A hard rule sends it to the analyst queue, whatever the blended score says.' },
+    { t: 10.6, text: 'The analyst’s decision becomes a new label. Labels flow back to re-fit the scorer and its calibration, especially after a model or index change.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, SHAPES } = c;
+    const SIG = [
+      [SHAPES.database(C.kb), -5.4, 'Retrieval', 'rerank score · margin'],
+      ['cards', -1.8, 'Self-consistency', 'N samples agree?'],
+      [SHAPES.shield(C.gov), 1.8, 'Groundedness', 'claims supported'],
+      [SHAPES.server({ color: 0x3f6b55, emi: C.ok }), 5.4, 'Tool check', 'calculator = XBRL'],
+    ].map(([s, z, n, sub]) => [c.obj(s, -9.4, z, n, sub), z]);
+    const sc = c.obj('monitor', -2.6, 0, 'Confidence scorer', 'calibrated p');
+    const gate = c.obj('signpost', 2.6, 0, 'Policy gate', '≥ 0.80 · 0.50–0.80 · < 0.50');
+    const OUT = [
+      [c.obj('person', 8.8, -4.8, 'Answer', 'with citations'), -4.8],
+      [c.obj('browser', 8.8, 0, 'Hedged answer', 'caveat + sources'), 0],
+      [c.obj('tray', 8.8, 4.8, 'Analyst queue', 'human review'), 4.8],
+    ];
+    SIG.forEach(([, z]) => c.lane([V(-9.4, z), V(-6.2, z), V(-6.2, 0), V(-2.6, 0)]));
+    c.lane([V(-2.6, 0), V(2.6, 0)]);
+    OUT.forEach(([, z]) => c.lane([V(2.6, 0), V(5.8, 0), V(5.8, z), V(8.8, z)]));
+    const round = (t0, p, color, out, label) => {
+      SIG.forEach(([o, z], i) => c.packet({ pts: [V(-9.4, z), V(-6.2, z), V(-6.2, 0), V(-2.6, 0)], t0: t0 + i * 0.12, t1: t0 + 1.2 + i * 0.12, kind: 'span', s: 1.5, from: o, to: sc }));
+      c.packet({ pts: arc(c.top(sc, 0), c.top(gate, 0), 1.6), t0: t0 + 1.6, t1: t0 + 2.3, kind: 'vec', to: gate, label: p });
+      const [o, z] = OUT[out];
+      c.packet({ pts: [V(2.6, 0), V(5.8, 0), V(5.8, z), V(8.8, z)], t0: t0 + 2.4, t1: t0 + 3.4, kind: 'doc', color, to: o, label });
+    };
+    round(0, 'p = 0.99', P.ship, 0, '29.8% + citations');
+    round(4.2, 'p = 0.53', P.env, 1, 'which margin?');
+    round(8.4, 'tool mismatch', P.bad, 2, 'needs review');
+    c.packet({ pts: arc(c.top(OUT[2][0], 0), c.top(sc, 0), 3.2), t0: 11.3, t1: 12.6, kind: 'span', s: 1.6, color: P.ask, to: sc, label: 'labels → re-fit' });
+  },
+};
+boot(D);
+</script>
+</body>
+</html>

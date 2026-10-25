@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weights in Retrieval: notebook</title>
+<meta name="description" content="How retrieval scores are built: hybrid alpha, score normalisation, Reciprocal Rank Fusion, field boosts, recency decay and tuning weights on a labelled set.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Weights in Retrieval">
+<meta property="og:description" content="How retrieval scores are built: hybrid alpha, score normalisation, Reciprocal Rank Fusion, field boosts, recency decay and tuning weights on a labelled set.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/retrieval-weights.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+<link rel="stylesheet" href="assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+<style>
+  .lede { color: var(--pencil); }
+  .lab { line-height: 1.5; font-size: 17px; }
+  .lab .row label { font-size: 16px; }
+  .lab output { font-family: var(--mono); font-size: 15px; min-width: 52px; display: inline-block; }
+  table.hand td.num, table.hand th.num { text-align: right; font-family: var(--mono); font-size: 14px; white-space: nowrap; }
+  table.hand tr.exact td { background: rgba(255,224,102,.35); }
+  table.hand tr.gone td { color: #aaa; text-decoration: line-through; }
+  .rk { font-family: var(--title); color: var(--ink); }
+  .bar { display: inline-block; height: 10px; background: var(--ink); border-radius: 3px; vertical-align: middle; opacity: .75; }
+  .bar.b { background: var(--red); } .bar.d { background: #8e44ad; }
+  .formula { font: 18px/1.6 var(--mono); text-align: center; margin: 4px 0 10px; }
+  .formula b { color: var(--red); font-weight: normal; }
+  #grid svg text { font-family: var(--hand); font-size: 13px; fill: #333; }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="ai-governance.html">← AI Governance</a><a href="reranking-cross-encoders.html">⑩ Reranking with Cross-Encoders →</a></p>
+  <h1>Weights in Retrieval</h1>
+  <p class="lede">Every search engine turns a query into one number per document and sorts. That number is almost always a
+    <span class="hl"><b>weighted sum of signals</b></span>: keyword match, meaning match, freshness, field, business rules.
+    The weights decide what “relevant” means, so they deserve the same care as the model.</p>
+
+  <h3>See it in 3D: two retrievers, one scale</h3>
+  <figure class="fig3d" id="weights3d">
+    <div class="stage3d" role="img" aria-label="A question about Apple's FY2023 operating margin goes to a BM25 keyword index and a vector index; each returns a ranked list; a fusion scale weighs them with alpha, adds a recency boost, and sends one fused top-k list on to the reranker"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The labs below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Yellow is the query, teal cubes are BM25 hits, purple shapes are vector hits, white sheets are the fused list.</figcaption>
+  </figure>
+
+  <!-- 1 -->
+  <h2>1 · A score is a weighted sum</h2>
+  <div class="box">
+    <p class="formula">score(d) = <b>w₁</b>·bm25 + <b>w₂</b>·dense + <b>w₃</b>·recency + <b>w₄</b>·field + <b>w₅</b>·business</p>
+    <p style="margin:0" class="muted">Each signal is a number per document. The <b>w</b>’s are the only thing you tune. In hybrid search the first two are usually written as one knob:
+      <code>alpha·dense + (1 − alpha)·bm25</code>, so <code>alpha = 1</code> is pure vector search and <code>alpha = 0</code> is pure keyword search.</p>
+  </div>
+  <table class="hand">
+    <tr><th>signal</th><th>range</th><th>good at</th></tr>
+    <tr><td>BM25 (keyword)</td><td>0 to unbounded; depends on query length and corpus</td><td>exact IDs, tickers, accession numbers, rare terms (<a href="system-design/search-types.html">search types</a>)</td></tr>
+    <tr><td>Dense cosine</td><td>−1 to 1, in practice a narrow band like 0.6–0.9</td><td>paraphrase: “how profitable” finds “operating income” (<a href="system-design/embeddings.html">embeddings</a>)</td></tr>
+    <tr><td>Recency</td><td>0–1 after a decay function</td><td>“latest guidance”, policies, prices</td></tr>
+    <tr><td>Field / metadata</td><td>a multiplier or additive bonus</td><td>title or section-header matches, the right form type</td></tr>
+  </table>
+  <p>The catch: <span class="hl">you can’t add numbers on different scales.</span> A BM25 score of 18 next to a cosine of 0.84 means BM25 wins every sum
+    unless you normalise first. Two common fixes: <b>min-max</b> (rescale each list to 0–1) and <b>z-score</b> (subtract the mean, divide by the standard deviation).</p>
+
+  <h3>Lab A: slide alpha</h3>
+  <div class="box lab">
+    <p style="margin:0 0 6px">Query: <code>Apple operating income 0000320193-23-000106</code>. The last part is the FY2023 10-K accession number, an exact ID that embeddings handle poorly.</p>
+    <div class="row">
+      <label for="alpha">alpha (dense weight)</label><input type="range" id="alpha" min="0" max="1" step="0.05" value="0.5"><output id="alphaV"></output>
+      <span style="margin-left:14px">normalise:</span>
+      <span id="norm"><button data-n="none" aria-pressed="false">none</button><button data-n="minmax" aria-pressed="true">min-max</button><button data-n="z" aria-pressed="false">z-score</button></span>
+    </div>
+    <div class="table" style="overflow-x:auto"><table class="hand" id="tA"></table></div>
+    <div class="out" id="outA" aria-live="polite"></div>
+  </div>
+
+  <!-- 2 -->
+  <h2>2 · Fuse ranks, not scores: RRF</h2>
+  <p>Reciprocal Rank Fusion ignores raw scores and uses only each document’s <b>rank</b> in each list:</p>
+  <p class="formula">RRF(d) = Σ <b>wᵢ</b> / (k + rankᵢ(d))</p>
+  <p>No normalisation is needed, which is why most engines ship it as the default hybrid mode. <code>k = 60</code> comes from the original paper (Cormack et al., 2009).
+    A small k makes the #1 slot in either list dominate. A large k flattens the curve, so documents that do well in <i>both</i> lists win.
+    <b>Weighted RRF</b> adds a weight per list, the same idea as alpha but applied to ranks.</p>
+  <h3>Lab B: slide k and the list weights</h3>
+  <div class="box lab">
+    <div class="row">
+      <label for="k">k</label><input type="range" id="k" min="1" max="100" step="1" value="60"><output id="kV"></output>
+      <label for="wb" style="margin-left:10px">BM25 weight</label><input type="range" id="wb" min="0" max="2" step="0.1" value="1"><output id="wbV"></output>
+      <label for="wd" style="margin-left:10px">dense weight</label><input type="range" id="wd" min="0" max="2" step="0.1" value="1"><output id="wdV"></output>
+    </div>
+    <div style="overflow-x:auto"><table class="hand" id="tB"></table></div>
+    <div class="out" id="outB" aria-live="polite"></div>
+  </div>
+
+  <!-- 3 -->
+  <h2>3 · Boosts, decay and filters</h2>
+  <div class="cols">
+    <div>
+      <h3>Field boosts</h3>
+      <p>A match in the title or a section header says more than a match in a footnote. Keyword engines let you weight fields:
+        <code>title^3 section^2 body</code>. For 10-Ks, a hit in the heading <i>“Item 7. Management’s Discussion and Analysis”</i> is worth more than one in the exhibit index.</p>
+      <h3>Business boosts</h3>
+      <p>“Promote our own research notes”, “prefer the help-centre article over the forum post”. They’re legitimate, but they quietly overrule relevance.
+        Keep them small and named, log them on every result, and measure them with the same eval as everything else. Otherwise nobody can explain why result #1 is #1.</p>
+    </div>
+    <div>
+      <h3>Recency decay</h3>
+      <p>Exponential decay with a <b>half-life</b>: <code>recency = 0.5^(age / half_life)</code>. With a 90-day half-life, a 90-day-old filing gets 0.5 and a 180-day-old one gets 0.25.</p>
+      <h3>Filter or boost?</h3>
+      <p><b>Filters are hard</b>: <code>WHERE fiscal_year = 2023</code> removes documents entirely. Use them when the question pins a value (ticker, year, permissions).
+        <b>Boosts are soft</b>: they reorder but never remove. Use them for preferences (“newer is usually better”). Never use a boost for access control (<a href="system-design/access-control.html">access control</a>).</p>
+    </div>
+  </div>
+  <h3>Lab C: “What is Apple’s latest guidance on gross margin?”</h3>
+  <div class="box lab">
+    <p class="muted" style="margin:0 0 6px">score = (1 − w)·relevance + w·0.5^(age / half-life)</p>
+    <div class="row">
+      <label for="rw">recency weight w</label><input type="range" id="rw" min="0" max="0.6" step="0.05" value="0"><output id="rwV"></output>
+      <label for="hl" style="margin-left:10px">half-life (days)</label><input type="range" id="hl" min="7" max="730" step="1" value="90"><output id="hlV"></output>
+      <label class="chk" style="margin-left:10px"><input type="checkbox" id="flt"> hard filter: fiscal_year ≥ 2023</label>
+    </div>
+    <div style="overflow-x:auto"><table class="hand" id="tC"></table></div>
+    <div class="out" id="outC" aria-live="polite"></div>
+  </div>
+
+  <!-- 4 -->
+  <h2>4 · Choosing the weights</h2>
+  <p>Weights are hyperparameters. Picking alpha by trying three queries and eyeballing the results is how teams ship a search that’s great on the demo and worse everywhere else.
+    The repeatable way is a <b>grid search on a labelled set</b>: queries with graded relevance (2 = answers it, 1 = related, 0 = not), a metric such as NDCG@k or recall@k,
+    and one run per weight value (<a href="system-design/evals.html">evals</a>, <a href="testing-and-evals.html">testing &amp; evals</a>).</p>
+  <h3>Lab D: grid-search alpha</h3>
+  <div class="box lab">
+    <p style="margin:0 0 6px">Four labelled queries (an exact accession number, a paraphrase and two mixed ones), five candidates each, min-max normalised, NDCG@3 averaged.</p>
+    <div class="row"><span>embedding model:</span><span id="mdl"><button data-m="a" aria-pressed="true">model A (old)</button><button data-m="b" aria-pressed="false">model B (new)</button></span></div>
+    <div id="grid"></div>
+    <div class="out" id="outD" aria-live="polite"></div>
+  </div>
+  <p>Three habits follow from that lab:</p>
+  <ul>
+    <li><b>Re-tune after any change to a signal.</b> A new embedding model, a new chunker or a new BM25 analyser shifts score distributions, and yesterday’s best alpha may now be wrong.</li>
+    <li><b>Tune per query type if they differ.</b> ID lookups want low alpha; open questions want high alpha. A <a href="system-design/routing.html">router</a> can pick the profile.</li>
+    <li><b>Hold out a test split.</b> Tune on one half of the labelled set and report on the other, or the score flatters you.</li>
+  </ul>
+  <p>When there are more than a handful of signals, hand-tuned weights stop scaling. <b>Learning to rank</b> (LTR) trains a model, often LambdaMART gradient-boosted trees, on
+    the same labelled pairs to learn the weights and their interactions. A <a href="reranking-cross-encoders.html">cross-encoder reranker</a>, the next page,
+    goes one step further and reads the query and document together.</p>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Remember</b>
+      <ul>
+        <li>A retrieval score is a weighted sum. The weights define relevance.</li>
+        <li>Normalise before you add scores, or use RRF and fuse ranks.</li>
+        <li>RRF: <code>1/(k + rank)</code>, k = 60 by default.</li>
+        <li>Filters remove, boosts reorder. Permissions are always filters.</li>
+        <li>Choose weights with a labelled set and NDCG/recall, and re-tune after any model change.</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>Pitfalls</b>
+      <ol>
+        <li><span class="strike">raw BM25 + cosine</span>: BM25 silently wins every query</li>
+        <li><span class="strike">alpha tuned on five demo queries</span></li>
+        <li><span class="strike">recency as a filter</span>: last year’s 10-K vanishes when it’s the only answer</li>
+        <li><span class="strike">unlogged business boosts</span>: nobody can explain the ranking</li>
+        <li><span class="strike">the same weights after swapping the embedding model</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <h2 id="real-world">In the real world</h2>
+  <table class="hand">
+    <tr><th>pattern</th><th>where you’ll meet it</th></tr>
+    <tr><td>Hybrid with RRF or linear fusion</td><td>Elasticsearch <code>rrf</code> and <code>linear</code> retrievers (with min-max normalisation); OpenSearch hybrid query with a normalization-processor (min_max or l2, arithmetic or harmonic mean) or RRF</td></tr>
+    <tr><td>One alpha knob</td><td>Weaviate hybrid search <code>alpha</code> (0 = keyword, 1 = vector) with relativeScoreFusion or rankedFusion</td></tr>
+    <tr><td>Fusion in a vector DB</td><td>Qdrant Query API prefetch with <code>fusion: rrf</code> or <code>dbsf</code> (distribution-based score fusion); Pinecone sparse-dense vectors scaled by alpha</td></tr>
+    <tr><td>Rank expressions</td><td>Vespa rank profiles (bm25, closeness, freshness, first-phase and second-phase ranking); Azure AI Search hybrid with RRF, scoring profiles and per-query vector weight</td></tr>
+    <tr><td>By hand in Postgres</td><td>pgvector <code>&lt;=&gt;</code> plus <code>tsvector</code>/<code>ts_rank</code>, fused with an RRF in SQL (two CTEs, <code>1.0/(60 + rank)</code>, summed)</td></tr>
+    <tr><td>Field boosts and decay</td><td>Elasticsearch <code>multi_match</code> with <code>title^3</code>, <code>function_score</code> with gauss/exp decay; Solr <code>qf</code> and <code>bf</code></td></tr>
+    <tr><td>Learning to rank</td><td>Elasticsearch LTR, OpenSearch LTR plugin, Solr LTR, Vespa with XGBoost/LightGBM, LambdaMART in LightGBM</td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p>
+
+  <h2>5 · Check yourself</h2>
+  <div class="cards quiz" id="quiz" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— next: ⑩ Reranking with Cross-Encoders, reading query and document together</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const pressed = (wrap, b) => wrap.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+const minmax = a => { const lo = Math.min(...a), hi = Math.max(...a); return a.map(x => hi > lo ? (x - lo) / (hi - lo) : 0); };
+const zscore = a => { const m = a.reduce((s, x) => s + x, 0) / a.length, sd = Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / a.length) || 1; return a.map(x => (x - m) / sd); };
+const bar = (v, cls, max = 1) => `<span class="bar ${cls}" style="width:${Math.max(2, Math.min(1, v / max) * 40)}px"></span>`;
+
+// ---------- Lab A ----------
+const DOCS = [
+  { id: 'A', t: '10-K cover page and Item 7 header (accession 0000320193-23-000106)', bm: 18.4, cos: 0.62, exact: true },
+  { id: 'B', t: 'Income statement: operating income $114,301M on net sales $383,285M', bm: 9.1, cos: 0.84 },
+  { id: 'C', t: 'MD&A: gross margin and operating expenses, FY2023', bm: 6.2, cos: 0.81 },
+  { id: 'D', t: 'Microsoft FY2023: operating income up 6%', bm: 7.4, cos: 0.79 },
+  { id: 'E', t: 'Apple FY2022 10-K: operating income $119,437M', bm: 10.8, cos: 0.77 },
+  { id: 'F', t: 'Risk factors: competitive pressure on margins', bm: 3.0, cos: 0.73 },
+];
+let normMode = 'minmax';
+function labA() {
+  const al = +$('alpha').value; $('alphaV').textContent = al.toFixed(2);
+  const f = normMode === 'minmax' ? minmax : normMode === 'z' ? zscore : (a => a);
+  const nb = f(DOCS.map(d => d.bm)), nd = f(DOCS.map(d => d.cos));
+  const rows = DOCS.map((d, i) => ({ ...d, nb: nb[i], nd: nd[i], s: al * nd[i] + (1 - al) * nb[i] })).sort((x, y) => y.s - x.s);
+  $('tA').innerHTML = `<tr><th>#</th><th>chunk</th><th class="num">bm25</th><th class="num">cosine</th><th class="num">norm bm25</th><th class="num">norm dense</th><th class="num">fused</th></tr>` +
+    rows.map((r, i) => `<tr class="${r.exact ? 'exact' : ''}"><td class="rk">${i + 1}</td><td>${esc(r.t)}</td><td class="num">${r.bm.toFixed(1)}</td><td class="num">${r.cos.toFixed(2)}</td>
+      <td class="num">${r.nb.toFixed(2)}</td><td class="num">${r.nd.toFixed(2)}</td><td class="num">${r.s.toFixed(2)}</td></tr>`).join('');
+  const pos = rows.findIndex(r => r.exact) + 1, top = rows[0];
+  let msg = `The exact-ID chunk (highlighted) is <b>#${pos}</b>. Top result: <b>${esc(top.t)}</b>. `;
+  if (normMode === 'none') msg += al < 0.97 ? `<span class="red">Without normalisation BM25 (0–18) swamps cosine (0.6–0.9), so alpha barely matters until it’s above ~0.97.</span>` : `Only at alpha near 1 does the cosine finally count, and then BM25 is ignored.`;
+  else if (pos <= 2 && rows.slice(0, 2).some(r => r.id === 'B')) msg += `<span class="green">A good blend: the accession number and the income statement both make the top two.</span>`;
+  else if (pos <= 2) msg += `The exact ID is near the top, but the FY2023 income statement is only #${rows.findIndex(r => r.id === 'B') + 1}. Nudge alpha up a little.`;
+  else if (al >= 0.5) msg += `High alpha trusts meaning over words, so the exact ID sinks below paraphrases. Bad for ID lookups.`;
+  else msg += `Low alpha trusts keywords: IDs win, but paraphrases and tables with different wording drop.`;
+  $('outA').innerHTML = msg;
+}
+$('alpha').oninput = labA;
+$('norm').onclick = e => { const b = e.target.closest('button'); if (!b) return; normMode = b.dataset.n; pressed($('norm'), b); labA(); };
+labA();
+
+// ---------- Lab B ----------
+const rankOf = key => { const o = [...DOCS].sort((x, y) => y[key] - x[key]); return Object.fromEntries(o.map((d, i) => [d.id, i + 1])); };
+const RB = rankOf('bm'), RD = rankOf('cos');
+function labB() {
+  const k = +$('k').value, wb = +$('wb').value, wd = +$('wd').value;
+  $('kV').textContent = k; $('wbV').textContent = wb.toFixed(1); $('wdV').textContent = wd.toFixed(1);
+  const rows = DOCS.map(d => { const a = wb / (k + RB[d.id]), b = wd / (k + RD[d.id]); return { ...d, a, b, s: a + b }; }).sort((x, y) => y.s - x.s);
+  const mx = rows[0].s || 1;
+  $('tB').innerHTML = `<tr><th>#</th><th>chunk</th><th class="num">bm25 rank</th><th class="num">dense rank</th><th class="num">RRF ×1000</th><th></th></tr>` +
+    rows.map((r, i) => `<tr class="${r.exact ? 'exact' : ''}"><td class="rk">${i + 1}</td><td>${esc(r.t)}</td><td class="num">${RB[r.id]}</td><td class="num">${RD[r.id]}</td>
+      <td class="num">${(r.s * 1000).toFixed(2)}</td><td style="white-space:nowrap">${bar(r.a, 'b', mx)}${bar(r.b, 'd', mx)}</td></tr>`).join('');
+  const spread = (rows[0].s - rows[rows.length - 1].s) / rows[0].s;
+  $('outB').innerHTML = `Top: <b>${esc(rows[0].t)}</b>. The gap between #1 and #6 is <b>${(spread * 100).toFixed(0)}%</b> of the top score. ` +
+    (k <= 10 ? 'Small k: being #1 in either list is worth a lot, so single-list winners rise.' : k >= 50 ? 'Large k: scores are close together, and documents ranked well in <i>both</i> lists win.' : 'Medium k: a balance between single-list winners and consensus.') +
+    ` Red bars are the BM25 share, purple bars the dense share.`;
+}
+['k', 'wb', 'wd'].forEach(id => $(id).oninput = labB);
+labB();
+
+// ---------- Lab C ----------
+const REC = [
+  { t: 'Q1 FY2024 10-Q: gross margin outlook', rel: 0.74, age: 20, fy: 2024 },
+  { t: 'FY2023 10-K MD&A: gross margin 44.1%', rel: 0.78, age: 110, fy: 2023 },
+  { t: 'Q3 FY2023 10-Q: gross margin by segment', rel: 0.80, age: 200, fy: 2023 },
+  { t: 'FY2021 10-K MD&A: gross margin 41.8%', rel: 0.86, age: 760, fy: 2021 },
+  { t: 'FY2019 10-K: gross margin discussion', rel: 0.83, age: 1490, fy: 2019 },
+];
+function labC() {
+  const w = +$('rw').value, h = +$('hl').value, flt = $('flt').checked;
+  $('rwV').textContent = w.toFixed(2); $('hlV').textContent = h;
+  const rows = REC.map(d => { const r = 0.5 ** (d.age / h); return { ...d, r, s: (1 - w) * d.rel + w * r, gone: flt && d.fy < 2023 }; })
+    .sort((x, y) => (x.gone - y.gone) || (y.s - x.s));
+  let n = 0;
+  $('tC').innerHTML = `<tr><th>#</th><th>chunk</th><th class="num">age (days)</th><th class="num">relevance</th><th class="num">recency</th><th class="num">score</th></tr>` +
+    rows.map(r => `<tr class="${r.gone ? 'gone' : ''}"><td class="rk">${r.gone ? '–' : ++n}</td><td>${esc(r.t)}</td><td class="num">${r.age}</td><td class="num">${r.rel.toFixed(2)}</td>
+      <td class="num">${r.r.toFixed(2)}</td><td class="num">${r.gone ? 'filtered' : r.s.toFixed(3)}</td></tr>`).join('');
+  const top = rows[0];
+  $('outC').innerHTML = w === 0 ? `<span class="red">No recency weight: the FY2021 filing wins on wording alone, a stale answer to a “latest” question.</span>`
+    : top.age <= 30 ? `<span class="green">The newest 10-Q is on top, and older filings are still there below it if the question needs them.</span>`
+    : `Recency is on, but not strong enough yet. Raise w or shorten the half-life. Current top: <b>${esc(top.t)}</b>.` +
+      (flt ? ' The filter already removed pre-2023 filings outright.' : '');
+}
+['rw', 'hl', 'flt'].forEach(id => $(id).oninput = labC);
+labC();
+
+// ---------- Lab D ----------
+const SETS = {
+  a: [[[15, 0.60, 2], [8, 0.80, 0], [6, 0.78, 1], [3, 0.75, 0], [2, 0.70, 0]],
+      [[9, 0.70, 0], [7, 0.72, 0], [2, 0.86, 2], [1, 0.82, 1], [4, 0.65, 0]],
+      [[10, 0.76, 2], [11, 0.66, 0], [5, 0.83, 1], [7, 0.76, 0], [1, 0.79, 0]],
+      [[6, 0.77, 1], [12, 0.70, 0], [9, 0.74, 2], [3, 0.84, 0], [8, 0.62, 0]]],
+  b: [[[15, 0.71, 2], [8, 0.74, 0], [6, 0.77, 1], [3, 0.73, 0], [2, 0.72, 0]],
+      [[9, 0.66, 0], [7, 0.70, 0], [2, 0.88, 2], [1, 0.85, 1], [4, 0.60, 0]],
+      [[10, 0.86, 2], [11, 0.62, 0], [5, 0.84, 1], [7, 0.70, 0], [1, 0.78, 0]],
+      [[6, 0.80, 1], [12, 0.64, 0], [9, 0.87, 2], [3, 0.76, 0], [8, 0.61, 0]]],
+};
+function ndcg(q, al, k = 3) {
+  const b = minmax(q.map(d => d[0])), c = minmax(q.map(d => d[1]));
+  const ord = q.map((d, i) => [al * c[i] + (1 - al) * b[i], d[2]]).sort((x, y) => y[0] - x[0]).map(x => x[1]);
+  const dcg = r => r.slice(0, k).reduce((s, g, i) => s + (2 ** g - 1) / Math.log2(i + 2), 0);
+  return dcg(ord) / dcg(q.map(d => d[2]).sort((x, y) => y - x));
+}
+function labD(m) {
+  const al = Array.from({ length: 11 }, (_, i) => i / 10);
+  const v = al.map(a => SETS[m].reduce((s, q) => s + ndcg(q, a), 0) / SETS[m].length);
+  const best = v.indexOf(Math.max(...v));
+  const W = 560, H = 210, x0 = 40, bw = 40, y = s => 180 - s * 160;
+  $('grid').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:620px;height:auto" role="img" aria-label="NDCG at 3 for alpha from 0 to 1; best alpha ${al[best]}">
+    <line x1="${x0 - 4}" y1="180" x2="${x0 + 11 * 46}" y2="180" stroke="#555"/>
+    ${[0, 0.5, 1].map(t => `<text x="${x0 - 8}" y="${y(t) + 4}" text-anchor="end">${t}</text><line x1="${x0 - 4}" y1="${y(t)}" x2="${x0 + 11 * 46}" y2="${y(t)}" stroke="#ddd"/>`).join('')}
+    ${v.map((s, i) => `<rect x="${x0 + i * 46}" y="${y(s)}" width="${bw}" height="${180 - y(s)}" rx="4" fill="${i === best ? '#c0392b' : '#1f3a93'}" opacity="${i === best ? 1 : 0.55}"><title>alpha ${al[i]}: NDCG@3 ${s.toFixed(3)}</title></rect>
+      <text x="${x0 + i * 46 + bw / 2}" y="198" text-anchor="middle">${al[i]}</text>
+      <text x="${x0 + i * 46 + bw / 2}" y="${y(s) - 4}" text-anchor="middle">${s.toFixed(2)}</text>`).join('')}
+    <text x="${x0 + 5 * 46}" y="${H}" text-anchor="middle">alpha</text></svg>`;
+  $('outD').innerHTML = `Best alpha for <b>model ${m.toUpperCase()}</b>: <b>${al[best]}</b> (NDCG@3 ${v[best].toFixed(3)}). ` +
+    (m === 'a' ? 'Now switch to model B: same queries, same labels, new embeddings.' : `<span class="red">The best alpha moved from 0.3 to ${al[best]}.</span> Keeping the old weight would leave quality on the table, so re-run the grid after every model change.`);
+}
+$('mdl').onclick = e => { const b = e.target.closest('button'); if (!b) return; pressed($('mdl'), b); labD(b.dataset.m); };
+labD('a');
+
+// ---------- quiz ----------
+const Q = [
+  ['You add raw BM25 scores (0–20) to raw cosine scores (0.6–0.9) with alpha = 0.5. What happens?',
+   ['A fair 50/50 blend', 'BM25 decides almost every ranking', 'Cosine decides almost every ranking', 'The engine throws an error'], 1,
+   'The signals are on different scales. Normalise first (min-max or z-score) or fuse ranks with RRF.'],
+  ['In `alpha·dense + (1 − alpha)·bm25`, what does alpha = 1 mean?',
+   ['Pure keyword search', 'Pure vector search', 'Equal weights', 'No search at all'], 1,
+   'alpha is the dense weight. 1 means vector only, 0 means keyword only.'],
+  ['Why does Reciprocal Rank Fusion need no normalisation?',
+   ['It uses only ranks, not raw scores', 'It only works with cosine scores', 'It normalises internally with z-scores', 'It runs after the reranker'], 0,
+   '1/(k + rank) only looks at positions, so the score scales of the two retrievers never meet.'],
+  ['You lower RRF’s k from 60 to 2. What changes?',
+   ['Nothing', 'Documents ranked #1 in one list gain a lot of weight', 'Consensus documents win more often', 'Only the dense list counts'], 1,
+   'A small k makes 1/(k + 1) much bigger than 1/(k + 5), so single-list winners rise. A large k rewards agreement between lists.'],
+  ['A user asks for Apple’s FY2023 operating margin. How should fiscal_year be applied?',
+   ['A hard filter: fiscal_year = 2023', 'A soft recency boost', 'Ignore it, since embeddings capture the year', 'A business boost'], 0,
+   'The question pins the value, so filter. Boosts are for preferences such as “newer is usually better”.'],
+  ['A recency half-life of 90 days. What is the recency score of a 180-day-old document?',
+   ['0.5', '0.25', '0.125', '0'], 1,
+   '0.5^(180/90) = 0.25. Each half-life halves it again, but it never reaches zero, so the document stays findable.'],
+  ['You swap in a new embedding model. What should happen to alpha?',
+   ['Nothing; alpha is model-independent', 'Re-run the grid search on the labelled set', 'Set it to 0.5', 'Set it to 1, since the new model is better'], 1,
+   'A new model changes the dense score distribution, so the best blend moves. Measure it, don’t assume it.'],
+  ['What is the most reliable way to choose fusion weights?',
+   ['Try a few demo queries and eyeball the results', 'Grid search on a labelled set, scored with NDCG or recall@k, checked on a held-out split', 'Copy the vendor default', 'Let the LLM choose at query time'], 1,
+   'Weights are hyperparameters. Tune them against labels, and report on queries you didn’t tune on.'],
+  ['Which signal should never be a soft boost?',
+   ['Recency', 'Title matches', 'Document permissions', 'Popularity'], 2,
+   'A boost can only reorder results, so a document the user mustn’t see can still appear. Access control is always a filter.'],
+];
+Q.forEach((q, i) => { const n = q[1].length, r = (i * 3 + 2) % n; q[1] = q[1].map((_, j) => q[1][(j + r) % n]); q[2] = (q[2] - r + n) % n; });
+let qr = 0, qd = 0;
+$('quiz').innerHTML = Q.map(([q, opts], i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q)}</p>
+  <div class="opts">${opts.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quiz').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const [, , a, w] = Q[card.dataset.i], ok = +b.dataset.j === a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.weights3d = {
+  loop: 13,
+  view: { target: [0.6, 0, 0.4], w: 25, d: 15, el: 50 },
+  steps: [
+    { t: 0.0, text: 'A question arrives: “What was Apple’s FY2023 operating margin? (10-K 0000320193-23-000106)”. It is sent to two retrievers at once.' },
+    { t: 1.2, text: 'BM25 scores keyword overlap. It nails the accession number but gives scores from 0 to about 18, with no fixed ceiling.' },
+    { t: 2.4, text: 'The vector index scores meaning. It finds the income-statement table even though it never says “margin”, with cosines in a narrow 0.6–0.9 band.' },
+    { t: 4.0, text: 'Fusion: normalise both lists (or use ranks with RRF, k = 60), then weigh them. Here alpha = 0.3 for dense and 0.7 for BM25, tuned on a labelled set.' },
+    { t: 6.4, text: 'Soft boosts are added on top: a title or section-header match and a recency decay. Hard filters (ticker = AAPL, fiscal_year = 2023, permissions) were applied before scoring.' },
+    { t: 8.4, text: 'One fused top-k list goes out to the cross-encoder reranker (next page). Every weight is logged with the result, so the ranking can be explained and re-tuned.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, THREE, rb, mesh } = c;
+    const usr = c.obj('person', -10.2, 0, 'Question', 'Apple FY2023 op. margin');
+    const bm = c.obj(c.SHAPES.server({ color: 0x3f6b55, emi: C.ingest }), -4.6, -3.4, 'BM25 index', 'scores 0 → ~18');
+    const vec = c.obj(c.SHAPES.database(C.kb), -4.6, 3.4, 'Vector index', 'cosine 0.6 → 0.9');
+
+    const sc = new THREE.Group(); sc.userData.glow = []; sc.userData.h = 2.6;
+    const base = mesh(new THREE.CylinderGeometry(0.8, 0.95, 0.18, 32), C.steel); base.position.y = 0.09; sc.add(base);
+    const post = mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.0, 12), C.steel); post.position.y = 1.1; sc.add(post);
+    const beam = new THREE.Group(); beam.position.y = 2.15; sc.add(beam);
+    const bar = rb(0.3, 0.22, 4.2, C.serve, { r: 0.05 }); beam.add(bar); sc.userData.glow.push(bar);
+    for (const z of [-1.95, 1.95]) {
+      const pan = mesh(new THREE.CylinderGeometry(0.62, 0.45, 0.14, 28), z < 0 ? C.ingest : C.kb); pan.position.set(0, -0.55, z); beam.add(pan); sc.userData.glow.push(pan);
+      const str = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 6), 0x6b7684); str.position.set(0, -0.28, z); beam.add(str);
+    }
+    const fuse = c.obj(sc, 1.6, 0, 'Fusion', 'normalise · weigh · boost', { lift: 0.9 });
+    c.note('<b>0.7 × bm25</b>', 3.4, -2.2, 1.6);
+    c.note('<b>0.3 × dense</b>', 3.4, 2.4, 1.6);
+    const out = c.obj('cards', 7.0, 0, 'Fused top-k', 'ranked list');
+    const rr = c.obj('signpost', 10.6, 0, 'To reranker', '⑩ cross-encoder', { rot: 0 });
+
+    c.lane([V(-10.2, 0), V(-7.6, 0), V(-7.6, -3.4), V(-4.6, -3.4)]);
+    c.lane([V(-7.6, 0), V(-7.6, 3.4), V(-4.6, 3.4)]);
+    c.lane([V(-4.6, -3.4), V(-1.4, -3.4), V(-1.4, 0), V(1.6, 0)]);
+    c.lane([V(-4.6, 3.4), V(-1.4, 3.4), V(-1.4, 0)]);
+    c.lane([V(1.6, 0), V(7.0, 0), V(10.6, 0)]);
+
+    c.packet({ pts: [V(-10.2, 0), V(-7.6, 0), V(-7.6, -3.4), V(-4.6, -3.4)], t0: 0.2, t1: 1.2, kind: 'ask', from: usr, to: bm, label: 'query' });
+    c.packet({ pts: [V(-10.2, 0), V(-7.6, 0), V(-7.6, 3.4), V(-4.6, 3.4)], t0: 0.2, t1: 1.2, kind: 'ask', to: vec });
+    c.packet({ pts: [V(-4.6, -3.4), V(-1.4, -3.4), V(-1.4, 0), V(1.6, 0)], t0: 1.6, t1: 3.6, kind: 'chunk', n: 4, st: 0.18, to: fuse, label: 'bm25 list' });
+    c.packet({ pts: [V(-4.6, 3.4), V(-1.4, 3.4), V(-1.4, 0), V(1.6, 0)], t0: 2.6, t1: 4.2, kind: 'vec', n: 4, st: 0.18, to: fuse, label: 'dense list' });
+    c.packet({ pts: [V(1.6, 0), V(7.0, 0)], t0: 6.9, t1: 7.9, kind: 'doc', n: 5, st: 0.16, to: out, label: 'fused, ranked' });
+    c.packet({ pts: [V(7.0, 0), V(10.6, 0)], t0: 8.8, t1: 9.8, kind: 'doc', color: P.ans, to: rr, label: 'top 50' });
+
+    c.tick((t) => {
+      const a = t < 4.0 ? 0 : Math.min(1, (t - 4.0) / 0.8);
+      beam.rotation.x = -0.16 * a + (t > 4.8 && t < 6.4 ? 0.025 * Math.sin((t - 4.8) * 6) : 0);
+    });
+  },
+};
+boot(D);
+</script>
+</body>
+</html>

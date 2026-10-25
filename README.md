@@ -20,7 +20,15 @@ Follow them in order, or jump to whatever you need.
 7. [LLM Observability](https://devlcodes.github.io/agentic-ai-notebook/llm-observability.html): OpenTelemetry traces, cost and latency, production signals
 8. [AI Governance](https://devlcodes.github.io/agentic-ai-notebook/ai-governance.html): prompt injection, OWASP LLM Top 10, EU AI Act, NIST, guardrails
 
-Coming next: retrieval, agent memory, production, and the model layer.
+Then the retrieval and model track:
+
+9. [Weights in Retrieval](https://devlcodes.github.io/agentic-ai-notebook/retrieval-weights.html): hybrid fusion weights, reciprocal rank fusion, field and recency boosts, tuning on a labelled set
+10. [Reranking with Cross-Encoders](https://devlcodes.github.io/agentic-ai-notebook/reranking-cross-encoders.html): bi-encoders vs cross-encoders, retrieve-then-rerank, latency budgets, ColBERT and LLM rerankers
+11. [Citations](https://devlcodes.github.io/agentic-ai-notebook/citations.html): citation granularity, native citation APIs, verifying citations in code, citation precision and recall
+12. [Confidence Scoring](https://devlcodes.github.io/agentic-ai-notebook/confidence-scoring.html): confidence signals, calibration, thresholds as a cost decision, abstain and escalate
+13. [Open-Weight Models](https://devlcodes.github.io/agentic-ai-notebook/open-weight-models.html): open-weight vs open-source, licences, VRAM math, quantization, self-hosting
+
+Coming next: agent memory, production, and fine-tuning.
 
 ## System design walkthroughs
 
