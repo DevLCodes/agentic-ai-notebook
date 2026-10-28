@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reranking with Cross-Encoders: notebook</title>
+<meta name="description" content="Bi-encoders vs cross-encoders, the retrieve-then-rerank funnel, latency budgets, score calibration, ColBERT and LLM rerankers, with hands-on labs.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Reranking with Cross-Encoders">
+<meta property="og:description" content="Bi-encoders vs cross-encoders, the retrieve-then-rerank funnel, latency budgets, score calibration, ColBERT and LLM rerankers, with hands-on labs.">
+<meta property="og:url" content="https://devlcodes.github.io/agentic-ai-notebook/reranking-cross-encoders.html">
+<meta property="og:image" content="https://devlcodes.github.io/agentic-ai-notebook/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  /* ponytail: system handwriting fonts only (macOS: Noteworthy / Bradley Hand / Marker Felt), so the page works offline */
+  :root {
+    --hand: "Noteworthy", "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --title: "Marker Felt", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
+    --mono: "Courier New", ui-monospace, Menlo, monospace;
+    --desk: #e9edf2; --hole: #d3dae3;
+    --paper: #fdfbf3; --rule: #c9dcef; --margin: #e8a0a0; --ink: #1f3a93; --pencil: #555;
+    --red: #c0392b; --green: #1e8449; --hl: #ffe066; --sticky: #fff59d; --pink: #ffd1dc; --blue: #cdeafe; --mint: #c8f0d8; --tan: #fbe6a2;
+    --lh: 30px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font: 19px/var(--lh) var(--hand); color: #222;
+         background: var(--desk) radial-gradient(#d6dde6 1px, transparent 1.5px) 0 0 / 22px 22px; }
+  .page { position: relative; max-width: 1040px; margin: 34px auto 60px; padding: 40px 48px 70px 110px;
+          background-color: var(--paper);
+          background-image: linear-gradient(transparent calc(var(--lh) - 1px), var(--rule) calc(var(--lh) - 1px));
+          background-size: 100% var(--lh); background-position: 0 12px;
+          box-shadow: 0 8px 28px rgba(40,60,90,.18), 0 0 0 1px #e3ddc8; border-radius: 3px 8px 8px 3px; }
+  .page::before { content: ""; position: absolute; top: 0; bottom: 0; left: 82px; border-left: 2px solid var(--margin); }
+  .page::after { content: ""; position: absolute; top: 0; bottom: 0; left: 22px; width: 26px;
+                 background: radial-gradient(circle, var(--hole) 9px, transparent 10px) 0 40px / 26px 180px repeat-y; }
+  @media (max-width: 760px) { .page { padding: 28px 18px 60px 64px; } .page::before { left: 52px; } .page::after { left: 10px; } }
+
+  h1, h2, h3 { font-family: var(--title); color: var(--ink); font-weight: normal; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 0 0 6px; }
+  h2 { font-size: 32px; margin: 64px 0 10px; display: inline-block; position: relative; z-index: 0; }
+  h2::after { content: ""; position: absolute; left: -6px; right: -10px; bottom: 2px; height: 12px;
+              background: var(--hl); opacity: .6; z-index: -1; transform: rotate(-1deg); border-radius: 4px; }
+  h2 small { font-size: 18px; color: var(--pencil); }
+  h3 { font-size: 23px; margin: 26px 0 4px; }
+  .part { font-family: var(--title); color: var(--red); font-size: 18px; letter-spacing: .08em; margin: 70px 0 -50px; text-transform: uppercase; }
+  p { margin: 0 0 var(--lh); }
+  a { color: var(--ink); }
+  code { font-family: var(--mono); font-size: 16px; background: rgba(31,58,147,.07); padding: 0 4px; border-radius: 3px; }
+  pre { font: 13.5px/1.5 var(--mono); background: #fffef8; border: 1.5px dashed #b9b2a0; padding: 10px 14px;
+        margin: 8px 0 16px; overflow-x: auto; white-space: pre; }
+  pre .c { color: #8a8a80; }
+  .hl { background: linear-gradient(transparent 50%, var(--hl) 50%, var(--hl) 88%, transparent 88%); }
+  .red { color: var(--red); } .green { color: var(--green); } .ink { color: var(--ink); } .muted { color: var(--pencil); }
+  .strike { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+  .nav { font-size: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  .box { border: 2px solid var(--ink); padding: 14px 18px; margin: 14px 0 22px; background: rgba(255,255,255,.55);
+         border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  .sticky { background: var(--sticky); padding: 16px 18px 12px; margin: 18px 0 26px; position: relative;
+            box-shadow: 2px 6px 12px rgba(0,0,0,.16); transform: rotate(-1.2deg); line-height: 1.5; }
+  .sticky.pink { background: var(--pink); transform: rotate(1deg); }
+  .sticky.blue { background: var(--blue); transform: rotate(-.6deg); }
+  .sticky.mint { background: var(--mint); transform: rotate(.7deg); }
+  .sticky::before { content: ""; position: absolute; top: -12px; left: 50%; width: 110px; height: 24px; margin-left: -55px;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); transform: rotate(-3deg); }
+  .sticky b { font-family: var(--title); font-weight: normal; font-size: 21px; }
+  .sticky ul, .sticky ol { margin: 4px 0 0; padding-left: 22px; }
+  .cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 26px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+
+  svg.doodle { width: 100%; height: auto; display: block; margin: 6px 0 14px; overflow: visible; }
+  .doodle text { font-family: var(--hand); fill: var(--ink); font-size: 15px; }
+  .doodle .t { font-family: var(--title); font-size: 19px; }
+  .doodle .r { fill: var(--red); } .doodle .g { fill: var(--green); } .doodle .p { fill: var(--pencil); }
+  .doodle .s { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .doodle .sb { fill: #fff; stroke: #222; stroke-width: 2.4; }
+  .doodle .tan { fill: var(--tan); stroke: #222; stroke-width: 2.4; }
+  .doodle a:hover .tan, .doodle a:focus .tan { fill: var(--hl); }
+  .doodle a text { fill: #222; }
+  .doodle .sr { fill: none; stroke: var(--red); stroke-width: 2.2; stroke-linecap: round; }
+  .doodle .sg { fill: none; stroke: var(--green); stroke-width: 2.2; stroke-linecap: round; }
+  .caption { text-align: center; font-size: 16px; color: var(--pencil); margin-top: -8px; }
+
+  button { font: 17px/1.3 var(--hand); color: #222; cursor: pointer; background: #fffef8; padding: 4px 12px;
+           border: 2px solid #444; border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+  button:hover:not(:disabled) { background: var(--hl); }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, label:focus-within, a:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: var(--hl); border-color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; margin-right: 14px; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--ink); }
+  input[type=range] { accent-color: var(--ink); width: 180px; }
+  .out { background: #fff; border-left: 4px solid var(--ink); padding: 8px 12px; margin: 8px 0; line-height: 1.5; font-size: 17px; }
+  .out.bad { border-left-color: var(--red); } .out.good { border-left-color: var(--green); }
+  .big { font-family: var(--title); font-size: 34px; color: var(--ink); }
+
+  table.hand { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+  table.hand th { font-family: var(--title); font-weight: normal; color: var(--ink); text-align: left; border-bottom: 2px solid var(--ink); padding: 4px 6px; }
+  table.hand td { border-bottom: 1px dashed #c8c2ae; padding: 5px 6px; vertical-align: top; }
+  td.pass { color: var(--green); font-weight: bold; } td.fail { color: var(--red); font-weight: bold; }
+  col.on, td.on, th.on { background: rgba(255,224,102,.45); }
+
+  /* sorter cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; margin: 14px 0; }
+  .card { background: var(--sticky); padding: 14px 14px 10px; box-shadow: 2px 5px 10px rgba(0,0,0,.14); line-height: 1.4; }
+  .card:nth-child(3n+2) { background: var(--pink); transform: rotate(.8deg); } .card:nth-child(3n) { background: var(--blue); transform: rotate(-.7deg); }
+  .card:nth-child(3n+1) { transform: rotate(-.9deg); }
+  .card .q { margin: 0 0 8px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card .opts button { font-size: 15px; padding: 2px 9px; }
+  .card button.right { background: #b9f2c6; border-color: var(--green); }
+  .card button.wrong { background: #ffc0b8; border-color: var(--red); text-decoration: line-through; }
+  .card .why { display: none; margin-top: 8px; font-size: 16px; }
+  .card.done .why { display: block; }
+  .tally { font-family: var(--title); color: var(--ink); }
+
+  /* judge calibration */
+  .ans { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 12px; align-items: center; }
+  .ans .txt { background: #fff; padding: 6px 10px; border-left: 3px solid #bbb; font-size: 16px; line-height: 1.4; }
+  .ans .jv { font-family: var(--title); min-width: 70px; text-align: center; }
+  .chunk { display: block; background: #fff; border: 1.5px solid #bbb; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .chunk input { margin-right: 6px; accent-color: var(--ink); }
+
+  .quiz .card { transform: none !important; background: #fffef8; border: 1.5px solid #d8d2bf; box-shadow: none; }
+  .quiz .card .opts { flex-direction: column; align-items: flex-start; }
+  .quiz .card .opts button { text-align: left; font-size: 16px; }
+  .score { position: sticky; bottom: 14px; text-align: center; margin-top: 18px; }
+  .score span { background: var(--sticky); padding: 4px 18px; box-shadow: 2px 4px 10px rgba(0,0,0,.2); font-family: var(--title); }
+  .sig { text-align: right; font-family: var(--title); color: var(--pencil); transform: rotate(-3deg); margin-top: 30px; }
+</style>
+<link rel="stylesheet" href="assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/>
+    <feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1f3a93" stroke-width="1.8"/></marker>
+  <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <path d="M0,1 L9,5 L0,9" fill="none" stroke="#1e8449" stroke-width="1.8"/></marker>
+</svg>
+
+
+<style>
+  :root { --fg: #222; --muted: var(--pencil); --card: #fffef8; --line: #c8c2ae; --code: #fffef8;
+          --accent: var(--red); --ok: var(--green); --bad: var(--red); }
+  .lede { color: var(--pencil); }
+  .lab { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 22px; align-items: start; }
+  @media (max-width: 860px) { .lab { grid-template-columns: 1fr; } }
+  ol.rank { list-style: none; margin: 0; padding: 0; counter-reset: r; }
+  ol.rank li { counter-increment: r; display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; align-items: start;
+               background: #fff; border: 1.5px solid #d8d2bf; border-radius: 6px; padding: 5px 9px; margin: 5px 0;
+               font-size: 15.5px; line-height: 1.35; transition: transform .35s; }
+  ol.rank li::before { content: counter(r); font-family: var(--title); color: var(--ink); font-size: 18px; }
+  ol.rank li.cut { border-top: 3px dashed var(--red); margin-top: 12px; }
+  ol.rank li.g3 { border-left: 6px solid var(--green); } ol.rank li.g2 { border-left: 6px solid #7fbf8f; }
+  ol.rank li.g1 { border-left: 6px solid var(--tan); } ol.rank li.g0 { border-left: 6px solid #e6b3ad; }
+  ol.rank li.gone { opacity: .35; text-decoration: line-through; }
+  ol.rank .sc { font-family: var(--mono); font-size: 13.5px; color: var(--pencil); text-align: right; white-space: nowrap; }
+  .metric { display: inline-block; margin: 0 16px 6px 0; }
+  .metric b { font-family: var(--title); font-weight: normal; font-size: 26px; color: var(--ink); }
+  .metric.up b { color: var(--green); } .metric.down b { color: var(--red); }
+  .legend { font-size: 14.5px; color: var(--pencil); line-height: 1.5; }
+  .legend i { display: inline-block; width: 12px; height: 12px; margin: 0 4px 0 10px; vertical-align: -1px; }
+  .sl { display: grid; grid-template-columns: 190px 1fr 92px; gap: 8px; align-items: center; font-size: 16px; margin: 4px 0; }
+  .sl output { font-family: var(--mono); font-size: 14px; text-align: right; }
+  @media (max-width: 600px) { .sl { grid-template-columns: 1fr; } .sl output { text-align: left; } }
+  .verdict { font-family: var(--title); font-size: 22px; }
+  .bar { height: 14px; background: #e3ddc8; border-radius: 7px; overflow: hidden; margin: 6px 0 2px; position: relative; }
+  .bar div { height: 100%; background: var(--green); transition: width .2s, background .2s; }
+  .bar.over div { background: var(--red); }
+  table.ms td, table.ms th { text-align: center; font-family: var(--mono); font-size: 13.5px; }
+  table.ms td.mx { background: rgba(255,224,102,.75); font-weight: bold; }
+  table.ms th:first-child, table.ms td:first-child { text-align: left; }
+  table.cal td.keep { color: var(--green); } table.cal td.drop { color: var(--pencil); text-decoration: line-through; }
+</style>
+<div class="page">
+  <p class="nav muted"><a href="index.html">⌂ Home</a><a href="retrieval-weights.html">← Weights in Retrieval</a><a href="citations.html">⑪ Citations →</a></p>
+  <h1>Reranking with Cross-Encoders</h1>
+  <p class="lede">Vector search finds fifty chunks that <i>look</i> like the question. A cross-encoder reads each one <i>together</i> with the question
+    and decides which actually answers it. <span class="hl">Retrieve wide for recall, rerank narrow for precision.</span>
+    The <a href="system-design/reranking.html">reranking topic page</a> has the short version; this notebook opens the model up.</p>
+
+  <!-- ============ 3D ============ -->
+  <h3>See it in 3D: from fifty lookalikes to five answers</h3>
+  <figure class="fig3d" id="rerank3d">
+    <div class="stage3d" role="img" aria-label="A question goes to a vector index, which returns a wide fan of candidate chunks; each candidate enters a cross-encoder press paired with the question, gets one relevance score, and only the top five, re-ordered, go on to the language model prompt"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagrams below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. The yellow sphere is the question, teal blocks are candidate chunks, and white sheets are the re-ordered top five.</figcaption>
+  </figure>
+
+  <!-- 1 -->
+  <h2>1 · Two ways to score a pair</h2>
+  <p>Both models start from the same kind of transformer. The difference is <b>when the question and the chunk meet</b>.</p>
+  <svg class="doodle" viewBox="0 0 900 300" role="img" aria-label="Left: a bi-encoder encodes the question and chunk separately into two vectors and compares them with a dot product. Right: a cross-encoder reads the question and chunk as one input and outputs a single relevance logit.">
+    <text class="t" x="20" y="28">Bi-encoder (retrieval)</text>
+    <rect class="sb" filter="url(#rough)" x="20" y="50" width="170" height="40" rx="8"/><text x="105" y="75" text-anchor="middle">“FY2023 op margin?”</text>
+    <rect class="sb" filter="url(#rough)" x="220" y="50" width="170" height="40" rx="8"/><text x="305" y="75" text-anchor="middle">chunk text</text>
+    <rect class="tan" filter="url(#rough)" x="40" y="120" width="130" height="44" rx="8"/><text x="105" y="147" text-anchor="middle">encoder</text>
+    <rect class="tan" filter="url(#rough)" x="240" y="120" width="130" height="44" rx="8"/><text x="305" y="147" text-anchor="middle">encoder</text>
+    <path class="s" d="M105,92 L105,116" marker-end="url(#arr)"/><path class="s" d="M305,92 L305,116" marker-end="url(#arr)"/>
+    <text x="105" y="196" text-anchor="middle">q = [0.12, -0.4, …]</text><text x="305" y="196" text-anchor="middle">d = [0.09, -0.3, …]</text>
+    <path class="s" d="M105,166 L105,180"/><path class="s" d="M305,166 L305,180"/>
+    <path class="s" d="M105,206 Q205,250 305,206"/><text x="205" y="262" text-anchor="middle" class="r">score = q · d</text>
+    <text x="205" y="288" text-anchor="middle" class="p">d is computed once, at index time</text>
+    <path class="s" d="M450,20 L450,290" stroke-dasharray="6 8"/>
+    <text class="t" x="490" y="28">Cross-encoder (reranking)</text>
+    <rect class="sb" filter="url(#rough)" x="490" y="50" width="380" height="40" rx="8"/>
+    <text x="680" y="75" text-anchor="middle">[CLS] FY2023 op margin? [SEP] chunk text [SEP]</text>
+    <rect class="tan" filter="url(#rough)" x="560" y="120" width="240" height="60" rx="8"/>
+    <text x="680" y="146" text-anchor="middle">one transformer</text><text x="680" y="168" text-anchor="middle" class="p">every token attends to every token</text>
+    <path class="s" d="M680,92 L680,116" marker-end="url(#arr)"/><path class="s" d="M680,182 L680,214" marker-end="url(#arr)"/>
+    <text x="680" y="240" text-anchor="middle" class="r">one logit: 4.1</text>
+    <text x="680" y="268" text-anchor="middle" class="p">nothing to precompute: one full pass per (query, chunk)</text>
+  </svg>
+  <table class="hand">
+    <tr><th></th><th>bi-encoder</th><th>cross-encoder</th></tr>
+    <tr><td>Input</td><td>query and chunk separately</td><td>query and chunk concatenated</td></tr>
+    <tr><td>Output</td><td>two vectors, compared by cosine or dot product</td><td>one relevance score (a logit)</td></tr>
+    <tr><td>Interaction</td><td>none until the very end: the whole chunk is squeezed into ~384–1,024 numbers first</td><td>token-level: “2023” in the question can attend to “2022” in the chunk and notice they differ</td></tr>
+    <tr><td>Precompute</td><td>yes: embed the corpus once, then ANN search in milliseconds</td><td>no: the score depends on the query, so the model runs at query time</td></tr>
+    <tr><td>Cost per query</td><td>one forward pass (the query) plus an index lookup</td><td>one forward pass <b>per candidate</b>: O(N)</td></tr>
+    <tr><td>Job</td><td>recall: find the 50–100 plausible chunks among millions</td><td>precision: put the right 5 at the top</td></tr>
+  </table>
+  <p>The cross-encoder is more accurate for the same reason it is expensive: it never compresses the chunk before seeing the question.
+    A bi-encoder must decide what a chunk is “about” without knowing what will be asked, so two chunks that share vocabulary
+    (“operating margin”, “gross margin”, a table-of-contents line that says “Operating Margin … page 21”) land close together.
+    Scoring a whole corpus that way is out of the question: FinSight has about 50,000 chunks, so one question would mean 50,000 transformer passes.</p>
+
+  <!-- 2 -->
+  <h2>2 · Lab: rerank the FinSight candidates</h2>
+  <p class="lede">Question: <i>“What was Apple’s FY2023 operating margin?”</i> The answer needs operating income and net sales from the FY2023 10-K
+    (114,301 ÷ 383,285 ≈ 29.8%). Here are eight of the candidates vector search returned. Switch the ordering and watch the metrics.</p>
+  <div class="box">
+    <div class="row" role="group" aria-label="Ordering">
+      <button id="byCos" aria-pressed="true">Order by cosine (bi-encoder)</button>
+      <button id="byCe" aria-pressed="false">Order by cross-encoder</button>
+      <label class="chk" style="margin-left:10px"><input type="checkbox" id="miss"> the answer chunk was never retrieved</label>
+    </div>
+    <div class="lab">
+      <div><ol class="rank" id="rank"></ol>
+        <p class="legend">Grade (human label): <i style="background:var(--green)"></i>3 answers it <i style="background:#7fbf8f"></i>2 half of it
+          <i style="background:var(--tan)"></i>1 related <i style="background:#e6b3ad"></i>0 lookalike. The dashed line is the top-5 cut: only those reach the prompt.</p></div>
+      <div>
+        <div aria-live="polite" id="metrics"></div>
+        <div class="out" id="labnote"></div>
+        <p class="muted" style="font-size:15px;line-height:1.45">NDCG@5 uses gain 2<sup>grade</sup>−1 and a log<sub>2</sub>(rank+1) discount, divided by the best possible top 5.
+          MRR here is 1 ÷ the rank of the chunk graded 3. Scores are illustrative; the filing figures are real.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <h2>3 · The budget: why only the top 50–100</h2>
+  <p>A reranker is a fixed price per pair. The price grows with the number of candidates and the tokens in each pair, and the
+    whole call sits on the critical path before the LLM can start. Do the math before picking a model.</p>
+  <div class="box">
+    <div class="row" role="group" aria-label="Presets">
+      <span class="muted">Presets:</span>
+      <button data-p="0">MiniLM-L6 · CPU</button><button data-p="1">MiniLM-L6 · GPU</button><button data-p="2">bge-reranker-v2-m3 · GPU</button>
+    </div>
+    <div class="sl"><label for="n">Candidates to rerank</label><input type="range" id="n" min="10" max="300" step="10" value="100"><output id="no"></output></div>
+    <div class="sl"><label for="tok">Tokens per pair</label><input type="range" id="tok" min="128" max="1024" step="64" value="512"><output id="toko"></output></div>
+    <div class="sl"><label for="pps">Pairs/s at 512 tokens</label><input type="range" id="pps" min="20" max="2000" step="10" value="400"><output id="ppso"></output></div>
+    <div class="sl"><label for="bud">Rerank budget (p95)</label><input type="range" id="bud" min="50" max="1000" step="10" value="200"><output id="budo"></output></div>
+    <div class="bar" id="bar"><div></div></div>
+    <div aria-live="polite" id="cost"></div>
+  </div>
+  <p class="muted" style="font-size:15px;line-height:1.45">Throughput presets are rough planning numbers, not benchmarks: measure on your own hardware, batch size and chunk length.
+    The model assumes cost grows linearly with tokens; attention is quadratic, so long pairs are worse than this shows. A hosted API
+    (Cohere, Voyage, Jina) replaces this math with one network call, typically on the order of 100–300 ms for ~100 short documents.</p>
+  <div class="cols">
+    <div>
+      <h3>Ways to stay inside the budget</h3>
+      <ul>
+        <li><b>Rerank fewer.</b> Measure recall@k of the first stage. If recall@50 ≈ recall@100, send 50.</li>
+        <li><b>Shorter pairs.</b> Rerank the chunk, not the parent section. Truncate to the model’s trained length (often 512).</li>
+        <li><b>Batch on a GPU.</b> All pairs for one query go in one or a few batches; padding to similar lengths helps.</li>
+        <li><b>Smaller model or distilled model.</b> A 22M-parameter MiniLM is many times cheaper than a 568M-parameter bge-reranker-v2-m3.</li>
+        <li><b>Skip when easy.</b> If the first stage is confident (an exact ID match, one dominant hit), don’t rerank at all; see <a href="system-design/routing.html">routing</a>.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Where it sits</h3>
+      <svg class="doodle" viewBox="0 0 420 250" role="img" aria-label="Funnel: hybrid search returns 100 candidates, the cross-encoder reranks to 10, business rules dedupe to 5, and those go into the prompt">
+        <path class="s" filter="url(#rough)" d="M20,20 L400,20 L320,90 L100,90 Z"/><text x="210" y="50" text-anchor="middle">hybrid search: 100 candidates</text><text x="210" y="74" text-anchor="middle" class="p">~10–50 ms · recall</text>
+        <path class="s" filter="url(#rough)" d="M100,100 L320,100 L270,160 L150,160 Z"/><text x="210" y="128" text-anchor="middle">cross-encoder → 10</text><text x="210" y="150" text-anchor="middle" class="p">~100–300 ms</text>
+        <path class="s" filter="url(#rough)" d="M150,170 L270,170 L245,215 L175,215 Z"/><text x="210" y="198" text-anchor="middle">dedupe → 5</text>
+        <text x="210" y="242" text-anchor="middle" class="r">prompt</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <h2>4 · Scores, thresholds and the middle grounds</h2>
+  <h3>A score is not a probability</h3>
+  <p>A cross-encoder outputs a raw <b>logit</b>. Libraries often pass it through a sigmoid so it lands in 0–1, but that number was trained
+    to <i>order</i> chunks for one query, not to mean “73% likely to be relevant” across queries. Easy questions produce high scores for
+    everything; hard or oddly phrased ones produce low scores even for the right chunk. A fixed cut-off like “drop below 0.7” therefore
+    behaves differently per query type, model and chunk length. If you need a threshold (to say “I couldn’t find this”), pick it on your
+    own labelled set, and re-pick it whenever the model changes. <a href="confidence-scoring.html">Confidence Scoring</a> goes further.</p>
+  <div class="box">
+    <div class="sl"><label for="thr">Threshold on top score</label><input type="range" id="thr" min="0.05" max="0.95" step="0.05" value="0.70"><output id="thro"></output></div>
+    <div class="lab">
+      <table class="hand cal" id="cal"></table>
+      <div aria-live="polite" id="calout"></div>
+    </div>
+  </div>
+
+  <h3>Late interaction: ColBERT’s MaxSim</h3>
+  <p>ColBERT keeps one small vector <b>per token</b> instead of one per chunk. Chunk token vectors are precomputed like a bi-encoder;
+    at query time each query token finds its best-matching chunk token, and the score is the sum of those maxima.
+    You get token-level matching without a transformer pass per pair, at the cost of a much larger index (ColBERTv2 compresses it with residuals).</p>
+  <div class="box">
+    <div class="row" role="group" aria-label="Chunk">
+      <button id="msA" aria-pressed="true">Chunk: FY2023 statement of operations</button><button id="msB" aria-pressed="false">Chunk: FY2023 gross margin %</button>
+    </div>
+    <div style="overflow-x:auto"><table class="hand ms" id="ms"></table></div>
+    <div class="out" id="msout" aria-live="polite"></div>
+    <p class="muted" style="font-size:15px">Similarities are illustrative. Yellow cells are each query token’s maximum.</p>
+  </div>
+
+  <h3>LLM rerankers</h3>
+  <table class="hand">
+    <tr><th>style</th><th>how it works</th><th>trade-off</th></tr>
+    <tr><td>Pointwise</td><td>Score each (query, chunk) alone: “relevant? yes/no” or 0–3. monoT5 is the classic fine-tuned version.</td><td>Parallel and simple; scores drift between calls, same calibration problem.</td></tr>
+    <tr><td>Pairwise</td><td>“Which of these two answers the question better?” Aggregate the wins (duoT5, pairwise ranking prompting).</td><td>Robust judgements, but O(N²) comparisons unless you sort cleverly.</td></tr>
+    <tr><td>Listwise</td><td>Show the model 20 passages and ask for a ranked list of IDs; slide a window over 100 (RankGPT).</td><td>Sees candidates side by side; long prompts, sensitive to input order, slowest.</td></tr>
+  </table>
+  <p>An LLM reranker can follow instructions (“prefer the audited financial statements over press releases”) that a cross-encoder can’t.
+    It is also 10–100× the latency and cost. Treat it as a candidate to beat, not the default.</p>
+
+  <h3>How they are trained</h3>
+  <ul>
+    <li><b>MS MARCO</b>: Bing queries with ~8.8 million passages and human-clicked positives. Most open cross-encoders (the ms-marco MiniLM family) start here.</li>
+    <li><b>Hard negatives</b>: the training negatives are chunks the retriever ranked highly but are wrong (the gross-margin chunk above). Random negatives teach nothing.</li>
+    <li><b>Distillation</b>: a big teacher (a large cross-encoder or an LLM) labels pairs; a small student learns its scores. The same trick trains better bi-encoders from cross-encoder scores.</li>
+    <li><b>Domain fine-tuning</b>: a few thousand (question, good chunk, hard negative) triples from your own logs or evals often beat a bigger general model on filings, contracts or code.</li>
+  </ul>
+
+  <h3>How to tell if it helped</h3>
+  <p>Run the same golden set twice, with and without the reranker, and compare <b>NDCG@10</b> and <b>MRR</b> (see <a href="system-design/evals.html">evals</a>
+    and <a href="testing-and-evals.html">Testing &amp; Evals</a>). Also log <b>first-stage recall@k</b>: if the right chunk isn’t in the 100
+    candidates, no reranker can rescue it, as the lab’s “never retrieved” box shows. Fix recall with <a href="system-design/search-types.html">hybrid search</a>,
+    better <a href="system-design/embeddings.html">embeddings</a> or chunking, then rerank.</p>
+
+  <div class="cols">
+    <div class="sticky">
+      <b>Remember</b>
+      <ul>
+        <li>Bi-encoder: fast, precomputed, recall. Cross-encoder: slow, query-time, precision.</li>
+        <li>Rerank the top 50–100, keep 5–10. Cost is one model pass per candidate.</li>
+        <li>Reranker scores order chunks for one query. They are not calibrated probabilities.</li>
+        <li>Measure NDCG@10 / MRR with and without it, plus first-stage recall.</li>
+      </ul>
+    </div>
+    <div class="sticky pink">
+      <b>Pitfalls</b>
+      <ol>
+        <li><span class="strike">One global threshold</span> copied from a blog post</li>
+        <li><span class="strike">Reranking 1,000 candidates</span> and blowing the p95 budget</li>
+        <li><span class="strike">Expecting the reranker to fix recall</span>: it can only reorder what it’s given</li>
+        <li><span class="strike">Pairs longer than the model’s trained length</span>, silently truncated</li>
+        <li><span class="strike">Shipping it without an A/B on the golden set</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============ real world ============ -->
+  <h2 id="real-world">In the real world</h2>
+  <table class="hand">
+    <tr><th>pattern</th><th>where you’ll meet it</th></tr>
+    <tr><td>Hosted rerank APIs</td><td>Cohere Rerank (3.5 and later), Voyage AI rerank-2.5, Jina Reranker (v2 multilingual, m0 multimodal)</td></tr>
+    <tr><td>Open-weight cross-encoders</td><td>BAAI bge-reranker-v2-m3, mixedbread mxbai-rerank-v2, cross-encoder/ms-marco-MiniLM-L-6-v2 via the sentence-transformers <code>CrossEncoder</code> class</td></tr>
+    <tr><td>Late interaction</td><td>ColBERTv2 and the PLAID engine, often via RAGatouille; Vespa and Qdrant support multi-vector scoring</td></tr>
+    <tr><td>Rerank inside a platform</td><td>Vertex AI ranking API, Amazon Bedrock Rerank, Elastic semantic reranking (<code>text_similarity_reranker</code>), Pinecone hosted rerank models</td></tr>
+    <tr><td>LLM reranking</td><td>RankGPT-style listwise prompts; pointwise relevance grading with a small model such as Claude Haiku or Gemini Flash</td></tr>
+  </table>
+  <p class="muted" style="font-size:15px">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p>
+
+  <!-- 5. Quiz -->
+  <h2>5 · Check yourself</h2>
+  <div class="cards quiz" id="quiz" style="grid-template-columns: 1fr"></div>
+  <div class="score"><span id="score"></span></div>
+  <p class="sig">— next: ⑪ Citations, pointing every claim at the chunk it came from</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const md = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const sig = x => 1 / (1 + Math.exp(-x));
+
+// ---------- 2. rerank lab ----------
+const CAND = [
+  { id: 'A', t: 'Statement of Operations, FY2023 ($M): total net sales 383,285 · operating income 114,301', g: 3, cos: 0.78, ce: 4.1 },
+  { id: 'B', t: 'Total gross margin percentage was 44.1% in 2023, compared to 43.3% in 2022', g: 0, cos: 0.87, ce: -1.6 },
+  { id: 'C', t: '2022: operating income 119,437 on total net sales 394,328 ($M)', g: 1, cos: 0.85, ce: 0.9 },
+  { id: 'D', t: 'Item 7. Management’s Discussion and Analysis … Operating Margin … page 21', g: 0, cos: 0.84, ce: -3.2 },
+  { id: 'E', t: 'The Company’s gross and operating margins are subject to volatility and downward pressure', g: 0, cos: 0.83, ce: -2.4 },
+  { id: 'F', t: 'Americas segment operating income was $60,508 million in 2023', g: 1, cos: 0.79, ce: 0.3 },
+  { id: 'G', t: 'Total net sales decreased 3% or $11.0 billion during 2023 compared to 2022', g: 2, cos: 0.76, ce: 2.2 },
+  { id: 'H', t: 'Total operating expenses were $54,847 million, 14% of total net sales, in 2023', g: 2, cos: 0.74, ce: 1.8 },
+];
+const gain = g => 2 ** g - 1;
+const dcg = gs => gs.slice(0, 5).reduce((s, g, i) => s + gain(g) / Math.log2(i + 2), 0);
+const IDEAL = dcg(CAND.map(c => c.g).sort((a, b) => b - a));
+function evalOrder(list) {
+  const r = list.findIndex(c => c.g === 3);
+  return { ndcg: dcg(list.map(c => c.g)) / IDEAL, mrr: r < 0 ? 0 : 1 / (r + 1), top5: list.slice(0, 5).filter(c => c.g >= 2).length };
+}
+let mode = 'cos';
+function renderLab() {
+  const miss = $('miss').checked;
+  const pool = CAND.filter(c => !(miss && c.id === 'A'));
+  const by = k => [...pool].sort((a, b) => b[k] - a[k]);
+  const cosL = by('cos'), ceL = by('ce'), cur = mode === 'cos' ? cosL : ceL;
+  $('rank').innerHTML = cur.map((c, i) => `<li class="g${c.g}${i === 5 ? ' cut' : ''}"><span>${esc(c.t)}</span>
+    <span class="sc">${mode === 'cos' ? 'cos ' + c.cos.toFixed(2) : 'logit ' + c.ce.toFixed(1) + '<br>σ ' + sig(c.ce).toFixed(2)}</span></li>`).join('');
+  const a = evalOrder(cosL), b = evalOrder(ceL), m = mode === 'cos' ? a : b;
+  const cls = (x, y) => mode === 'ce' ? (x > y + 1e-9 ? 'up' : x < y - 1e-9 ? 'down' : '') : '';
+  $('metrics').innerHTML = `<span class="metric ${cls(b.ndcg, a.ndcg)}">NDCG@5<br><b>${m.ndcg.toFixed(2)}</b></span>
+    <span class="metric ${cls(b.mrr, a.mrr)}">MRR<br><b>${m.mrr.toFixed(2)}</b></span>
+    <span class="metric">useful chunks in top 5<br><b>${m.top5}</b></span>`;
+  $('labnote').className = 'out ' + (m.mrr === 1 ? 'good' : 'bad');
+  $('labnote').innerHTML = miss
+    ? 'The FY2023 statement chunk never made the candidate list. Both orderings score MRR 0: <b>a reranker can only reorder what retrieval hands it</b>. Fix recall first.'
+    : mode === 'cos'
+      ? 'Cosine puts the <b>gross margin</b> chunk first (shares “margin” and “2023”), then <b>FY2022</b> figures and a table-of-contents line. The chunk that answers the question sits at rank 6, below the cut.'
+      : 'Reading question and chunk together, the cross-encoder sees that “gross margin” is a different measure, that “2022” is the wrong year and that a contents line has no numbers. The answer chunk moves to rank 1 and two of its inputs follow.';
+}
+const setMode = m => { mode = m; $('byCos').setAttribute('aria-pressed', m === 'cos'); $('byCe').setAttribute('aria-pressed', m === 'ce'); renderLab(); };
+$('byCos').onclick = () => setMode('cos'); $('byCe').onclick = () => setMode('ce'); $('miss').onchange = renderLab;
+renderLab();
+
+// ---------- 3. cost calculator ----------
+const PRESETS = [{ pps: 60 }, { pps: 1500 }, { pps: 250 }];
+function renderCost() {
+  const n = +$('n').value, tok = +$('tok').value, pps = +$('pps').value, bud = +$('bud').value;
+  $('no').textContent = n; $('toko').textContent = tok; $('ppso').textContent = pps; $('budo').textContent = bud + ' ms';
+  const eff = pps * 512 / tok, ms = n / eff * 1000 + 15, ok = ms <= bud;
+  const corpus = 50000 / eff;
+  $('bar').classList.toggle('over', !ok);
+  $('bar').firstElementChild.style.width = Math.min(100, ms / bud * 100) + '%';
+  $('cost').innerHTML = `<p style="margin:6px 0 0"><span class="verdict ${ok ? 'green' : 'red'}">${ok ? '✓ fits' : '✗ over budget'}</span>
+    &nbsp;≈ <b>${Math.round(ms)} ms</b> for ${n} pairs (${Math.round(eff)} pairs/s at ${tok} tokens, +15 ms overhead) against a ${bud} ms budget.</p>
+    <p style="margin:4px 0 0" class="muted">The same model over all ~50,000 FinSight chunks: <b>${corpus < 120 ? Math.round(corpus) + ' s' : (corpus / 60).toFixed(1) + ' min'}</b> per question. That is why it reranks and never indexes.</p>`;
+}
+['n', 'tok', 'pps', 'bud'].forEach(id => $(id).oninput = renderCost);
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { $('pps').value = PRESETS[b.dataset.p].pps; renderCost(); });
+renderCost();
+
+// ---------- 4a. calibration ----------
+const CAL = [
+  ['Apple FY2023 operating margin?', 0.98, true],
+  ['Microsoft FY2023 cloud revenue?', 0.91, true],
+  ['What drove Nike’s inventory build in FY2022?', 0.62, true],
+  ['Did Boeing change its revenue recognition policy?', 0.55, true],
+  ['3M PFAS liability provision, 2023?', 0.74, true],
+  ['Tesla 2023 dividend per share?', 0.81, false],
+  ['Netflix headcount in Brazil?', 0.47, false],
+  ['Amazon’s 2030 revenue?', 0.69, false],
+];
+function renderCal() {
+  const t = +$('thr').value; $('thro').textContent = t.toFixed(2);
+  $('cal').innerHTML = '<tr><th>question</th><th>top σ</th><th>top chunk right?</th></tr>' + CAL.map(([q, s, ok]) =>
+    `<tr><td class="${s >= t ? 'keep' : 'drop'}">${esc(q)}</td><td>${s.toFixed(2)}</td><td>${ok ? '✓' : '✗ (unanswerable)'}</td></tr>`).join('');
+  const kept = CAL.filter(r => r[1] >= t), right = kept.filter(r => r[2]).length, total = CAL.filter(r => r[2]).length;
+  $('calout').innerHTML = `<p style="margin:0">Answered <b>${kept.length}/${CAL.length}</b>; of those, <b>${right}</b> were right.
+    Lost <b>${total - right}</b> answerable question${total - right === 1 ? '' : 's'}; answered <b>${kept.length - right}</b> unanswerable one${kept.length - right === 1 ? '' : 's'}.</p>
+    <p class="muted" style="margin:6px 0 0;line-height:1.45">No threshold separates them perfectly: the Tesla question scores 0.81 (its chunks talk confidently about capital returns) while the Boeing one scores 0.55.
+    Choose the trade-off on labelled data, then add other signals.</p>`;
+}
+$('thr').oninput = renderCal; renderCal();
+
+// ---------- 4b. MaxSim ----------
+const QT = ['apple', 'operating', 'margin', '2023'];
+const MS = {
+  A: { toks: ['operating', 'income', '114,301', 'net', 'sales', 'FY2023'], sim: [
+    [0.21, 0.18, 0.10, 0.12, 0.22, 0.30], [0.95, 0.60, 0.20, 0.25, 0.30, 0.15], [0.55, 0.62, 0.35, 0.40, 0.45, 0.10], [0.12, 0.10, 0.20, 0.08, 0.10, 0.92]] },
+  B: { toks: ['gross', 'margin', 'percentage', '44.1%', '2023', '2022'], sim: [
+    [0.20, 0.18, 0.10, 0.12, 0.25, 0.22], [0.40, 0.45, 0.20, 0.15, 0.10, 0.10], [0.50, 0.97, 0.55, 0.40, 0.05, 0.05], [0.05, 0.08, 0.06, 0.10, 0.96, 0.70]] },
+};
+function renderMS(k) {
+  const d = MS[k]; let total = 0;
+  $('ms').innerHTML = `<tr><th>query ↓ / chunk →</th>${d.toks.map(t => `<th>${esc(t)}</th>`).join('')}<th>max</th></tr>` + QT.map((q, i) => {
+    const row = d.sim[i], mx = Math.max(...row); total += mx;
+    return `<tr><td>${q}</td>${row.map(v => `<td class="${v === mx ? 'mx' : ''}">${v.toFixed(2)}</td>`).join('')}<td><b>${mx.toFixed(2)}</b></td></tr>`;
+  }).join('');
+  $('msout').innerHTML = `MaxSim score = sum of row maxima = <b>${total.toFixed(2)}</b>.<br>${k === 'A'
+    ? '“operating” matches “operating”, and “margin” finds its best partner in “income”, the numerator of a margin.'
+    : '“margin” matches “margin” perfectly, but “operating” has no good partner: the max is only 0.45. The weak row pulls the total down.'}`;
+  $('msA').setAttribute('aria-pressed', k === 'A'); $('msB').setAttribute('aria-pressed', k === 'B');
+}
+$('msA').onclick = () => renderMS('A'); $('msB').onclick = () => renderMS('B'); renderMS('A');
+
+// ---------- 5. quiz ----------
+const Q = [
+  ['Why can’t you use a cross-encoder to index the whole corpus ahead of time?',
+   ['It only supports English', 'Its score depends on the query, so there is nothing to precompute: one pass per (query, chunk)', 'Its vectors are too large', 'It needs labelled data at query time'], 1,
+   'A cross-encoder outputs a score for a pair, not a vector for a chunk. Without the query, there is nothing to store.'],
+  ['What makes a cross-encoder more accurate than a bi-encoder?',
+   ['It has more parameters', 'Query and chunk tokens attend to each other in one pass', 'It uses BM25 internally', 'It reads the whole document'], 1,
+   'Token-level interaction lets “2023” in the question notice “2022” in the chunk. A bi-encoder compresses each side before they meet.'],
+  ['Retrieval returns 100 candidates but the right chunk isn’t among them. What does a reranker do?',
+   ['Finds it anyway', 'Nothing useful: it can only reorder what it is given', 'Re-runs retrieval', 'Raises the score of similar chunks until it appears'], 1,
+   'Reranking improves precision, never recall. Track first-stage recall@k separately.'],
+  ['A team drops answers whenever the reranker’s top sigmoid score is below 0.7. What is the risk?',
+   ['None: sigmoid outputs are probabilities', 'The scores aren’t calibrated across queries, so it drops right answers on hard questions and keeps wrong ones on easy-looking ones', 'The API will reject it', 'It makes reranking slower'], 1,
+   'Reranker scores are trained to order chunks for one query. Pick any threshold on your own labelled set and re-check it when the model changes.'],
+  ['Your reranker takes 900 ms at p95 on 200 candidates of 1,024 tokens. Which change most directly helps?',
+   ['Rerank more candidates', 'Rerank fewer, shorter pairs (e.g. 50 chunks at 512 tokens) after checking recall@50', 'Switch to a larger model', 'Add a second reranker'], 1,
+   'Cost is roughly candidates × tokens per pair. Cut both, but confirm with recall@k that you’re not throwing away the answer.'],
+  ['What does ColBERT’s MaxSim compute?',
+   ['A dot product of two pooled vectors', 'For each query token, the best-matching chunk token similarity, summed', 'A BM25 score over tokens', 'A listwise ranking from an LLM'], 1,
+   'Late interaction keeps token vectors, precomputed for chunks, and matches them at query time: between bi- and cross-encoders in cost and quality.'],
+  ['Which LLM reranking style shows the model many passages at once and asks for an ordered list?',
+   ['Pointwise', 'Pairwise', 'Listwise, as in RankGPT', 'Bi-encoder'], 2,
+   'Listwise prompts compare candidates side by side, usually with a sliding window. They are the slowest and sensitive to input order.'],
+  ['Why do reranker training sets use hard negatives?',
+   ['They are cheaper to label', 'Random negatives are too easy; the model must learn to reject chunks that look relevant but aren’t', 'They increase recall', 'MS MARCO has no positives'], 1,
+   'The chunks that fool retrieval (gross margin vs operating margin) are exactly what the reranker exists to catch.'],
+  ['How should you decide whether to keep a reranker?',
+   ['If the vendor benchmark is high', 'Compare NDCG@10 and MRR on your golden set with and without it, alongside the latency cost', 'If users like it in a demo', 'Always keep it'], 1,
+   'Keep it only if your own numbers move enough to pay for the added latency.'],
+];
+Q.forEach((q, i) => { const n = q[1].length, r = (i * 3 + 2) % n; q[1] = q[1].map((_, j) => q[1][(j + r) % n]); q[2] = (q[2] - r + n) % n; });
+let qr = 0, qd = 0;
+$('quiz').innerHTML = Q.map(([q, opts], i) => `<div class="card" data-i="${i}"><p class="q"><b>${i + 1}.</b> ${md(q)}</p>
+  <div class="opts">${opts.map((o, j) => `<button data-j="${j}">${md(o)}</button>`).join('')}</div><div class="why"></div></div>`).join('');
+$('quiz').onclick = e => {
+  const b = e.target.closest('.opts button'), card = e.target.closest('.card');
+  if (!b || card.classList.contains('done')) return;
+  const [, , a, w] = Q[card.dataset.i], ok = +b.dataset.j === a;
+  card.classList.add('done');
+  card.querySelectorAll('.opts button').forEach((x, k) => { x.disabled = true; if (k === a) x.classList.add('right'); });
+  if (!ok) b.classList.add('wrong');
+  card.querySelector('.why').innerHTML = `<span class="${ok ? 'green' : 'red'}">${ok ? '✓' : '✗'}</span> ${md(w)}`;
+  qd++; qr += ok; renderScore();
+};
+function renderScore() {
+  $('score').textContent = qd === Q.length ? `Final: ${qr} / ${Q.length} ${qr === Q.length ? '⭐ gold star' : '· reload to retry'}`
+                                           : `score ${qr} / ${qd} · ${Q.length - qd} to go`;
+}
+renderScore();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from './assets/scene3d.js';
+const D = {};
+D.rerank3d = {
+  loop: 14,
+  view: { target: [0, 0, 0.4], w: 25, d: 15, el: 50 },
+  steps: [
+    { t: 0.0, text: 'A user asks “What was Apple’s FY2023 operating margin?” The question is embedded once and sent to the vector index (HNSW in pgvector, Qdrant, Pinecone…).' },
+    { t: 1.6, text: 'Retrieve wide: the index returns the top 50–100 chunks by cosine in a few milliseconds. Recall is good, but the order is not: gross margin, FY2022 figures and a contents line all look similar.' },
+    { t: 3.6, text: 'Rerank: each candidate enters the cross-encoder paired with the question, as one input. Full attention between their tokens produces one relevance score per pair.' },
+    { t: 7.9, text: 'The scores re-order the list. Lookalikes sink; the FY2023 statement of operations rises to rank 1. Cost: one model pass per candidate, so only the shortlist is reranked.' },
+    { t: 10.1, text: 'Keep narrow: the top five go into the prompt, and the model computes 114,301 ÷ 383,285 ≈ 29.8%, citing the chunk it used.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, rb } = c;
+    const usr = c.obj('person', -11, 0, 'User', 'asks a question');
+    const idx = c.obj(c.SHAPES.database(C.kb, { r: 1.2 }), -6.2, 0, 'Vector index', 'top 100 by cosine · ms');
+    const press = new c.THREE.Group();
+    const add = (m, x, y) => { m.position.set(x, y, 0); press.add(m); return m; };
+    const base = add(rb(2.6, 0.5, 2.0, 0x3b3f58, { r: 0.08 }), 0, 0.25);
+    for (const x of [-1.1, 1.1]) add(rb(0.18, 2.6, 0.18, C.steel, { r: 0.04 }), x, 1.5);
+    const plate = add(rb(2.6, 0.4, 2.0, C.model, { r: 0.08, glow: 0.25 }), 0, 2.2);
+    press.userData.glow = [base, plate];
+    press.userData.h = 3.0;
+    const ce = c.obj(press, 0, 0, 'Cross-encoder', 'query + chunk → one score');
+    c.tick(t => { const k = t > 3.6 && t < 7.4 ? Math.abs(Math.sin((t - 3.6) * Math.PI * 1.3)) : 1; plate.position.y = 0.9 + 1.3 * k; });
+    const list = c.obj('cards', 5.6, 0, 'Top 5', 're-ordered');
+    const llm = c.obj('modelGem', 10, 0, 'LLM', 'answers from the top 5');
+    c.lane([V(-11, 0), V(-6.2, 0)]);
+    c.lane([V(-6.2, 0), V(0, 0), V(5.6, 0), V(10, 0)]);
+    c.packet({ pts: [V(-11, 0), V(-6.2, 0)], t0: 0.2, t1: 1.2, kind: 'ask', from: usr, to: idx, label: 'FY2023 op margin?' });
+    const zs = [-3.6, -2.6, -1.6, -0.6, 0.4, 1.4, 2.4, 3.4];
+    zs.forEach((z, i) => c.packet({ pts: [c.top(idx, 0), V(-3.4, z, 1.4), V(-1.8, z * 0.25, 1.2), V(-1.4, 0, 1.0)], t0: 1.8 + i * 0.14, t1: 3.4 + i * 0.45, kind: 'chunk', to: ce, label: i === 0 ? 'gross margin 44.1%' : i === 3 ? 'FY2022 figures' : i === 6 ? 'FY2023 statement' : undefined }));
+    zs.forEach((z, i) => c.packet({ pts: [V(-9, -1.2, 1.0), V(-1.4, -0.4, 1.0)], t0: 3.4 + i * 0.45 - 0.9, t1: 3.4 + i * 0.45, kind: 'ask', s: 0.6 }));
+    const scores = [['0.98', P.ship], ['0.90', P.ship], ['0.86', P.ship], ['0.71', P.chunk], ['0.57', P.chunk]];
+    scores.forEach(([s, col], i) => c.packet({ pts: [c.top(ce, 0), V(3, 0, 2.2), c.top(list, 0.2)], t0: 7.4 + i * 0.25, t1: 8.4 + i * 0.25, kind: 'doc', color: i === 0 ? P.ans : P.doc, to: list, label: i === 0 ? '#1 · FY2023 statement · 0.98' : undefined }));
+    c.packet({ pts: [c.top(ce, 0), V(1.5, 3.4, 1.0), V(1.5, 5.2, 0.4)], t0: 7.4, t1: 8.6, kind: 'chunk', color: P.bad, n: 3, st: 0.3, label: 'lookalikes sink' });
+    c.packet({ pts: arc(c.top(list, 0), c.top(llm, 0), 2), t0: 9.6, t1: 10.6, kind: 'env', to: llm, label: 'top 5 + question' });
+    c.packet({ pts: [c.top(llm, 0), V(10, 3.6, 1.2)], t0: 11.0, t1: 12.0, kind: 'doc', color: P.ans, label: '≈ 29.8% [chunk A]' });
+    c.note('<b>retrieve wide</b> · recall', -3.4, 4.8);
+    c.note('<b>rerank narrow</b> · precision', 3.0, 4.8);
+  },
+};
+boot(D);
+</script>
+</body>
+</html>
