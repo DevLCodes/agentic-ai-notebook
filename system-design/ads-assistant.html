@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ads Account Manager Assistant · Agentic System Designs</title>
+<meta name="description" content="System design for an ads account-manager assistant: campaign data in BigQuery through predefined tools, per-advertiser isolation enforced in code and the warehouse, help docs and notes in pgvector, root-cause walkthrough for a CPC rise, guardrails, evaluating budget suggestions and evals with targets.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Design · text-to-SQL + RAG · suggestions only</p><h1>Ads Account Manager Assistant</h1><p class="lead">An assistant that answers advertiser questions from live campaign data, help docs and past notes, explains why metrics moved, and suggests budget changes without applying them.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#problem">The problem and assumptions</a></li><li><a href="#picture">The one-minute picture</a></li><li><a href="#stores">Three sources, two stores</a></li><li><a href="#tools">Predefined tools, not free-form SQL</a></li><li><a href="#isolation">Keeping each advertiser&#x27;s data separate</a></li><li><a href="#walkthrough">Walkthrough: &quot;Why did CPC go up for advertiser X last week?&quot;</a></li><li><a href="#guardrails">Guardrails, enforced in code</a></li><li><a href="#suggestions">Is a budget suggestion any good?</a></li><li><a href="#evals">Evals for the answers</a></li><li><a href="#cost">Cost and latency</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="problem"><h2>The problem and assumptions</h2>
+<p>Account managers answer advertiser questions such as <em>"Why did my CPC go up last week?"</em> or <em>"Which campaigns should I move budget to?"</em>. The assistant answers from three sources and can <strong>suggest</strong> budget changes, but never applies them.</p>
+<div class="table"><table><thead><tr><th>Source</th><th>Shape</th><th>Where it lives</th></tr></thead><tbody>
+<tr><td>Campaign data</td><td>Daily rows per campaign, ad group and keyword: impressions, clicks, cost, CPC, conversions, budget, bid strategy, plus a change history of edits</td><td>BigQuery (structured, stays there)</td></tr>
+<tr><td>Help docs</td><td>Public product documentation</td><td>Chunked into pgvector</td></tr>
+<tr><td>Past account-manager notes</td><td>Free text per advertiser, may contain personal data</td><td>Chunked into pgvector with advertiser and access metadata</td></tr>
+</tbody></table></div>
+<p>Ask these in one batch in the first two minutes, or state them as assumptions: about 5,000 account managers, each covering around 20 advertisers; answers in under 10 seconds; read-only apart from suggestions.</p></section><section id="picture"><h2>The one-minute picture</h2><figure class="fig"><svg viewBox="0 0 722 208" class="dg" role="img" aria-label="An account manager asks a question; the gateway checks it; the agent picks tools; the tool layer adds the advertiser filter and queries BigQuery and pgvector; the answer is checked in code"><rect x="10" y="20" width="120" height="46" rx="8" class="k-user"/><text x="70" y="39" class="b" text-anchor="middle">Account manager</text><text x="70" y="55" class="sm" text-anchor="middle">signed in</text><path d="M130 43 L164 43" class="wire" marker-end="url(#ah)"/><rect x="166" y="20" width="120" height="46" rx="8" class="k-gov"/><text x="226" y="39" class="b" text-anchor="middle">Gateway</text><text x="226" y="55" class="sm" text-anchor="middle">auth · input checks</text><path d="M286 43 L320 43" class="wire" marker-end="url(#ah)"/><rect x="322" y="20" width="130" height="46" rx="8" class="k-model"/><text x="387" y="39" class="b" text-anchor="middle">Agent</text><text x="387" y="55" class="sm" text-anchor="middle">plans, picks tools</text><path d="M452 43 L486 43" class="wire" marker-end="url(#ah)"/><rect x="488" y="20" width="140" height="46" rx="8" class="k-gov"/><text x="558" y="39" class="b" text-anchor="middle">Tool layer (code)</text><text x="558" y="55" class="sm" text-anchor="middle">adds advertiser filter</text><path d="M520 66 L420 120" class="wire" marker-end="url(#ah)"/><path d="M558 66 L558 120" class="wire" marker-end="url(#ah)"/><path d="M600 66 L680 120" class="wire dash" marker-end="url(#ah)"/><rect x="330" y="122" width="170" height="46" rx="8" class="k-kb"/><text x="415" y="141" class="b" text-anchor="middle">BigQuery</text><text x="415" y="157" class="sm" text-anchor="middle">campaign metrics, changes</text><rect x="510" y="122" width="100" height="46" rx="8" class="k-kb"/><text x="560" y="141" class="b" text-anchor="middle">pgvector</text><text x="560" y="157" class="sm" text-anchor="middle">help docs, notes</text><rect x="620" y="122" width="92" height="46" rx="8" class="k-serve"/><text x="666" y="141" class="b" text-anchor="middle">Suggestions</text><text x="666" y="157" class="sm" text-anchor="middle">never applied</text><path d="M387 122 L387 66" class="wire dash" marker-end="url(#ah)"/><rect x="10" y="122" width="300" height="46" rx="8" class="k-cross"/><text x="160" y="141" class="b" text-anchor="middle">Answer check (code)</text><text x="160" y="157" class="sm" text-anchor="middle">every number must appear in a tool result</text><text x="10" y="196" class="sm">The model decides what to look up. Code decides whose data it can see and checks the answer before it is sent.</text></svg><figcaption>Illustrative. Three sources, two stores, and two places where code, not the model, has the final say.</figcaption></figure></section><section id="stores"><h2>Three sources, two stores</h2>
+<ul class="plain">
+<li><strong>Campaign data stays in BigQuery.</strong> Copying warehouse rows into a vector database gives stale, unfilterable numbers. Query it live.</li>
+<li><strong>No vector database for the schema.</strong> 30 to 40 table descriptions are roughly 10K tokens. Put them in the system prompt with a few example questions and cache that prefix. Schema retrieval only pays off at hundreds of tables.</li>
+<li><strong>Help docs and notes go into pgvector</strong>, chunked on headings and paragraphs, each chunk tagged with <code>doc_id</code>, <code>advertiser_id</code> (for notes), source and access group. Use hybrid search (keyword plus embeddings), take the top 20, rerank, keep the best 5.</li>
+</ul></section><section id="tools"><h2>Predefined tools, not free-form SQL</h2>
+<p>The model picks a tool and fills in parameters. Code builds and runs the SQL, so the model cannot write a query that scans everything or skips a filter.</p>
+<div class="table"><table><thead><tr><th>Tool</th><th>Returns</th></tr></thead><tbody>
+<tr><td><code>get_metrics(advertiser_id, metrics, date_range, group_by)</code></td><td>Aggregated metrics, e.g. cost and clicks by campaign for two weeks</td></tr>
+<tr><td><code>get_change_history(advertiser_id, date_range)</code></td><td>Bid strategy, budget, keyword and ad edits with timestamps</td></tr>
+<tr><td><code>search_docs(query)</code></td><td>Top help-doc chunks with links</td></tr>
+<tr><td><code>search_notes(advertiser_id, query)</code></td><td>Top note chunks for that advertiser</td></tr>
+<tr><td><code>propose_budget_shift(from, to, amount, reason)</code></td><td>A suggestion card for the account manager. There is no tool that writes to the account.</td></tr>
+</tbody></table></div>
+<p>Free-form SQL is a fallback for questions the tools cannot express. It runs with a read-only service account, SELECT only, a dry run first with a cap on bytes scanned, and a row limit.</p></section><section id="isolation"><h2>Keeping each advertiser&#x27;s data separate</h2>
+<p>A filter written by the model is not a guarantee. Use two layers that do not depend on the model:</p>
+<ul class="plain">
+<li><strong>Code adds the filter.</strong> The tool layer reads the manager's advertiser list from the signed-in session and adds <code>advertiser_id IN (...)</code> to every query. An <code>advertiser_id</code> the manager does not own is rejected before any query runs.</li>
+<li><strong>The warehouse enforces it again.</strong> BigQuery row-level access policies (or authorised views) scoped to the manager mean even a buggy query cannot return another advertiser's rows.</li>
+</ul>
+<p>The same applies to notes: the <code>advertiser_id</code> and access-group filter is applied inside the vector search, not after it.</p></section><section id="walkthrough"><h2>Walkthrough: &quot;Why did CPC go up for advertiser X last week?&quot;</h2><figure class="fig"><svg viewBox="0 0 722 160" class="dg" role="img" aria-label="Root cause for a CPC rise: compare weeks, split cost and clicks, break down by campaign, check the change history, then explain"><rect x="10" y="20" width="160" height="46" rx="8" class="k-model"/><text x="90" y="39" class="b" text-anchor="middle">CPC up 18%</text><text x="90" y="55" class="sm" text-anchor="middle">last week vs week before</text><path d="M170 43 L204 43" class="wire" marker-end="url(#ah)"/><rect x="206" y="20" width="150" height="46" rx="8" class="k-kb"/><text x="281" y="39" class="b" text-anchor="middle">CPC = cost ÷ clicks</text><text x="281" y="55" class="sm" text-anchor="middle">which one moved?</text><path d="M356 43 L390 43" class="wire" marker-end="url(#ah)"/><rect x="392" y="20" width="150" height="46" rx="8" class="k-kb"/><text x="467" y="39" class="b" text-anchor="middle">Split by campaign</text><text x="467" y="55" class="sm" text-anchor="middle">keyword, device</text><path d="M542 43 L576 43" class="wire" marker-end="url(#ah)"/><rect x="578" y="20" width="134" height="46" rx="8" class="k-kb"/><text x="645" y="39" class="b" text-anchor="middle">Change history</text><text x="645" y="55" class="sm" text-anchor="middle">bids, budgets, keywords</text><path d="M645 66 L645 100" class="wire" marker-end="url(#ah)"/><rect x="392" y="102" width="320" height="46" rx="8" class="k-serve"/><text x="552" y="121" class="b" text-anchor="middle">&quot;80% of the rise is campaign Y,</text><text x="552" y="137" class="sm" text-anchor="middle">after its switch to Target CPA on Oct 20&quot;</text><text x="10" y="124" class="sm">Numbers come from tools.</text><text x="10" y="140" class="sm">The why comes from the change history plus help docs.</text></svg><figcaption>Illustrative numbers. The design is only useful if it can actually do this analysis, so show it.</figcaption></figure>
+<ol>
+<li>Gateway: verify the user, load their advertiser list, check the input for prompt injection and personal data.</li>
+<li>Agent calls <code>get_metrics</code> for this week and last week, grouped by campaign. CPC is cost divided by clicks, so it checks which one moved and which campaigns explain most of the change.</li>
+<li>Agent calls <code>get_change_history</code> for the same window to find a cause: a bid strategy switch, a budget cut, new broad-match keywords.</li>
+<li>Agent calls <code>search_docs</code> for how that change affects CPC, and <code>search_notes</code> for context from past conversations with this advertiser.</li>
+<li>The model writes the answer with sources. Code checks that every number in it appears in a tool result, then sends it.</li>
+</ol>
+<p>Tool calls with no dependency on each other run in parallel to stay under the latency budget.</p></section><section id="guardrails"><h2>Guardrails, enforced in code</h2>
+<ul class="plain">
+<li><strong>Prompt injection.</strong> Notes and docs are data, never instructions. Detected injection is blocked and logged. Tools have least privilege, and no tool can change an account.</li>
+<li><strong>Grounded numbers.</strong> Any number in the answer that is not in a tool result fails the check; the answer is regenerated or returned as "I couldn't find that in the data".</li>
+<li><strong>Suggest, never apply.</strong> Budget changes are cards the manager accepts in the normal Ads UI, where existing permissions and audit apply.</li>
+<li><strong>Personal data.</strong> Notes are scanned for personal data at ingestion and masked in answers.</li>
+</ul></section><section id="suggestions"><h2>Is a budget suggestion any good?</h2>
+<p>A suggestion must be grounded in the data, agreed with by experts, and improve results. Check each one. Targets below are illustrative.</p>
+<div class="table"><table><thead><tr><th>When</th><th>Check</th><th>Bar</th></tr></thead><tbody>
+<tr><td>Before it is shown</td><td>Rules in code: only suggest moving budget to B if B is limited by budget (losing over 10% of impression share to budget) and B's cost per conversion is at least 20% better than A's, with 30+ conversions each</td><td>Otherwise, no suggestion</td></tr>
+<tr><td>Before launch</td><td>Expert review: 300 suggestions on last quarter's data, stratified by advertiser size and vertical, rated by senior account managers</td><td>≥ 80% "I would make this change", &lt; 2% "would hurt the advertiser"</td></tr>
+<tr><td>Before launch</td><td>Backtest: past cases where managers moved budget the same way, conversions over the next 14 days</td><td>Better than no change</td></tr>
+<tr><td>After launch</td><td>A/B test randomised by advertiser (not by suggestion, since one advertiser's suggestions affect each other) for 4 weeks</td><td>Conversions or ROAS at equal spend up ≥ 3%, p &lt; 0.05</td></tr>
+<tr><td>After launch</td><td>Acceptance rate, reverts within 7 days, complaints</td><td>Acceptance ≥ 40%, reverts &lt; 10%; reverts &gt; 15% or a ROAS drop turns the feature flag off</td></tr>
+</tbody></table></div></section><section id="evals"><h2>Evals for the answers</h2>
+<div class="table"><table><thead><tr><th>What</th><th>How</th><th>Illustrative target</th></tr></thead><tbody>
+<tr><td>Golden set</td><td>About 500 real past questions with answers written by experienced account managers, stratified by question type (why-questions, comparisons, how-to, budget)</td><td>Refreshed monthly from production misses</td></tr>
+<tr><td>Number accuracy</td><td>Numbers in the answer match a SQL result computed independently</td><td>≥ 98%</td></tr>
+<tr><td>Root cause agreement</td><td>LLM judge, calibrated against 100 human labels, compares the stated cause with the expert's</td><td>≥ 80%</td></tr>
+<tr><td>Retrieval</td><td>Recall@5 for doc and note questions</td><td>≥ 0.9</td></tr>
+<tr><td>Isolation</td><td>Red-team set asking for other advertisers' data, including through injected notes</td><td>0 leaks, release blocker</td></tr>
+<tr><td>Latency and cost</td><td>p95 end to end; cost per answer</td><td>p95 &lt; 10 s</td></tr>
+</tbody></table></div>
+<p>Rollout: shadow mode against real questions, then 1%, 10%, 50%, 100% behind a flag, with an automatic rollback if quality drops more than 2 points or errors cross a threshold. After launch, watch thumbs-down rate, a weekly graded sample, and how often managers rewrite the answer before sending it.</p></section><section id="cost"><h2>Cost and latency</h2>
+<ul class="plain">
+<li>Cache the stable prefix: system prompt, schema descriptions and tool definitions.</li>
+<li>A small, fast model classifies the question; the large model only plans and writes the final answer.</li>
+<li>Independent tool calls run in parallel; aggregation happens in BigQuery, so only small result sets reach the model.</li>
+</ul></section><section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"Campaign data is structured, so it stays in BigQuery and the model reaches it through a few predefined tools; code builds the SQL and always adds the advertiser filter from the session, and row-level security enforces it again. With only 30 to 40 tables I'd put the schema in a cached prompt rather than a vector database. Help docs and notes go into pgvector with advertiser and access metadata and hybrid search. For 'why did CPC go up', the agent compares weeks, splits cost and clicks by campaign, checks the change history and explains with docs and notes, and code checks every number against the tool results. Budget changes are only suggestions. I'd validate them with rules, expert review and a backtest before launch, and an advertiser-level A/B test after, with acceptance and revert rates as guardrails and a rollback rule."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="ask-your-data.html">&quot;Ask Your Data&quot; analytics agent</a></li><li><a href="support-agent.html">AI customer support agent</a></li><li><a href="access-control.html">Access control</a></li><li><a href="search-types.html">Search types</a></li><li><a href="evals.html">Evals</a></li><li><a href="testing.html">Testing in production</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+</body>
+</html>
