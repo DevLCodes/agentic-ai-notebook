@@ -310,7 +310,7 @@
       <li><a href="#evals">Evals before launch</a></li>
       <li><a href="#launch">After launch</a></li>
       <li><a href="#scale">Scale, latency and cost</a></li>
-      <li><a href="#mistakes">Common weak answers</a></li>
+      <li><a href="#billing">Variant: cloud billing support</a></li><li><a href="#mistakes">Common weak answers</a></li>
       <li><a href="#risks">Risks and v2</a></li>
       <li><a href="#presenting">Presenting it in 45 minutes</a></li>
       <li><a href="#numbers">Numbers to remember</a></li>
@@ -586,6 +586,31 @@ amount = min(amount, order_value, 500)        # ₹; above 500 goes to a human</
         </tbody>
       </table></div>
       <p>Illustrative. Caching the system prompt and tool definitions cuts input cost on every call, because they are identical across conversations.</p>
+    </section>
+
+    <section id="billing">
+      <h2>Variant: cloud billing support</h2>
+      <ul class="tags"><li>What changes</li></ul>
+      <p>The same design handles a cloud billing agent ("I deleted my VM on the 3rd but was charged until the 10th", "raise my GPU quota"). Routing, money rules in code, the pre-tool hook, idempotency and the evals carry over. These are the parts that are new.</p>
+      <div class="table"><table>
+        <thead><tr><th>Area</th><th>Food delivery (above)</th><th>Cloud billing</th></tr></thead>
+        <tbody>
+          <tr><td>Who may act on what</td><td>The order belongs to the signed-in user</td><td>A user can reach several billing accounts and an account has several users. Code checks the user's IAM role on the chosen billing account before any lookup or credit; the model never picks an account the user cannot access.</td></tr>
+          <tr><td>Checking the claim</td><td>Orders API: promised vs actual delivery time</td><td>Audit logs give the real deletion time of the resource; the claim is checked against them, not against the customer's date.</td></tr>
+          <tr><td>Where the amount comes from</td><td>A policy formula on the order total</td><td>The <strong>actual charges</strong>: billing-export line items for that resource between the deletion time and the end of the disputed period. The credit is their sum, capped by policy. Never recomputed from list prices, never taken from the customer's figure.</td></tr>
+          <tr><td>Explaining why</td><td>Late courier, missing item</td><td>Often the charge is real: deleting a VM can leave its persistent disk, snapshots or a static IP still billing. The agent shows the line items and names the resource still running, which resolves many tickets without a credit.</td></tr>
+          <tr><td>Second action</td><td>Cancel an order</td><td>File a quota-increase request into the existing quota-review system. The agent fills the form (project, region, resource, amount, justification) and returns the ticket id; it does not decide the increase.</td></tr>
+          <tr><td>Approval tiers</td><td>Above a cap, a human</td><td>Auto-apply small credits that pass the rules (for example up to $100); above that, a human agent; above the agent limit ($500), a manager.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Using the non-functional requirements</h3>
+      <ul>
+        <li><strong>Predictable spike:</strong> volume roughly triples in the first days of the month when invoices go out. Scale model capacity and workers ahead of the invoice date, queue non-urgent requests, and keep cached prompts warm.</li>
+        <li><strong>99.9% availability:</strong> if the model or a tool is down, the conversation goes to the human queue with the context collected so far, never a dead end.</li>
+        <li><strong>Several languages:</strong> answer in the customer's language, but run rules and tools on structured fields, and keep policy retrieval multilingual or translated at query time.</li>
+        <li><strong>Cost:</strong> compare cost per resolved conversation with the human cost (for example about $8) and report it next to resolution rate.</li>
+      </ul>
+      <p>Illustrative numbers. Design walkthrough of the data half (billing data behind predefined tools, isolation in code and the warehouse): <a href="ads-assistant.html">Ads account manager assistant</a>.</p>
     </section>
 
     <section id="mistakes">
