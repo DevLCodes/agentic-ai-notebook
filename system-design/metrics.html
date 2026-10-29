@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Metrics cheat sheet · Agentic System Designs</title>
+<meta name="description" content="Metrics cheat sheet for AI system design interviews: ingestion freshness, recall@k, MRR, NDCG, groundedness, faithfulness, tool selection and argument accuracy, task success, precision, recall, macro-F1, ROC-AUC, safety, inter-rater agreement, latency, cost, rollout gates, A/B tests and production metrics.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Revision · metrics</p><h1>Metrics cheat sheet</h1><p class="lead">Every metric worth knowing for an AI system design, stage by stage: ingestion, retrieval, generation, tools and agents, classifiers, safety, labels, operations, rollout and production, each with a plain meaning and an example target.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#top">Memorise these first</a></li><li><a href="#ingestion">Ingestion and knowledge base</a></li><li><a href="#retrieval">Retrieval</a></li><li><a href="#generation">Generation (answers)</a></li><li><a href="#agents">Tools and agents</a></li><li><a href="#classification">Classification and ML models</a></li><li><a href="#safety">Safety, privacy and security</a></li><li><a href="#labels">Golden set and labels</a></li><li><a href="#ops">Latency, cost and reliability</a></li><li><a href="#release">Testing and rollout gates</a></li><li><a href="#online">Production and business</a></li><li><a href="#note">Notes on the numbers</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="top"><h2>Memorise these first</h2>
+<p>If you remember only twelve, remember these. In an interview, name the metric, give one target number, and say how you would measure it.</p>
+<ol><li><strong>Recall@5</strong>: retrieval found the evidence</li><li><strong>Groundedness</strong>: claims supported by sources</li><li><strong>Task success + argument accuracy</strong>: agents did the right thing</li><li><strong>Per-class precision/recall + macro-F1</strong>: classifiers on imbalanced data</li><li><strong>Execution accuracy</strong>: text-to-SQL</li><li><strong>Faithfulness + coverage</strong>: summaries</li><li><strong>p95 latency + cost per request</strong>: operations</li><li><strong>Zero leaks on the red-team/permission suite</strong>: safety</li><li><strong>No slice regresses > 1 point</strong>: release gate</li><li><strong>One primary metric + guardrails in an A/B</strong>: proving impact</li><li><strong>Thumbs-down, escalation, resolution rate</strong>: production</li><li><strong>Kappa ≥ 0.7, judge agreement ≥ 80%</strong>: trusting the labels and judges</li></ol>
+<div class="say"><p>"For this design I'd track recall@5 for retrieval, groundedness for answers, and task success with argument accuracy for actions, gate releases on no slice regressing more than a point, and prove impact with an A/B test on one primary metric with latency, cost and safety as guardrails."</p></div></section><section id="ingestion"><h2>Ingestion and knowledge base</h2><p>Is the right data in the index, fresh and complete?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Freshness lag</strong></td><td>Time from a source change to it being searchable</td><td>p95 &lt; 15 min</td></tr><tr><td><strong>Coverage</strong></td><td>Share of source documents present in the index</td><td>≥ 99.5%</td></tr><tr><td><strong>Parse / extraction success</strong></td><td>Documents parsed without errors (tables, PDFs)</td><td>≥ 99%; failures to a dead-letter queue</td></tr><tr><td><strong>Stale or orphan chunks</strong></td><td>Chunks whose source was deleted or changed</td><td>0 after each sync</td></tr><tr><td><strong>ACL sync lag</strong></td><td>Time for a permission change to reach the index</td><td>&lt; 5 min</td></tr><tr><td><strong>Pipeline errors / DLQ depth</strong></td><td>Failed events waiting for retry</td><td>Alert above a small threshold</td></tr></tbody></table></div></section><section id="retrieval"><h2>Retrieval</h2><p>Did we fetch the evidence needed to answer?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Recall@k</strong></td><td>Share of questions where a relevant chunk is in the top k</td><td>Recall@5 ≥ 0.85</td></tr><tr><td><strong>Precision@k</strong></td><td>Share of the top k that is relevant</td><td>Context precision ≥ 0.7</td></tr><tr><td><strong>MRR</strong></td><td>How high the first relevant result ranks (1 = always first)</td><td>≥ 0.7</td></tr><tr><td><strong>NDCG@k</strong></td><td>Ranking quality that rewards the most relevant items being near the top</td><td>≥ 0.75</td></tr><tr><td><strong>Hit rate / no-result rate</strong></td><td>Queries with zero results above the score gate</td><td>Track; review a weekly sample</td></tr><tr><td><strong>Retrieval latency</strong></td><td>Embed + search + rerank time</td><td>p95 &lt; 300 ms</td></tr></tbody></table></div></section><section id="generation"><h2>Generation (answers)</h2><p>Is the answer correct, supported and useful?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Groundedness / faithfulness</strong></td><td>Share of claims supported by the retrieved sources</td><td>≥ 95%</td></tr><tr><td><strong>Answer correctness</strong></td><td>Matches the reference answer on the golden set</td><td>≥ 90%</td></tr><tr><td><strong>Answer relevance</strong></td><td>Actually addresses the question asked</td><td>≥ 90% (judge)</td></tr><tr><td><strong>Citation accuracy</strong></td><td>Every cited id exists, was retrieved and supports the claim</td><td>≥ 98%; checked in code</td></tr><tr><td><strong>Correct "not found" rate</strong></td><td>Says it does not know when the answer is not in the sources</td><td>≥ 90% on unanswerable questions</td></tr><tr><td><strong>Format / schema validity</strong></td><td>Structured output parses and matches the schema</td><td>≥ 99.9%</td></tr><tr><td><strong>Summary: faithfulness + coverage</strong></td><td>No invented claims, and the key points are included</td><td>≥ 95% / ≥ 85%</td></tr><tr><td><strong>Text-to-SQL: execution accuracy</strong></td><td>Query result matches the expected result</td><td>≥ 85%</td></tr></tbody></table></div></section><section id="agents"><h2>Tools and agents</h2><p>Did the agent take the right actions, correctly and safely?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Task success rate</strong></td><td>End state is correct (checked in a sandbox), not just the text</td><td>≥ 85%</td></tr><tr><td><strong>Tool selection accuracy</strong></td><td>Picked the right tool for the request</td><td>≥ 95%</td></tr><tr><td><strong>Argument accuracy</strong></td><td>Tool arguments exactly right (ids, amounts, dates)</td><td>≥ 98%</td></tr><tr><td><strong>Tool execution success</strong></td><td>Calls that ran without error or timeout</td><td>≥ 99%</td></tr><tr><td><strong>Invalid-call rate</strong></td><td>Schema failures per 100 calls in production</td><td>&lt; 1%</td></tr><tr><td><strong>Steps per task / loop rate</strong></td><td>Efficiency; share of tasks hitting the step cap</td><td>p95 ≤ 6 steps; cap hits &lt; 1%</td></tr><tr><td><strong>Unsafe or unauthorised actions</strong></td><td>Writes without approval or outside the user's scope</td><td>0, release blocker</td></tr><tr><td><strong>Pass rate over repeats</strong></td><td>Same case run 3 to 5 times; agents are not deterministic</td><td>Report the rate, not one run</td></tr></tbody></table></div></section><section id="classification"><h2>Classification and ML models</h2><p>For routers, taggers, moderation and other classifiers.</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Precision / recall per class</strong></td><td>Right when flagged / caught what was there</td><td>Recall ≥ 90% on high-harm classes</td></tr><tr><td><strong>Macro-F1</strong></td><td>F1 averaged over classes so rare ones count equally</td><td>≥ 0.85</td></tr><tr><td><strong>Confusion matrix</strong></td><td>Which classes get mixed up</td><td>Review before every release</td></tr><tr><td><strong>ROC-AUC / PR-AUC</strong></td><td>How well scores separate classes across thresholds (PR better when rare)</td><td>AUC ≥ 0.9</td></tr><tr><td><strong>Calibration</strong></td><td>A 0.8 score is right about 80% of the time</td><td>Check before using scores as confidence</td></tr><tr><td><strong>Routing accuracy</strong></td><td>Router sends requests to the right path or model</td><td>≥ 95%</td></tr><tr><td><strong>MAE / RMSE</strong></td><td>Average error size when predicting numbers</td><td>vs a baseline</td></tr></tbody></table></div></section><section id="safety"><h2>Safety, privacy and security</h2><p>Is it safe for users and the company?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Red-team pass rate</strong></td><td>Fixed injection and jailbreak suite</td><td>100% (zero failures)</td></tr><tr><td><strong>Permission / cross-tenant leaks</strong></td><td>Answers revealing data the user cannot see</td><td>0, release blocker</td></tr><tr><td><strong>PII detector recall</strong></td><td>Personal data caught before the model and logs</td><td>≥ 99%</td></tr><tr><td><strong>Harmful output rate</strong></td><td>Toxic or policy-violating outputs</td><td>≈ 0 on the safety set</td></tr><tr><td><strong>Over-refusal rate</strong></td><td>Benign questions wrongly refused</td><td>≤ 3%</td></tr></tbody></table></div></section><section id="labels"><h2>Golden set and labels</h2><p>Can we trust the numbers above?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Golden set size and coverage</strong></td><td>Real cases sliced by intent, language, difficulty</td><td>200 to 500+, ≥ 30 per key slice</td></tr><tr><td><strong>Inter-rater agreement</strong></td><td>Two raters label the same items (Cohen's kappa)</td><td>κ ≥ 0.7</td></tr><tr><td><strong>Judge-human agreement</strong></td><td>LLM judge vs expert labels</td><td>≥ 80% before it gates releases</td></tr><tr><td><strong>Confidence interval</strong></td><td>How precise a measured rate is; shrinks with more examples</td><td>±3 points needs about 400 per slice</td></tr></tbody></table></div></section><section id="ops"><h2>Latency, cost and reliability</h2><p>Is it fast, affordable and up?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Time to first token</strong></td><td>What users feel with streaming</td><td>p95 &lt; 1.5 s</td></tr><tr><td><strong>End-to-end latency</strong></td><td>Full request or task time</td><td>p95 &lt; 5 s chat; agents set per task</td></tr><tr><td><strong>Error / timeout / 429 rate</strong></td><td>Failed model and tool calls</td><td>&lt; 1%</td></tr><tr><td><strong>Availability</strong></td><td>Requests answered (including fallback)</td><td>≥ 99.9%</td></tr><tr><td><strong>Fallback rate</strong></td><td>Served by backup model, region or human</td><td>Track; alert on spikes</td></tr><tr><td><strong>Tokens and cost per request / task</strong></td><td>Input + output tokens × price</td><td>Within budget, e.g. ≤ $0.01 per turn</td></tr><tr><td><strong>Cache hit rate</strong></td><td>Prompt or response cache reuse</td><td>Higher is cheaper; check correctness</td></tr></tbody></table></div></section><section id="release"><h2>Testing and rollout gates</h2><p>Metrics that decide whether a change ships.</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Golden-set regression</strong></td><td>Every metric vs the current version, per slice</td><td>No slice down &gt; 1 point</td></tr><tr><td><strong>Blind side-by-side win rate</strong></td><td>Experts prefer new vs old, order hidden</td><td>Win or tie ≥ 95%</td></tr><tr><td><strong>Shadow: judge win/tie, action agreement</strong></td><td>New version on live traffic, outputs not shown</td><td>≥ 95% win or tie; ≥ 95% same actions</td></tr><tr><td><strong>Canary guardrails</strong></td><td>Errors, p95, cost, thumbs-down at 1% → 5% → 25%</td><td>Auto-rollback if errors &gt; 2× or thumbs-down +30%</td></tr><tr><td><strong>A/B primary metric</strong></td><td>One business metric decided up front</td><td>Significant lift (p &lt; 0.05), sized in advance</td></tr><tr><td><strong>A/B guardrails</strong></td><td>Must not get worse: CSAT, latency, cost, safety</td><td>Within tolerance</td></tr></tbody></table></div></section><section id="online"><h2>Production and business</h2><p>Is it working for users after launch?</p><div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Example target</th></tr></thead><tbody><tr><td><strong>Thumbs-down / negative feedback rate</strong></td><td>Explicit user signal</td><td>Below baseline; spikes alert</td></tr><tr><td><strong>Resolution / task completion rate</strong></td><td>Users got what they came for</td><td>Above the old process</td></tr><tr><td><strong>Escalation / handoff rate</strong></td><td>Conversations passed to a human</td><td>Down, without CSAT dropping</td></tr><tr><td><strong>Repeat contact / retry rate</strong></td><td>User had to ask again</td><td>Down</td></tr><tr><td><strong>Acceptance / edit rate</strong></td><td>Drafts used as-is vs edited</td><td>Track; rising edits = quality drop</td></tr><tr><td><strong>Adoption and retention</strong></td><td>Weekly active users, returning users</td><td>Up</td></tr><tr><td><strong>CSAT</strong></td><td>Survey satisfaction</td><td>Not worse than baseline</td></tr><tr><td><strong>Online eval scores</strong></td><td>Judges run on 1 to 5% of real traces</td><td>Stable vs offline numbers</td></tr><tr><td><strong>Drift signals</strong></td><td>Topic mix, score distribution, refusal rate change</td><td>Alert on shifts</td></tr></tbody></table></div></section><section id="note"><h2>Notes on the numbers</h2>
+<ul>
+<li>Targets are illustrative starting points. Set real ones from the current system's baseline and the cost of each mistake.</li>
+<li>Report per slice (intent, language, customer tier), not only the average.</li>
+<li>Use code for anything exact (amounts, ids, citations, schemas) and judges only for fuzzy qualities, calibrated against experts.</li>
+</ul></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="evals.html">Evals</a></li><li><a href="eval-rubrics.html">Evals in practice</a></li><li><a href="testing.html">Testing and rollout</a></li><li><a href="ml-basics.html">ML basics</a></li><li><a href="fluency.html">AI fluency Q&amp;A</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+</body>
+</html>
