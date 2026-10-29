@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ML basics in 15 minutes · Agentic System Designs</title>
+<meta name="description" content="Classic machine learning basics for AI engineering interviews: supervised vs unsupervised, regression and classification, prediction scores and thresholds, decision trees, random forests and boosting, clustering and anomaly detection, training and overfitting, precision, recall, ROC-AUC, labelling, cold start, and data and concept drift.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Revision · machine learning</p><h1>ML basics in 15 minutes</h1><p class="lead">Supervised and unsupervised learning, prediction scores, trees and forests, clustering, evaluation, labelling and cold start, and drift: the classic ML an AI engineer is expected to know.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#map">The map in one picture</a></li><li><a href="#supervised">Supervised learning</a></li><li><a href="#score">Prediction scores and thresholds</a></li><li><a href="#trees">Algorithms: trees and forests</a></li><li><a href="#unsupervised">Unsupervised learning</a></li><li><a href="#training">Training basics</a></li><li><a href="#eval">Model evaluation</a></li><li><a href="#labels">Labelling and cold start</a></li><li><a href="#monitor">Monitoring: data drift and concept drift</a></li><li><a href="#llm">Where classic ML fits next to LLMs</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="map"><h2>The map in one picture</h2><p>Classic machine learning learns patterns from data instead of following hand-written rules. Two families cover almost every interview question: <strong>supervised</strong> (you have the right answers for past examples) and <strong>unsupervised</strong> (you do not).</p><figure class="fig"><svg viewBox="0 0 722 360" class="dg" role="img" aria-label="Machine learning splits into supervised (regression, classification) and unsupervised (clustering, anomaly detection, dimensionality reduction); lifecycle: data and labels, train, evaluate, deploy as a score, monitor drift, retrain"><rect x="281" y="10" width="160" height="44" rx="8" class="k-model"/><text x="361" y="36.5" class="small b" text-anchor="middle">Machine learning</text><rect x="90" y="96" width="200" height="44" rx="8" class="k-kb"/><text x="190" y="114" class="small b" text-anchor="middle">Supervised</text><text x="190" y="130" class="sm" text-anchor="middle">labelled data → predict</text><rect x="432" y="96" width="200" height="44" rx="8" class="k-src"/><text x="532" y="114" class="small b" text-anchor="middle">Unsupervised</text><text x="532" y="130" class="sm" text-anchor="middle">no labels → find structure</text><path d="M330 54 L200 94" class="wire" marker-end="url(#ah)"/><path d="M392 54 L522 94" class="wire" marker-end="url(#ah)"/><rect x="10" y="182" width="140" height="44" rx="8" class="k-kb"/><text x="80" y="200" class="small b" text-anchor="middle">Regression</text><text x="80" y="216" class="sm" text-anchor="middle">a number: price, spend</text><rect x="160" y="182" width="140" height="44" rx="8" class="k-kb"/><text x="230" y="200" class="small b" text-anchor="middle">Classification</text><text x="230" y="216" class="sm" text-anchor="middle">a label: spam, churn</text><path d="M160 140 L80 180" class="wire" marker-end="url(#ah)"/><path d="M220 140 L230 180" class="wire" marker-end="url(#ah)"/><rect x="352" y="182" width="104" height="44" rx="8" class="k-src"/><text x="404" y="200" class="small b" text-anchor="middle">Clustering</text><text x="404" y="216" class="sm" text-anchor="middle">group similar</text><rect x="482" y="182" width="104" height="44" rx="8" class="k-src"/><text x="534" y="200" class="small b" text-anchor="middle">Anomaly</text><text x="534" y="216" class="sm" text-anchor="middle">spot the odd one</text><rect x="612" y="182" width="104" height="44" rx="8" class="k-src"/><text x="664" y="200" class="small b" text-anchor="middle">Reduce dims</text><text x="664" y="216" class="sm" text-anchor="middle">PCA, embeddings</text><path d="M500 140 L404 180" class="wire" marker-end="url(#ah)"/><path d="M532 140 L534 180" class="wire" marker-end="url(#ah)"/><path d="M564 140 L664 180" class="wire" marker-end="url(#ah)"/><text x="10" y="262" class="cap">Lifecycle</text><rect x="10" y="274" width="124" height="40" rx="8" class="k-src"/><text x="72" y="298.5" class="small b" text-anchor="middle">Data + labels</text><path d="M134 294 L148 294" class="wire" marker-end="url(#ah)"/><rect x="150" y="274" width="124" height="40" rx="8" class="k-model"/><text x="212" y="298.5" class="small b" text-anchor="middle">Train</text><path d="M274 294 L288 294" class="wire" marker-end="url(#ah)"/><rect x="290" y="274" width="124" height="40" rx="8" class="k-gov"/><text x="352" y="298.5" class="small b" text-anchor="middle">Evaluate</text><path d="M414 294 L428 294" class="wire" marker-end="url(#ah)"/><rect x="430" y="274" width="124" height="40" rx="8" class="k-serve"/><text x="492" y="298.5" class="small b" text-anchor="middle">Deploy: score</text><path d="M554 294 L568 294" class="wire" marker-end="url(#ah)"/><rect x="570" y="274" width="124" height="40" rx="8" class="k-cross"/><text x="632" y="298.5" class="small b" text-anchor="middle">Monitor drift</text><path d="M632 314 L632 336 L72 336 L72 316" class="wire dash" marker-end="url(#ah)"/><text x="300" y="350" class="sm">retrain when drift or new labels</text></svg><figcaption>Supervised needs labels and predicts something specific; unsupervised finds structure without labels.</figcaption></figure></section><section id="supervised"><h2>Supervised learning</h2>
+<p>You have past examples with the correct answer (the <strong>label</strong>), and the model learns to predict that answer for new examples.</p>
+<div class="table"><table><thead><tr><th>Type</th><th>Predicts</th><th>Examples</th><th>Typical models</th></tr></thead><tbody>
+<tr><td>Regression</td><td>A number</td><td>Next month's ad spend, delivery time, house price</td><td>Linear regression, gradient-boosted trees</td></tr>
+<tr><td>Classification</td><td>A category</td><td>Spam or not, will this user churn, which issue type is this review</td><td>Logistic regression, random forest, gradient-boosted trees, fine-tuned text encoders</td></tr>
+</tbody></table></div>
+<p><strong>Features</strong> are the inputs (for churn: days since last login, plan, number of support tickets). <strong>Training</strong> means adjusting the model so its predictions match the labels on past data.</p></section><section id="score"><h2>Prediction scores and thresholds</h2>
+<ul>
+<li>A classifier usually outputs a <strong>score</strong>, a probability such as "0.82 likely to churn", not just yes or no.</li>
+<li>You turn the score into a decision with a <strong>threshold</strong>. Lower it to catch more cases (higher recall, more false alarms); raise it to be surer (higher precision, more misses).</li>
+<li>Pick the threshold from the cost of each mistake: missing fraud is expensive, so a low threshold; auto-suspending an account is expensive when wrong, so a high one.</li>
+<li>Scores also <strong>rank</strong>: "call the 1,000 customers most likely to churn" needs only the order.</li>
+<li>The same score routes work in a cascade: confident cases decided automatically, uncertain ones sent to an LLM or a person.</li>
+</ul></section><section id="trees"><h2>Algorithms: trees and forests</h2>
+<div class="table"><table><thead><tr><th>Model</th><th>How it works, in one line</th><th>Strengths</th><th>Watch out</th></tr></thead><tbody>
+<tr><td>Linear / logistic regression</td><td>A weighted sum of features (logistic squashes it into a probability)</td><td>Fast, explainable: each weight says how a feature pushes the prediction</td><td>Misses non-linear patterns and interactions</td></tr>
+<tr><td>Decision tree</td><td>A flowchart of yes/no questions on features ("tickets &gt; 3?")</td><td>Easy to explain, handles mixed data</td><td>One deep tree memorises the training data (overfits)</td></tr>
+<tr><td>Random forest</td><td>Hundreds of trees, each trained on a random sample of rows and features; they vote</td><td>Much less overfitting, strong default with little tuning</td><td>Larger and slower than one tree; less explainable</td></tr>
+<tr><td>Gradient-boosted trees (XGBoost, LightGBM)</td><td>Trees built one after another, each fixing the previous ones' errors</td><td>Usually the most accurate on tabular data</td><td>More tuning; can overfit if trained too long</td></tr>
+<tr><td>Neural networks / fine-tuned encoders</td><td>Many layers learning features themselves</td><td>Best for text, images, audio</td><td>Need more data and compute</td></tr>
+</tbody></table></div>
+<p><strong>Rule of thumb:</strong> tabular data → gradient-boosted trees or random forest; text at high volume with fixed labels → embeddings plus logistic regression, or a fine-tuned small encoder; open-ended text → an LLM.</p></section><section id="unsupervised"><h2>Unsupervised learning</h2>
+<div class="table"><table><thead><tr><th>Task</th><th>What it does</th><th>Common methods</th><th>Example</th></tr></thead><tbody>
+<tr><td>Clustering</td><td>Groups similar items</td><td>k-means (you choose the number of groups), HDBSCAN (finds the number itself and leaves outliers out)</td><td>Embed app reviews and cluster them to discover new complaint topics; customer segments</td></tr>
+<tr><td>Anomaly detection</td><td>Flags items unlike the rest</td><td>Isolation forest, z-score on a metric</td><td>Spike in crash reports, unusual ad spend, fraud</td></tr>
+<tr><td>Dimensionality reduction</td><td>Compresses many features into a few</td><td>PCA; embeddings are a learned version</td><td>Visualising data, speeding up other models</td></tr>
+</tbody></table></div>
+<p>There are no labels, so judge results by usefulness: do the clusters make sense to a domain expert, are they stable when re-run, and do they lead to action? An LLM can name each cluster from a few examples.</p></section><section id="training"><h2>Training basics</h2>
+<ul>
+<li><strong>Train / validation / test split.</strong> Train on one part, tune on another, and report on a test set the model never saw. Split by time when predicting the future.</li>
+<li><strong>Overfitting</strong> means great on training data, poor on new data: the model memorised. <strong>Underfitting</strong> means poor on both: too simple.</li>
+<li><strong>Cross-validation</strong>: split the data into k parts, train k times, each time testing on a different part, and average. A more reliable score when data is small.</li>
+<li><strong>Regularisation</strong>: penalise complexity (smaller weights, shallower trees) to reduce overfitting.</li>
+<li><strong>Leakage</strong>: a feature that would not be known at prediction time (for churn, "account closed date") makes results look great offline and fail in production.</li>
+<li><strong>Class imbalance</strong>: when one class is rare (2% fraud), use class weights or resampling, and do not judge by accuracy.</li>
+</ul></section><section id="eval"><h2>Model evaluation</h2>
+<div class="table"><table><thead><tr><th>Metric</th><th>Plain meaning</th><th>Use for</th></tr></thead><tbody>
+<tr><td>Precision</td><td>Of what I flagged, how much was right</td><td>When false alarms are costly</td></tr>
+<tr><td>Recall</td><td>Of what was really there, how much I caught</td><td>When misses are costly</td></tr>
+<tr><td>F1 / macro-F1</td><td>One score that is high only if both are high; macro averages per class so rare classes count equally</td><td>Imbalanced classification</td></tr>
+<tr><td>ROC curve and AUC</td><td>How well the scores separate positives from negatives across all thresholds. AUC 0.5 = random, 1.0 = perfect</td><td>Comparing models before choosing a threshold</td></tr>
+<tr><td>PR curve / PR-AUC</td><td>Precision against recall across thresholds</td><td>Better than ROC when positives are rare</td></tr>
+<tr><td>MAE / RMSE</td><td>Average size of the error in regression (RMSE punishes big misses more)</td><td>Predicting numbers</td></tr>
+<tr><td>MAP / NDCG</td><td>Are the relevant items near the top of a ranked list</td><td>Search, recommendations, retrieval</td></tr>
+</tbody></table></div>
+<p>Always compare against a <strong>baseline</strong> (current rules, or "predict the most common class") and report results <strong>per slice</strong> (language, region, new vs existing users).</p></section><section id="labels"><h2>Labelling and cold start</h2>
+<ul>
+<li><strong>Where labels come from:</strong> past human decisions, trained raters with written guidelines, user actions (clicked, refunded), or an LLM labelling a sample that humans spot-check.</li>
+<li><strong>Label quality:</strong> have two raters label the same items and measure agreement (Cohen's kappa; about 0.7 or more is good). Low agreement means unclear guidelines.</li>
+<li><strong>Active learning:</strong> send the items the model is least sure about to humans; their labels improve the model fastest.</li>
+<li><strong>Cold start:</strong> a new user, item or product has no history, so a history-based model has nothing to go on. Fall back to content features (the item's text, category), popular or rule-based defaults, or an LLM working zero-shot, and switch to the learned model as data builds up.</li>
+</ul></section><section id="monitor"><h2>Monitoring: data drift and concept drift</h2>
+<ul>
+<li><strong>Data drift:</strong> the inputs change (new languages, a new app version, a new customer segment). Detect by comparing feature distributions with training data.</li>
+<li><strong>Concept drift:</strong> the relationship itself changes, so the same input now means something else (after a pricing change, "too expensive" reviews mean something new; fraudsters change tactics). Detect by measuring performance on fresh labelled samples.</li>
+<li>Watch the score distribution and the share above threshold; a sudden shift is an early warning before labels arrive.</li>
+<li>Retrain on a schedule or when drift alerts fire; check the new model on the golden set and roll it out like any release (shadow, canary).</li>
+</ul></section><section id="llm"><h2>Where classic ML fits next to LLMs</h2>
+<div class="table"><table><thead><tr><th>Situation</th><th>Choose</th></tr></thead><tbody>
+<tr><td>Exact, stable logic</td><td>Rules or SQL</td></tr>
+<tr><td>Tabular features, many labels, fixed outputs (churn, fraud, CTR)</td><td>Classic ML: gradient-boosted trees, logistic regression</td></tr>
+<tr><td>Text, fixed labels, very high volume</td><td>Small classifier on embeddings, often trained on LLM-made labels (distillation), with the LLM for low-confidence cases</td></tr>
+<tr><td>Open-ended text: summarise, write, extract messy fields</td><td>LLM</td></tr>
+<tr><td>Multi-step work with tools</td><td>Agent</td></tr>
+</tbody></table></div></section><section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"Supervised learning predicts a label from past labelled examples: regression for numbers, classification for categories. On tabular data I'd start with gradient-boosted trees or a random forest, compare against a baseline on a held-out test set, and avoid overfitting with cross-validation. Classifiers give a score, and I choose the threshold from the cost of false alarms versus misses, checking precision, recall and ROC-AUC. Unsupervised learning finds structure without labels, like clustering reviews to discover new topics or flagging anomalies. In production I monitor data and concept drift and retrain when performance on fresh labels drops."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="fluency.html">AI fluency Q&amp;A</a></li><li><a href="evals.html">Evals</a></li><li><a href="eval-rubrics.html">Evals in practice</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="routing.html">Routing</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+</body>
+</html>
