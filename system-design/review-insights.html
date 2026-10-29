@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>App Review Insights · Agentic System Designs</title>
+<meta name="description" content="System design for app review insights: a distilled multilingual classifier with an LLM for low-confidence cases, building a labelled golden set with inter-rater agreement, per-class precision, recall and macro-F1, weekly top issues from SQL with spike detection and clustering, guarded reply drafts, and an A/B test randomised by developer.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Design · classifier cascade + LLM · data-science round</p><h1>App Review Insights</h1><p class="lead">Tag 20 million app reviews a day by issue and sentiment, surface rising issues each week, and draft replies developers approve, with the labels, metrics and A/B test to prove it works.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#problem">The problem</a></li><li><a href="#clarify">Clarifying questions (batch them in the first two minutes)</a></li><li><a href="#picture">The one-minute picture</a></li><li><a href="#tagging">Tagging 20M reviews a day: a classifier cascade</a></li><li><a href="#labels">Labels: building the eval set</a></li><li><a href="#metrics">Classifier metrics</a></li><li><a href="#summary">Weekly &quot;top issues&quot; summary</a></li><li><a href="#replies">Reply drafts</a></li><li><a href="#experiment">Proving the drafts work: the A/B test</a></li><li><a href="#monitoring">Monitoring and retraining</a></li><li><a href="#probes">What the interviewer probed, and strong answers</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="problem"><h2>The problem</h2>
+<p><em>"Play Console wants an AI assistant for app developers' user reviews. Popular apps get thousands of reviews a day in many languages, and developers can't read them all. The system should (1) tag each review with an issue category (crash, login, payments, performance, feature request…) and a sentiment, (2) give the developer a weekly 'top issues' summary with example reviews, and (3) draft replies the developer can edit and send. Design it, and tell me how you'd know it works."</em></p>
+<p>This was asked by an interviewer playing a senior data scientist, so most of the grading is on <strong>measurement</strong>: the classifier choice, labels, metrics and the experiment. The pipes matter less.</p></section><section id="clarify"><h2>Clarifying questions (batch them in the first two minutes)</h2>
+<div class="table"><table><thead><tr><th>Question</th><th>Answer used here</th></tr></thead><tbody>
+<tr><td>Volume?</td><td>About 20M new reviews a day; 1.8B historical reviews to backfill</td></tr>
+<tr><td>Languages?</td><td>About 40; the top 10 cover most traffic</td></tr>
+<tr><td>Taxonomy?</td><td>About 15 issue categories plus sentiment; new categories appear over time</td></tr>
+<tr><td>Labelled data?</td><td>5,000 labelled reviews, but on an <strong>old taxonomy</strong></td></tr>
+<tr><td>Input type?</td><td>Text only</td></tr>
+<tr><td>Freshness?</td><td>Tags within minutes; the summary is weekly</td></tr>
+<tr><td>Today's baseline?</td><td>Keyword rules that agree with human raters about 60% of the time</td></tr>
+<tr><td>Business goal?</td><td>More developers reply to reviews, and sooner; developers find issues faster</td></tr>
+</tbody></table></div>
+<p><strong>Non-functional:</strong> cost per review must be tiny at 20M a day; replies are never sent without the developer; personal data in reviews stays protected; per-language quality, not just the average.</p></section><section id="picture"><h2>The one-minute picture</h2><figure class="fig"><svg viewBox="0 0 722 290" class="dg" role="img" aria-label="Every review: prep in code, a small multilingual classifier, a confidence gate; confident tags go to BigQuery, unsure ones to an LLM, and still-unsure ones to raters whose labels retrain the classifier. Every week: SQL counts, spike check, clustering of other, an LLM writes the summary text, shown in Play Console"><text x="10" y="18" class="cap">Every review (streaming)</text><rect x="10" y="28" width="120" height="46" rx="8" class="k-user"/><text x="70" y="47" class="small b" text-anchor="middle">New review</text><text x="70" y="63" class="sm" text-anchor="middle">text, any language</text><path d="M130 51 L148 51" class="wire" marker-end="url(#ah)"/><rect x="150" y="28" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="47" class="small b" text-anchor="middle">Prep (code)</text><text x="210" y="63" class="sm" text-anchor="middle">language · dedupe · PII</text><path d="M270 51 L288 51" class="wire" marker-end="url(#ah)"/><rect x="290" y="28" width="120" height="46" rx="8" class="k-model"/><text x="350" y="47" class="small b" text-anchor="middle">Small classifier</text><text x="350" y="63" class="sm" text-anchor="middle">multilingual encoder</text><path d="M410 51 L428 51" class="wire" marker-end="url(#ah)"/><rect x="430" y="28" width="120" height="46" rx="8" class="k-gov"/><text x="490" y="47" class="small b" text-anchor="middle">Confidence gate</text><text x="490" y="63" class="sm" text-anchor="middle">threshold per tag</text><path d="M550 51 L568 51" class="wire" marker-end="url(#ah)"/><rect x="570" y="28" width="120" height="46" rx="8" class="k-kb"/><text x="630" y="47" class="small b" text-anchor="middle">BigQuery</text><text x="630" y="63" class="sm" text-anchor="middle">tags + scores</text><rect x="430" y="130" width="120" height="46" rx="8" class="k-model"/><text x="490" y="149" class="small b" text-anchor="middle">LLM</text><text x="490" y="165" class="sm" text-anchor="middle">taxonomy + examples</text><rect x="290" y="130" width="120" height="46" rx="8" class="k-src"/><text x="350" y="149" class="small b" text-anchor="middle">Raters</text><text x="350" y="165" class="sm" text-anchor="middle">still unsure</text><path d="M490 74 L490 128" class="wire" marker-end="url(#ah)"/><path d="M550 153 L630 153 L630 76" class="wire" marker-end="url(#ah)"/><path d="M430 153 L412 153" class="wire" marker-end="url(#ah)"/><path d="M350 130 L350 76" class="wire dash" marker-end="url(#ah)"/><text x="496" y="106" class="sm">unsure</text><text x="356" y="106" class="sm">retrain</text><text x="10" y="212" class="cap">Every week (batch)</text><rect x="10" y="222" width="120" height="46" rx="8" class="k-kb"/><text x="70" y="241" class="small b" text-anchor="middle">SQL counts</text><text x="70" y="257" class="sm" text-anchor="middle">per tag, app, version</text><path d="M130 245 L148 245" class="wire" marker-end="url(#ah)"/><rect x="150" y="222" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="241" class="small b" text-anchor="middle">Spike check</text><text x="210" y="257" class="sm" text-anchor="middle">vs baseline</text><path d="M270 245 L288 245" class="wire" marker-end="url(#ah)"/><rect x="290" y="222" width="120" height="46" rx="8" class="k-model"/><text x="350" y="241" class="small b" text-anchor="middle">Cluster &quot;other&quot;</text><text x="350" y="257" class="sm" text-anchor="middle">new issue types</text><path d="M410 245 L428 245" class="wire" marker-end="url(#ah)"/><rect x="430" y="222" width="120" height="46" rx="8" class="k-model"/><text x="490" y="241" class="small b" text-anchor="middle">LLM writes text</text><text x="490" y="257" class="sm" text-anchor="middle">numbers from SQL</text><path d="M550 245 L568 245" class="wire" marker-end="url(#ah)"/><rect x="570" y="222" width="120" height="46" rx="8" class="k-serve"/><text x="630" y="241" class="small b" text-anchor="middle">Play Console</text><text x="630" y="257" class="sm" text-anchor="middle">top issues + examples</text></svg><figcaption>The cheap model handles most reviews; the LLM only sees the unsure ones and writes text. Counts and trends always come from SQL.</figcaption></figure></section><section id="tagging"><h2>Tagging 20M reviews a day: a classifier cascade</h2>
+<p>Sending every review to an LLM is the expensive default, not the design. At about 400 tokens in and 10 out, a mid-tier LLM costs roughly <strong>$2,900 a day (≈ $87K a month)</strong>, and the 1.8B backfill would cost six figures. The labels are fixed and the volume is high, so this is a job for a small classifier.</p>
+<ol>
+<li><strong>Distillation.</strong> An LLM labels about 50K reviews once, sampled across languages, apps and categories (oversampling rare ones like payments). Experts check a sample of those labels.</li>
+<li><strong>Train a small multilingual classifier</strong> on them: a fine-tuned encoder (BERT-size), or embeddings plus logistic regression. One model for category, one head for sentiment.</li>
+<li><strong>Confidence gate in code.</strong> If the top probability is low (for example below 0.7), the top two are close, or the predicted class is high-stakes (payments, security), the review goes to the LLM with the taxonomy and examples.</li>
+<li><strong>Still unsure → raters.</strong> Their labels go back into training (active learning).</li>
+<li><strong>Backfill</strong> runs the same classifier as a batch job over the 1.8B reviews: hours of GPU time instead of a large LLM bill.</li>
+</ol>
+<p>Rough cost: classifier ≈ $20 to $50 a day of GPU, plus about 10% of reviews at LLM prices ≈ $300 a day, so <strong>about $10K a month instead of $87K</strong>. Tune the threshold so auto-tagged reviews meet the precision target and the share sent to the LLM fits the budget.</p>
+<p><strong>Why not keywords first?</strong> Keywords fire on almost every review and are confidently wrong about 40% of the time, so they cannot decide which reviews are easy. The classifier's own confidence can.</p></section><section id="labels"><h2>Labels: building the eval set</h2>
+<p>The 5,000 old labels use the wrong taxonomy, and keyword tags cannot be ground truth because they <em>are</em> the 60% baseline. Build a new golden set:</p>
+<ul class="plain">
+<li><strong>Taxonomy and guidelines first:</strong> a written definition and examples for each category, including the confusing pairs (performance vs crash, login vs account).</li>
+<li><strong>Sample:</strong> stratified by category, language and app type, from recent production reviews. Oversample rare classes so each key class has <strong>200 or more</strong> examples. About 3,000 to 5,000 reviews in total.</li>
+<li><strong>Raters:</strong> trained raters with the guidelines, native speakers for the top languages. Map old labels to the new taxonomy where they line up, to save time.</li>
+<li><strong>Quality:</strong> two raters label an overlap set; <strong>Cohen's kappa ≥ 0.7</strong>. Disagreements go to an adjudicator, and low agreement means the guidelines need fixing.</li>
+<li><strong>Leakage:</strong> golden-set reviews never go into training or into prompt examples.</li>
+</ul>
+<p><strong>Why 200 per class?</strong> With about 40 examples, a measured 90% recall is uncertain by roughly ±9 points; with 400 it is about ±3. Small slices give numbers you cannot trust.</p></section><section id="metrics"><h2>Classifier metrics</h2>
+<div class="table"><table><thead><tr><th>Metric</th><th>Why</th><th>Illustrative target</th></tr></thead><tbody>
+<tr><td>Per-class precision and recall</td><td>Accuracy hides rare classes: tagging everything "praise" can look accurate while missing every payments issue</td><td>Recall ≥ 90% on crash and payments</td></tr>
+<tr><td>Macro-F1</td><td>F1 averaged across classes so small classes count as much as big ones</td><td>≥ 0.85, vs about 0.6 for keywords</td></tr>
+<tr><td>Confusion matrix</td><td>Shows which classes get mixed up</td><td>Reviewed every release</td></tr>
+<tr><td>Per-language slices</td><td>The average can hide a weak language</td><td>No top-10 language more than 5 points below the average</td></tr>
+<tr><td>Share sent to the LLM</td><td>Cost and latency</td><td>≤ 10 to 20%</td></tr>
+</tbody></table></div>
+<p>Comparing gold and predicted labels is done in code. An LLM judge adds nothing for classification, because every item already has a gold label.</p></section><section id="summary"><h2>Weekly &quot;top issues&quot; summary</h2>
+<ul class="plain">
+<li><strong>Counts and trends come from SQL</strong> over the tags in BigQuery: per category, app version, country and language. The LLM never counts.</li>
+<li><strong>Top means rising:</strong> compare each tag's weekly count with its baseline (percentage change with a minimum volume, or a z-score) to flag spikes like "crash reports up 4× since version 3.2".</li>
+<li><strong>Dedupe before counting:</strong> near-duplicate and bot reviews (review bombing) should not look like a real spike.</li>
+<li><strong>New issue types:</strong> embed reviews tagged "other", cluster them, and let an LLM name the big clusters, for example "battery drain after update". Frequent ones become candidate categories.</li>
+<li><strong>The LLM writes the text</strong> from the SQL results plus 3 representative reviews per issue, and code checks that every number in the text matches the query.</li>
+</ul></section><section id="replies"><h2>Reply drafts</h2>
+<p>The LLM drafts a reply in the review's language, using the developer's own FAQ, release notes and past replies as grounding. The developer always edits or approves; nothing is auto-sent.</p>
+<div class="table"><table><thead><tr><th>Worst case</th><th>Guard</th></tr></thead><tbody>
+<tr><td>Promises: "we'll refund you", "fixed next week"</td><td>Code checks block commitments and dates not in the developer's notes</td></tr>
+<tr><td>Invented facts about the app</td><td>Ground only in the developer's FAQ and release notes; otherwise say "we're looking into it"</td></tr>
+<tr><td>Leaking personal data</td><td>PII detector on input and output</td></tr>
+<tr><td>Wrong language or tone-deaf reply to an angry user</td><td>Language check in code; tone rules and examples in the prompt; toxicity filter on output</td></tr>
+</tbody></table></div>
+<p>Abusive reviews are still tagged and shown to the developer (flagged, not hidden), and no reply is drafted for them.</p></section><section id="experiment"><h2>Proving the drafts work: the A/B test</h2>
+<ul class="plain">
+<li><strong>Randomise by developer (or app)</strong>, not by review, because one developer sees all their drafts. Half get drafts, half don't, <strong>at the same time</strong>. Before/after comparisons are confused by seasons and launches.</li>
+<li><strong>Primary metric:</strong> share of reviews replied to within 7 days. <strong>Secondary:</strong> median time to reply.</li>
+<li><strong>Guardrails:</strong> rating change after a reply, reports and complaints about replies, edit rate.</li>
+<li><strong>Size it before starting</strong> and run at least 2 full weeks; no peeking and stopping early. Ship if the primary lift is significant (p &lt; 0.05) and guardrails hold.</li>
+<li>Offline checks and shadow mode test quality, but only an A/B test can show developers reply more.</li>
+</ul></section><section id="monitoring"><h2>Monitoring and retraining</h2>
+<ul class="plain">
+<li><strong>Data drift:</strong> language mix, review length and vocabulary change (a new country launch, new slang). Detect by comparing input distributions.</li>
+<li><strong>Concept drift:</strong> the meaning of a tag shifts (a new payment method brings new complaints). Detect by precision and recall falling on a fresh weekly labelled sample.</li>
+<li>Track the tag mix, the share of low-confidence reviews and the share sent to the LLM. Retrain monthly, or when drift alerts fire, and gate every new model on the golden set (no slice down more than 1 point).</li>
+</ul></section><section id="probes"><h2>What the interviewer probed, and strong answers</h2>
+<div class="table"><table><thead><tr><th>Probe</th><th>Strong answer</th></tr></thead><tbody>
+<tr><td>"Would you send all 20M reviews to an LLM?"</td><td>No. Distil into a small multilingual classifier; the LLM only for low-confidence cases. About $10K vs $87K a month.</td></tr>
+<tr><td>"Why not accuracy?"</td><td>Classes are imbalanced. Report per-class precision and recall, macro-F1, and recall targets on crash and payments.</td></tr>
+<tr><td>"Your labels are on the old taxonomy. Now what?"</td><td>New guidelines, stratified sample, trained raters, kappa on an overlap set, adjudication, 200+ per key class.</td></tr>
+<tr><td>"Why an LLM judge for classification?"</td><td>None needed: compare predicted and gold labels in code.</td></tr>
+<tr><td>"Is 40 examples enough for 90% recall?"</td><td>No, that is about ±9 points. Use 200 to 400 per key class.</td></tr>
+<tr><td>"How do you prove drafts helped?"</td><td>A/B test randomised by developer, run at the same time, one primary metric plus guardrails, sized in advance.</td></tr>
+<tr><td>"What's the worst reply?"</td><td>A false promise or invented fact. Developer approval, code checks on commitments, grounding in their own docs.</td></tr>
+</tbody></table></div></section><section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"At 20 million reviews a day with fixed categories, I wouldn't call an LLM per review. I'd have an LLM label about 50K reviews once, train a small multilingual classifier on them, and send only the low-confidence ones to the LLM, with raters for what's still unsure, which also gives me new training data. For evaluation I'd build a new golden set with written guidelines, two raters and kappa of at least 0.7, with 200 or more examples per key class, and report per-class precision and recall and macro-F1, with recall of 90% or more on crash and payments, sliced by language. The weekly summary gets its counts and spikes from SQL, and the LLM only writes the text. Reply drafts are never auto-sent and are checked for promises. To prove they help, I'd run an A/B test randomised by developer, with the share of reviews replied to within 7 days as the primary metric and ratings and complaints as guardrails."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="ml-basics.html">ML basics</a></li><li><a href="metrics.html">Metrics cheat sheet</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="testing.html">Testing and rollout</a></li><li><a href="evals.html">Evals</a></li><li><a href="routing.html">Routing</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+</body>
+</html>
