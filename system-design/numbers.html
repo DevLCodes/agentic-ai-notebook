@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Numbers cheat sheet: tokens, cost and latency · Agentic System Designs</title>
+<meta name="description" content="Numbers cheat sheet for AI system design interviews: tokens per word, page, PDF, image and audio; input and output token prices for small, mid and large models; cost of chat, RAG and agent workloads; classifier vs LLM cost; batch and caching discounts; latency numbers.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="enterprise-search.html">Enterprise search</a><a href="knowledge-freshness.html">Fresh knowledge base</a><a href="index.html#topics">Topics</a><a href="testing.html">Testing</a><a href="glossary.html">Glossary</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Revision · numbers</p><h1>Numbers cheat sheet: tokens, cost and latency</h1><p class="lead">Back-of-the-envelope numbers for AI system design: how many tokens a page, file, prompt or chat turn is, input and output prices by model tier, monthly cost estimates, classifier vs LLM cost, and latency.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#top">Memorise these first</a></li><li><a href="#tokens">How many tokens is it?</a></li><li><a href="#prices">Price tiers (per 1M tokens)</a></li><li><a href="#requests">Typical request sizes</a></li><li><a href="#examples">Worked monthly estimates</a></li><li><a href="#classifier">Classifier vs LLM: the cost gap</a></li><li><a href="#latency">Latency numbers</a></li><li><a href="#levers">Cutting the bill, biggest lever first</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="top"><h2>Memorise these first</h2>
+<ol>
+<li><strong>1 token ≈ 4 characters ≈ ¾ of an English word.</strong> 1,000 words ≈ 1,300 tokens; one page ≈ 600 tokens.</li>
+<li><strong>Output costs 4 to 8 times more than input</strong> per token, so long answers are expensive and short labels are cheap.</li>
+<li><strong>Three price tiers per 1M tokens (input / output):</strong> small about $0.10 / $0.40, mid about $0.30 / $2.50, large about $1.25 / $10.</li>
+<li><strong>A chat turn is about 5K tokens in and 250 out.</strong> The prompt is mostly system prompt, history and retrieved chunks, not the question.</li>
+<li><strong>An agent task is 30K to 100K tokens in</strong>, because every step re-sends the context.</li>
+<li><strong>Cost = input tokens × input price + output tokens × output price.</strong> Per day × 30 = per month.</li>
+<li><strong>A classifier is 10 to 100 times cheaper and faster than an LLM</strong> on high-volume fixed-label work: a few dollars vs $100+ per million items, 10 ms vs 1 s.</li>
+<li><strong>Batch is about half price; cached input is 75 to 90% off.</strong></li>
+</ol>
+<p>Prices are illustrative list prices for Flash-Lite, Flash and Pro class models at the time of writing. They change often, so say "roughly" in an interview and show the method, not the exact number.</p></section><section id="tokens"><h2>How many tokens is it?</h2><div class="table"><table><thead><tr><th>Input</th><th>Rough tokens</th><th>Note</th></tr></thead><tbody><tr><td>One English word</td><td>≈ 1.3</td><td>Short common words are 1 token, long or rare words 2 to 4</td></tr><tr><td>One sentence</td><td>20 to 30</td><td></td></tr><tr><td>One page of text (≈ 450 words)</td><td>≈ 600</td><td></td></tr><tr><td>10-page PDF</td><td>≈ 6K</td><td>Tables and scanned pages can be more</td></tr><tr><td>100-page contract or report</td><td>≈ 60K</td><td>Fits in a long-context model, but costly to send every time</td></tr><tr><td>A whole book (≈ 300 pages)</td><td>≈ 150K to 200K</td><td></td></tr><tr><td>One chunk for RAG</td><td>300 to 800</td><td>Top 5 chunks ≈ 2K to 4K</td></tr><tr><td>System prompt with rules and examples</td><td>1K to 3K</td><td>Sent on every call, so cache it</td></tr><tr><td>Tool definitions</td><td>100 to 300 each</td><td>20 tools ≈ 4K tokens on every call</td></tr><tr><td>Chat history, 10 turns</td><td>2K to 4K</td><td>Summarise older turns</td></tr><tr><td>One image</td><td>≈ 250 to 1.5K</td><td>Depends on size and model (tiles)</td></tr><tr><td>Audio</td><td>≈ 30 per second</td><td>1 hour ≈ 100K</td></tr><tr><td>Video</td><td>≈ 250 to 300 per second</td><td>1 minute ≈ 16K</td></tr><tr><td>Code</td><td>≈ 1 token per 3 characters</td><td>Denser than prose</td></tr><tr><td>Hindi, Tamil and other non-Latin scripts</td><td>2 to 4 × English</td><td>Same text, more tokens, so higher cost</td></tr><tr><td>JSON output label like {"label":"spam"}</td><td>5 to 15</td><td></td></tr></tbody></table></div></section><section id="prices"><h2>Price tiers (per 1M tokens)</h2><div class="table"><table><thead><tr><th>Tier</th><th>Example class</th><th>Input</th><th>Output</th><th>Use for</th></tr></thead><tbody><tr><td>Small</td><td>Flash-Lite, Haiku class</td><td>≈ $0.10</td><td>≈ $0.40</td><td>Routing, tagging, extraction, simple classification</td></tr><tr><td>Mid</td><td>Flash, Sonnet class</td><td>≈ $0.30</td><td>≈ $2.50</td><td>Most chat, RAG answers, summaries</td></tr><tr><td>Large</td><td>Pro, Opus class</td><td>≈ $1.25 to $3</td><td>≈ $10 to $15</td><td>Hard reasoning, long documents, planning in agents</td></tr><tr><td>Embeddings</td><td>text or Gemini embedding</td><td>≈ $0.02 to $0.15</td><td>n/a</td><td>Indexing chunks, queries, classifier features</td></tr><tr><td>Batch mode</td><td>any tier</td><td>≈ 50% off</td><td>≈ 50% off</td><td>Overnight jobs that can wait hours</td></tr><tr><td>Cached input</td><td>any tier</td><td>≈ 75 to 90% off</td><td>n/a</td><td>Repeated system prompt, tools, long shared documents</td></tr></tbody></table></div><p>Self-hosting: one GPU costs roughly $1 to $4 an hour. It pays off only at high, steady volume, and you also pay for the people who run it.</p></section><section id="requests"><h2>Typical request sizes</h2><div class="table"><table><thead><tr><th>Workload</th><th>Input tokens</th><th>Output tokens</th><th>Cost per request (mid tier)</th></tr></thead><tbody><tr><td>LLM classification of one item</td><td>300 to 500</td><td>5 to 10</td><td>≈ $0.0001</td></tr><tr><td>Chat turn with RAG</td><td>≈ 5K (2K system, 2K chunks, 1K history)</td><td>≈ 250</td><td>≈ $0.002</td></tr><tr><td>Text-to-SQL</td><td>2K to 5K (schema + examples)</td><td>100 to 200</td><td>≈ $0.001</td></tr><tr><td>Summarise a 10-page document</td><td>≈ 6K</td><td>300 to 500</td><td>≈ $0.003</td></tr><tr><td>Answer over a 100-page document sent in full</td><td>≈ 60K</td><td>≈ 300</td><td>≈ $0.02 (large tier ≈ $0.08)</td></tr><tr><td>Same question with RAG (top 5 chunks)</td><td>≈ 5K</td><td>≈ 300</td><td>≈ $0.002, about 10 × cheaper</td></tr><tr><td>Agent task, 8 steps</td><td>≈ 60K in total (≈ 8K per step)</td><td>≈ 2K</td><td>≈ $0.025 (large tier ≈ $0.10)</td></tr><tr><td>LLM-as-judge on one answer</td><td>1K to 2K</td><td>50 to 200</td><td>≈ $0.001</td></tr></tbody></table></div></section><section id="examples"><h2>Worked monthly estimates</h2>
+<p>The method: requests per day × tokens per request = tokens per day; multiply by the price per million; × 30 for the month. Say every assumption out loud.</p>
+<div class="table"><table><thead><tr><th>Scenario</th><th>Tokens per day</th><th>Mid tier per month</th><th>Large tier per month</th></tr></thead><tbody><tr><td>Support chat: 50K conversations × 6 turns × (5K in, 250 out)</td><td>1.5B in, 75M out</td><td>≈ $19K</td><td>≈ $79K</td></tr><tr><td>Internal RAG search: 10K questions × (5K in, 300 out)</td><td>50M in, 3M out</td><td>≈ $680</td><td>≈ $2.8K</td></tr><tr><td>Agent: 100K tasks × (60K in, 2K out)</td><td>6B in, 200M out</td><td>≈ $69K</td><td>≈ $285K</td></tr><tr><td>Review tagging by LLM: 1M reviews × (400 in, 10 out)</td><td>400M in, 10M out</td><td>≈ $4.4K</td><td>≈ $18K</td></tr><tr><td>Nightly batch: 200K reviews grouped into 200 summaries × (50K in, 500 out)</td><td>10M in, 0.1M out</td><td>≈ $50 (batch)</td><td>≈ $200 (batch)</td></tr></tbody></table></div>
+<p>One-time indexing: 1M pages × 600 tokens = 600M tokens. Embedding them costs about $10 to $90. Adding an LLM-written context line per chunk with a mid model costs a few hundred dollars more.</p></section><section id="classifier"><h2>Classifier vs LLM: the cost gap</h2>
+<p>Same job, 1M items a day with fixed labels (for example, tag each review as bug, billing, praise or spam).</p>
+<div class="table"><table><thead><tr><th>Approach</th><th>Cost per 1M items</th><th>Per month</th><th>Latency per item</th><th>Notes</th></tr></thead><tbody><tr><td>Rules or SQL</td><td>≈ $0</td><td>≈ $0</td><td>&lt; 1 ms</td><td>Only when the logic is exact</td></tr><tr><td>Classic ML on features (logistic regression, gradient-boosted trees)</td><td>&lt; $1 of CPU</td><td>&lt; $30</td><td>≈ 1 ms</td><td>Needs labelled data and good features</td></tr><tr><td>Embedding + small classifier</td><td>≈ $10 to $60 (embedding cost)</td><td>≈ $300 to $1.8K</td><td>≈ 20 to 50 ms</td><td>Handles meaning and many languages; train on 5K to 10K labels</td></tr><tr><td>Fine-tuned encoder (BERT-size) on one GPU</td><td>≈ $2 to $5 of GPU time</td><td>≈ $100</td><td>≈ 5 to 20 ms</td><td>Best accuracy per dollar at high volume</td></tr><tr><td>Small LLM, zero-shot</td><td>≈ $45</td><td>≈ $1.3K</td><td>≈ 300 ms</td><td>No training data needed</td></tr><tr><td>Mid LLM</td><td>≈ $145</td><td>≈ $4.4K</td><td>≈ 0.5 to 1 s</td><td></td></tr><tr><td>Large LLM</td><td>≈ $600</td><td>≈ $18K</td><td>≈ 1 to 3 s</td><td>Overkill for fixed labels</td></tr><tr><td>Cascade: classifier for all, LLM for the ≈ 10% it is unsure about</td><td>≈ $10 to $60 + 10% of LLM cost</td><td>≈ $1K to $2K with a mid LLM</td><td>Mostly fast</td><td>Usually the best answer in an interview</td></tr></tbody></table></div>
+<p>Do not forget labelling: 5K to 10K human labels at $0.10 to $1 each is $500 to $10K one time, or have an LLM label them and experts check a sample. The classifier still wins when volume is high, labels are fixed and the data is labelled.</p></section><section id="latency"><h2>Latency numbers</h2><div class="table"><table><thead><tr><th>Step</th><th>Typical</th></tr></thead><tbody><tr><td>Time to first token</td><td>0.3 to 1 s (more for large models and long prompts)</td></tr><tr><td>Output speed</td><td>50 to 200 tokens per second; a 300-token answer ≈ 2 to 4 s</td></tr><tr><td>Input processing</td><td>Fast, roughly thousands of tokens per second; long prompts still add time to first token</td></tr><tr><td>Embedding one query</td><td>20 to 100 ms</td></tr><tr><td>Vector search (ANN)</td><td>10 to 50 ms</td></tr><tr><td>Cross-encoder rerank of 50 chunks</td><td>50 to 200 ms</td></tr><tr><td>Small classifier</td><td>1 to 20 ms</td></tr><tr><td>Each agent step (model + tool)</td><td>1 to 5 s; 8 steps ≈ 10 to 40 s</td></tr></tbody></table></div></section><section id="levers"><h2>Cutting the bill, biggest lever first</h2>
+<ol>
+<li><strong>Use a smaller model where evals allow</strong> (routing, cascade): often 5 to 10 × cheaper.</li>
+<li><strong>Send fewer input tokens:</strong> RAG instead of whole documents, top 3 to 5 chunks, summarise old turns, load only the tools needed.</li>
+<li><strong>Prompt caching</strong> for the fixed system prompt, tools and shared documents: 75 to 90% off those tokens.</li>
+<li><strong>Cap output:</strong> short answers, JSON labels instead of explanations.</li>
+<li><strong>Batch mode</strong> for anything that can wait: about 50% off.</li>
+<li><strong>Response or semantic cache</strong> for repeated questions (check correctness and per-user data).</li>
+<li><strong>Replace the LLM with a classifier</strong> on high-volume, fixed-label paths.</li>
+</ol></section><section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"Let me estimate. 50K conversations a day, about 6 turns, and each turn sends roughly 5K tokens: 2K system prompt, 2K of retrieved chunks and some history, with about 250 tokens out. That's 1.5 billion input and 75 million output tokens a day. On a Flash-class model at roughly 30 cents in and $2.50 out per million, that's about $640 a day, or around $19K a month; on a Pro-class model, about four times that. To cut it, I'd cache the system prompt, route easy turns to a smaller model, and keep only the top chunks. If part of the traffic is fixed-label tagging at high volume, a small fine-tuned classifier does it for a few percent of the LLM cost."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="metrics.html">Metrics cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="ml-basics.html">ML basics</a></li><li><a href="fluency.html">AI fluency Q&amp;A</a></li><li><a href="after-retrieval.html">After retrieval</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+</body>
+</html>
