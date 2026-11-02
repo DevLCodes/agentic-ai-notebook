@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Caching · Classic System Designs</title>
+<meta name="description" content="Caching for system design: where caches sit, cache-aside vs write-through vs write-back, eviction, invalidation, stampedes and hot keys, with a hit-ratio lab.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+
+<style>
+  .lab-chart { display: block; width: 100%; height: auto; margin: 4px 0 0; }
+  .lab-chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+  .grid-cells { display: grid; gap: 4px; }
+  .srv { display: grid; grid-template-columns: 92px minmax(0,1fr) 70px; gap: 10px; align-items: center; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .lab select { font: 14px var(--font-body); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab input[type=number] { width: 9ch; font: 14px var(--font-mono); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Classic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="index.html#blocks">Building blocks</a><a href="numbers.html">Numbers</a><a href="../system-design/index.html">Agentic designs</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Building block · speed</p><h1>Caching</h1><p class="lead">Keeping a copy of hot data somewhere faster, so most reads never reach the slow system behind it.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#what">What a cache does</a></li><li><a href="#patterns">Read and write patterns</a></li><li><a href="#lab">Try it: hit ratio and cache size</a></li><li><a href="#eviction">Eviction and expiry</a></li><li><a href="#failure">How caches fail</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article>
+<section id="what"><h2>What a cache does</h2>
+<p class="lead">A cache trades memory for speed. A read from Redis takes well under a millisecond; the same read from a database that has to touch disk or run a join can take 5 to 50 ms.</p>
+<figure class="fig"><svg viewBox="0 0 722 190" class="dg" role="img" aria-label="Caches at each layer: browser, CDN, application cache, database buffer pool">
+<rect x="10" y="70" width="104" height="44" rx="8" class="k-user"/><text x="62" y="90" class="small b" text-anchor="middle">Browser</text><text x="62" y="106" class="sm" text-anchor="middle">HTTP cache</text>
+<path d="M114 92 L150 92" class="wire" marker-end="url(#ah)"/>
+<rect x="152" y="70" width="110" height="44" rx="8" class="k-serve"/><text x="207" y="90" class="small b" text-anchor="middle">CDN edge</text><text x="207" y="106" class="sm" text-anchor="middle">static, some API</text>
+<path d="M262 92 L298 92" class="wire" marker-end="url(#ah)"/>
+<rect x="300" y="70" width="110" height="44" rx="8" class="k-kb"/><text x="355" y="90" class="small b" text-anchor="middle">App servers</text><text x="355" y="106" class="sm" text-anchor="middle">in-process cache</text>
+<path d="M410 92 L446 92" class="wire" marker-end="url(#ah)"/>
+<rect x="448" y="70" width="120" height="44" rx="8" class="k-ingest"/><text x="508" y="90" class="small b" text-anchor="middle">Redis / Memcached</text><text x="508" y="106" class="sm" text-anchor="middle">shared cache</text>
+<path d="M568 92 L604 92" class="wire" marker-end="url(#ah)"/>
+<rect x="606" y="70" width="106" height="44" rx="8" class="k-cross"/><text x="659" y="90" class="small b" text-anchor="middle">Database</text><text x="659" y="106" class="sm" text-anchor="middle">buffer pool</text>
+<path d="M30 140 L700 140" class="axis" marker-end="url(#ah)"/><text x="30" y="160" class="sm">closer to the user: faster, but harder to invalidate</text><text x="700" y="160" class="sm" text-anchor="end">closer to the data: slower, easier to keep correct</text>
+<text x="361" y="40" class="cap" text-anchor="middle">EVERY LAYER CAN CACHE</text>
+</svg><figcaption>Caches exist at every layer. In design interviews, "add a cache" usually means the shared Redis or Memcached tier.</figcaption></figure>
+<p>Caching works because real traffic is skewed: a small share of keys (today's popular posts, the logged-in user's profile, the home page) gets most of the reads. Cache those and the database only sees the long tail.</p>
+<p>Caching is a good fit when data is <strong>read much more than written</strong>, when it is <strong>expensive to compute</strong>, and when a <strong>slightly stale answer is acceptable</strong>. It is a bad fit for data that must always be exact, like an account balance at the moment of a payment.</p></section>
+
+<section id="patterns"><h2>Read and write patterns</h2>
+<figure class="fig"><svg viewBox="0 0 722 170" class="dg" role="img" aria-label="Cache-aside: the app checks the cache, and on a miss reads the database and fills the cache">
+<rect x="20" y="62" width="120" height="44" rx="8" class="k-kb"/><text x="80" y="89" class="small b" text-anchor="middle">App</text>
+<rect x="300" y="12" width="140" height="44" rx="8" class="k-ingest"/><text x="370" y="39" class="small b" text-anchor="middle">Cache</text>
+<rect x="300" y="112" width="140" height="44" rx="8" class="k-cross"/><text x="370" y="139" class="small b" text-anchor="middle">Database</text>
+<path d="M140 74 L298 36" class="wire hot" marker-end="url(#ah)"/><text x="200" y="40" class="sm">1. get(key)</text>
+<path d="M140 96 L298 132" class="wire" marker-end="url(#ah)"/><text x="160" y="140" class="sm">2. on a miss: query</text>
+<path d="M440 134 C520 134 520 34 442 34" class="wire dash" marker-end="url(#ah)"/><text x="530" y="80" class="sm">3. set(key, value, ttl)</text>
+<text x="530" y="98" class="sm">done by the app</text>
+</svg><figcaption>Cache-aside (lazy loading), the most common pattern: the application owns both reads and fills.</figcaption></figure>
+<div class="table"><table><thead><tr><th>Pattern</th><th>How it works</th><th>Pros</th><th>Cons</th></tr></thead><tbody>
+<tr><td>Cache-aside</td><td>App reads cache; on a miss reads the DB and fills the cache. Writes go to the DB and delete the cache key.</td><td>Simple; cache only holds what is read; cache outage only slows things down</td><td>First read is slow; small window for stale data</td></tr>
+<tr><td>Read-through</td><td>The cache library loads from the DB on a miss</td><td>Less app code</td><td>Same staleness as cache-aside</td></tr>
+<tr><td>Write-through</td><td>Every write goes to the cache and the DB together</td><td>Cache is always fresh</td><td>Slower writes; caches data nobody reads</td></tr>
+<tr><td>Write-back (write-behind)</td><td>Write to the cache; flush to the DB later in batches</td><td>Very fast writes; absorbs bursts</td><td>Data loss if the cache dies before flushing</td></tr>
+</tbody></table></div>
+<div class="note"><p>On a write, <strong>delete</strong> the cache key rather than updating it. Two concurrent writers that each update the cache can leave the older value in place; deleting forces the next reader to load the current value.</p></div></section>
+
+<section id="lab"><h2>Try it: hit ratio and cache size</h2>
+<p>A catalogue of 100,000 items gets 200,000 reads. Popularity follows a power law, as in real traffic. Change how big the cache is, how skewed traffic is, and the eviction policy.</p>
+<div class="lab" id="calab">
+  <div class="lab-row"><label for="ca-size">Cache size, % of items <input type="range" id="ca-size" min="0" max="12" step="1" value="5"><output id="ca-size-o"></output></label><label for="ca-skew">Skew <input type="range" id="ca-skew" min="0.6" max="1.2" step="0.1" value="0.9"><output id="ca-skew-o"></output></label></div>
+  <div class="lab-row"><span class="lab-k">Eviction</span><span class="seg" role="group" aria-label="Eviction policy" id="ca-pol"><button type="button" data-v="lru" aria-pressed="true">LRU</button><button type="button" data-v="fifo" aria-pressed="false">FIFO</button><button type="button" data-v="rand" aria-pressed="false">Random</button></span></div>
+  <div class="metrics" id="ca-m"></div>
+  <p class="lab-out" id="ca-out" aria-live="polite"></p>
+</div>
+<p class="muted" style="font-size:13.5px">Assumes 0.5 ms for a cache hit and 15 ms for a database read. Sizes map to a 0.5% to 12% scale; the first step is 0.5%.</p></section>
+
+<section id="eviction"><h2>Eviction and expiry</h2>
+<div class="table"><table><thead><tr><th>Policy</th><th>Evicts</th><th>Use when</th></tr></thead><tbody>
+<tr><td>LRU</td><td>Least recently used key</td><td>The default; recent use predicts future use</td></tr>
+<tr><td>LFU</td><td>Least frequently used key</td><td>Stable popularity; resists a one-off scan flushing the cache</td></tr>
+<tr><td>TTL</td><td>Anything older than its time to live</td><td>Always set one, so stale data heals itself even if an invalidation is missed</td></tr>
+</tbody></table></div>
+<p>Redis approximates LRU and LFU by sampling a few keys rather than keeping an exact order, which is cheap and close enough. Add a little random jitter to TTLs so keys written together do not all expire together.</p></section>
+
+<section id="failure"><h2>How caches fail</h2>
+<h3>Stale data</h3>
+<p>The hardest part of caching is invalidation. Delete on write, set a TTL as a safety net, and for data that must be fresh, either skip the cache or listen to the database change stream (change data capture) to invalidate keys.</p>
+<h3>Cache stampede</h3>
+<p>A hot key expires and thousands of requests miss at once, all hitting the database for the same value. Fixes: let only one request rebuild the key (a short lock or request coalescing) while others wait or get the stale value, or refresh popular keys a little before they expire.</p>
+<h3>Hot keys</h3>
+<p>One key, like a celebrity's profile, can get more traffic than one cache node can serve. Keep a small in-process copy on each app server for a few seconds, or replicate the key under several names (<code>key#1</code> to <code>key#8</code>) and read one at random.</p>
+<h3>Cold start and cache loss</h3>
+<p>If the cache tier restarts empty, the full read load lands on the database at once. Size the database to survive a cold cache at reduced traffic, warm the cache before shifting traffic, and replicate the cache so one node failing is not a full flush.</p>
+<h3>Penetration</h3>
+<p>Requests for keys that do not exist always miss. Cache the "not found" result with a short TTL, or check a Bloom filter first.</p></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"Reads outnumber writes about 100 to 1, so I'd put a Redis cluster in front of the database with cache-aside: read from Redis, on a miss read the database and set the key with a TTL of a few minutes plus jitter. Writes go to the database and delete the key. How much a cache helps depends on how skewed the traffic is, so I'd size it from the real key distribution: with typical skew, caching the hottest 5 to 10% of items takes half or more of the reads off the database, and far more for very skewed traffic. For hot keys I'd add a short in-process cache, and I'd use request coalescing so one expiry doesn't stampede the database."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Shared in-memory cache</td><td>Redis, Valkey, Memcached, Dragonfly</td><td>Redis and Valkey add data structures, replication and persistence</td></tr>
+<tr><td>Managed</td><td>Amazon ElastiCache, Google Memorystore, Azure Cache for Redis, Upstash</td><td>Failover and patching handled for you</td></tr>
+<tr><td>In-process</td><td>Caffeine (Java), lru-cache (Node), functools.lru_cache (Python)</td><td>Fastest, but per server and lost on restart</td></tr>
+<tr><td>Edge and HTTP</td><td>Cloudflare, Fastly, Amazon CloudFront, Varnish</td><td>Controlled with Cache-Control headers</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="databases.html">Databases and indexes</a></li><li><a href="consistency.html">Consistency</a></li><li><a href="sharding.html">Sharding and consistent hashing</a></li><li><a href="numbers.html">Numbers to know</a></li></ul></section>
+  </article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(function(){
+  function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  var $ = function(id){ return document.getElementById(id); }, pol = 'lru', N = 100000, R = 200000, cdfCache = {};
+  function cdf(s){ if (cdfCache[s]) return cdfCache[s]; var c = new Float64Array(N), acc = 0; for (var i = 0; i < N; i++){ acc += 1 / Math.pow(i + 1, s); c[i] = acc; } for (i = 0; i < N; i++) c[i] /= acc; return cdfCache[s] = c; }
+  function draw(c, u){ var lo = 0, hi = N - 1; while (lo < hi){ var m = (lo + hi) >> 1; if (c[m] < u) lo = m + 1; else hi = m; } return lo; }
+  function run(){
+    var step = +$('ca-size').value, pct = step === 0 ? 0.5 : step, s = +(+$('ca-skew').value).toFixed(1);
+    $('ca-size-o').textContent = pct + '%'; $('ca-skew-o').textContent = s.toFixed(1);
+    var cap = Math.round(N * pct / 100), c = cdf(s), r = rng(7), hits = 0;
+    var map = new Map(), keys = [], warm = 20000;
+    for (var i = 0; i < R + warm; i++){
+      var k = draw(c, r()), hit = map.has(k);
+      if (hit){ if (pol === 'lru'){ map.delete(k); map.set(k, 1); } }
+      else {
+        if (map.size >= cap){
+          if (pol === 'rand'){ var j = Math.floor(r() * keys.length), ev = keys[j]; keys[j] = k; map.delete(ev); }
+          else { map.delete(map.keys().next().value); }
+        } else if (pol === 'rand') keys.push(k);
+        map.set(k, 1);
+      }
+      if (i >= warm && hit) hits++;
+    }
+    var hr = hits / R, lat = hr * 0.5 + (1 - hr) * 15, dbq = (1 - hr);
+    $('ca-m').innerHTML = '<div class="metric"><span class="n">' + (hr*100).toFixed(1) + '%</span><span class="l">hit ratio</span></div><div class="metric"><span class="n">' + lat.toFixed(1) + ' ms</span><span class="l">average read</span><small>15 ms with no cache</small></div><div class="metric"><span class="n">' + (dbq*100).toFixed(0) + '%</span><span class="l">reads reaching the DB</span></div>';
+    var msg = 'Caching ' + pct + '% of items serves ' + (hr*100).toFixed(0) + '% of reads. ';
+    if (s >= 1) msg += 'With strongly skewed traffic a small cache goes a long way.';
+    else if (s <= 0.7) msg += 'With flatter traffic, many items are read about equally often, so you need a much bigger cache for the same hit ratio. Measure your real key distribution before sizing.';
+    else msg += 'Doubling the cache does not double the hit ratio: each extra item is less popular than the last, so returns diminish.';
+    if (pol !== 'lru') msg += ' ' + (pol === 'fifo' ? 'FIFO' : 'Random eviction') + ' throws out popular items as readily as unpopular ones, so it trails LRU at the same size.';
+    $('ca-out').textContent = msg;
+  }
+  $('ca-pol').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; pol = b.dataset.v; this.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); run(); });
+  $('ca-size').addEventListener('change', run); $('ca-skew').addEventListener('change', run);
+  $('ca-size').addEventListener('input', function(){ var v = +this.value; $('ca-size-o').textContent = (v === 0 ? 0.5 : v) + '%'; });
+  $('ca-skew').addEventListener('input', function(){ $('ca-skew-o').textContent = (+this.value).toFixed(1); });
+  run();
+})();
+</script>
+</body>
+</html>

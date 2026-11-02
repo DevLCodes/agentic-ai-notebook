@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rate limiting · Classic System Designs</title>
+<meta name="description" content="Rate limiting for system design: token bucket, leaky bucket, fixed and sliding windows, where to enforce limits, distributed limiting with Redis, and a side-by-side lab.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+
+<style>
+  .lab-chart { display: block; width: 100%; height: auto; margin: 4px 0 0; }
+  .lab-chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+  .grid-cells { display: grid; gap: 4px; }
+  .srv { display: grid; grid-template-columns: 92px minmax(0,1fr) 70px; gap: 10px; align-items: center; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .lab select { font: 14px var(--font-body); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab input[type=number] { width: 9ch; font: 14px var(--font-mono); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Classic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="index.html#blocks">Building blocks</a><a href="numbers.html">Numbers</a><a href="../system-design/index.html">Agentic designs</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Building block · protection</p><h1>Rate limiting</h1><p class="lead">Capping how many requests a client can make in a period, so one noisy user or a bug can't take the service down for everyone.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#why">Why limit</a></li><li><a href="#algorithms">Algorithms</a></li><li><a href="#lab">Try it: four limiters, same traffic</a></li><li><a href="#where">Where to enforce</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article>
+<section id="why"><h2>Why limit</h2>
+<p class="lead">Without limits, the heaviest client decides how the service performs for everyone else.</p>
+<ul class="plain">
+<li><strong>Protect capacity.</strong> A retry loop in one customer's script can send 10,000 requests a second.</li>
+<li><strong>Fairness.</strong> Each user or API key gets its share, often tied to a pricing plan.</li>
+<li><strong>Abuse and cost.</strong> Slow down password guessing, scraping and sign-up spam; cap spend on expensive calls such as SMS or LLM requests.</li>
+</ul>
+<p>When a client is over its limit, return <code>429 Too Many Requests</code> with a <code>Retry-After</code> header, and ideally headers that show the limit and how much remains, so well-behaved clients can slow down on their own.</p></section>
+
+<section id="algorithms"><h2>Algorithms</h2>
+<figure class="fig"><svg viewBox="0 0 722 180" class="dg" role="img" aria-label="Token bucket: tokens drip in at a fixed rate up to a capacity; each request takes one token or is rejected">
+<path d="M150 50 L150 150 L270 150 L270 50" fill="none" stroke="var(--line-strong)" stroke-width="2"/>
+<rect x="152" y="96" width="116" height="52" fill="var(--t-kb)"/>
+<circle cx="180" cy="122" r="7" class="f-kb"/><circle cx="200" cy="130" r="7" class="f-kb"/><circle cx="222" cy="118" r="7" class="f-kb"/><circle cx="242" cy="132" r="7" class="f-kb"/>
+<circle cx="210" cy="20" r="7" class="f-kb"/><path d="M210 30 L210 46" class="wire" marker-end="url(#ah)"/><text x="230" y="24" class="sm">refill: 2 tokens per second</text>
+<text x="210" y="172" class="sm" text-anchor="middle">capacity: 20 tokens (max burst)</text>
+<rect x="10" y="100" width="100" height="36" rx="8" class="k-user"/><text x="60" y="123" class="small b" text-anchor="middle">Request</text>
+<path d="M110 118 L148 118" class="wire" marker-end="url(#ah)"/>
+<path d="M270 106 L380 70" class="wire hot" marker-end="url(#ah)"/><rect x="382" y="52" width="200" height="36" rx="8" class="k-ingest"/><text x="482" y="75" class="small b" text-anchor="middle">token taken → allowed</text>
+<path d="M270 136 L380 140" class="wire red" marker-end="url(#ah)"/><rect x="382" y="122" width="200" height="36" rx="8" class="k-dlq"/><text x="482" y="145" class="small b" text-anchor="middle">bucket empty → 429</text>
+</svg><figcaption>A token bucket allows short bursts up to its capacity while holding the long-run rate to the refill rate.</figcaption></figure>
+<div class="table"><table><thead><tr><th>Algorithm</th><th>How it works</th><th>Strengths</th><th>Weaknesses</th></tr></thead><tbody>
+<tr><td>Token bucket</td><td>Tokens refill at rate r up to capacity b; each request spends one</td><td>Allows controlled bursts; two numbers to store per client</td><td>Two knobs to tune</td></tr>
+<tr><td>Leaky bucket</td><td>Requests enter a queue that drains at a fixed rate</td><td>Perfectly smooth output</td><td>Bursts wait or are dropped; adds latency</td></tr>
+<tr><td>Fixed window</td><td>Count per clock window (e.g. per minute); reset at the boundary</td><td>Simplest: one counter with a TTL</td><td>Up to 2× the limit around a window boundary</td></tr>
+<tr><td>Sliding window log</td><td>Store the timestamp of every request in the last window</td><td>Exact</td><td>Memory grows with the limit</td></tr>
+<tr><td>Sliding window counter</td><td>Current window count plus the previous window's count, weighted by overlap</td><td>Nearly exact with two counters</td><td>An approximation; assumes even traffic in the previous window</td></tr>
+</tbody></table></div></section>
+
+<section id="lab"><h2>Try it: four limiters, same traffic</h2>
+<p>The limit is <strong>20 requests per 10 seconds</strong>. For the token bucket that is a capacity of 20 and a refill of 2 per second. Pick a traffic pattern and compare.</p>
+<div class="lab" id="rllab">
+  <div class="lab-row"><span class="lab-k">Algorithm</span><span class="seg" role="group" aria-label="Algorithm" id="rl-a"><button type="button" data-v="fixed" aria-pressed="true">Fixed window</button><button type="button" data-v="log" aria-pressed="false">Sliding log</button><button type="button" data-v="swc" aria-pressed="false">Sliding counter</button><button type="button" data-v="tb" aria-pressed="false">Token bucket</button></span></div>
+  <div class="lab-row"><span class="lab-k">Traffic</span><span class="seg" role="group" aria-label="Traffic pattern" id="rl-p"><button type="button" data-v="edge" aria-pressed="true">Bursts at window edges</button><button type="button" data-v="steady" aria-pressed="false">Steady, too fast</button><button type="button" data-v="spiky" aria-pressed="false">Random spikes</button></span></div>
+  <svg class="lab-chart" id="rl-chart" viewBox="0 0 700 190" role="img" aria-label="Requests per second, allowed and rejected"></svg>
+  <div class="metrics" id="rl-m"></div>
+  <p class="lab-out" id="rl-out" aria-live="polite"></p>
+</div></section>
+
+<section id="where"><h2>Where to enforce</h2>
+<figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Limits at the edge, at the API gateway using a shared Redis counter, and inside services">
+<rect x="10" y="50" width="110" height="40" rx="8" class="k-user"/><text x="65" y="75" class="small b" text-anchor="middle">Clients</text>
+<path d="M120 70 L160 70" class="wire" marker-end="url(#ah)"/>
+<rect x="162" y="50" width="140" height="40" rx="8" class="k-gov"/><text x="232" y="68" class="small b" text-anchor="middle">Edge / WAF</text><text x="232" y="83" class="sm" text-anchor="middle">per IP, coarse</text>
+<path d="M302 70 L342 70" class="wire" marker-end="url(#ah)"/>
+<rect x="344" y="50" width="150" height="40" rx="8" class="k-serve"/><text x="419" y="68" class="small b" text-anchor="middle">API gateway</text><text x="419" y="83" class="sm" text-anchor="middle">per key / user / plan</text>
+<path d="M419 90 L419 112" class="wire dash" marker-end="url(#ah)"/><rect x="359" y="114" width="120" height="30" rx="8" class="k-ingest"/><text x="419" y="134" class="small b" text-anchor="middle">Redis counters</text>
+<path d="M494 70 L534 70" class="wire" marker-end="url(#ah)"/>
+<rect x="536" y="50" width="176" height="40" rx="8" class="k-kb"/><text x="624" y="68" class="small b" text-anchor="middle">Services</text><text x="624" y="83" class="sm" text-anchor="middle">per expensive operation</text>
+</svg><figcaption>Coarse limits at the edge stop floods cheaply; precise per-customer limits live at the gateway.</figcaption></figure>
+<h3>Limiting across many servers</h3>
+<p>With 50 gateway instances, a limit kept in each instance's memory lets a client get 50 times the limit. Keep counters in a shared store: Redis is the standard choice, with the check-and-increment done atomically in one Lua script or a single <code>INCR</code> plus <code>EXPIRE</code> per window.</p>
+<p>That adds a network hop to every request. At very high volume, servers keep local counts and sync with Redis every few hundred milliseconds, accepting a small overshoot in exchange for speed.</p>
+<h3>If the limiter fails</h3>
+<p>Decide up front: <strong>fail open</strong> (allow traffic if Redis is down; usual for general API limits) or <strong>fail closed</strong> (reject; right for login attempts and expensive operations).</p>
+<h3>Rate limits are not load shedding</h3>
+<p>A per-client limit doesn't help if the total of all well-behaved clients exceeds capacity. Pair limits with <strong>load shedding</strong>: when the service itself is overloaded, reject low-priority traffic first, regardless of whose it is.</p></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"I'd enforce per-API-key limits at the gateway with a token bucket: a refill rate from the customer's plan and a capacity that allows short bursts. State lives in Redis, keyed by API key, updated atomically with a Lua script, so all gateway instances share one count. Over-limit requests get a 429 with Retry-After. Coarse per-IP limits at the CDN stop floods earlier. If Redis is unreachable we fail open for normal endpoints and closed for login."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Edge and WAF</td><td>Cloudflare rate limiting rules, AWS WAF rate-based rules, Google Cloud Armor</td><td>Per IP or header, before traffic reaches you</td></tr>
+<tr><td>API gateways</td><td>Kong, Envoy rate limit service, NGINX limit_req, AWS API Gateway usage plans, Apigee</td><td>Per key and plan</td></tr>
+<tr><td>Libraries</td><td>redis-cell, Bucket4j, rate-limiter-flexible, Upstash Ratelimit</td><td>Token bucket and sliding windows over Redis</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="load-balancing.html">Load balancing</a></li><li><a href="caching.html">Caching (Redis)</a></li><li><a href="queues.html">Queues and backpressure</a></li><li><a href="../ai-governance.html">AI governance</a></li></ul></section>
+  </article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); }, alg = 'fixed', pat = 'edge', T = 60, L = 20, WIN = 10;
+  function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function traffic(){
+    var ev = [], i, r = rng(11);
+    if (pat === 'steady'){ for (i = 0; i < T * 3; i++) ev.push(i / 3 + 0.01); }
+    else if (pat === 'edge'){ [10, 30, 50].forEach(function(b){ for (i = 0; i < 20; i++){ ev.push(b - 2 + i * 0.099); ev.push(b + 0.01 + i * 0.099); } }); for (i = 0; i < T; i += 2) ev.push(i + 0.5); }
+    else { for (var t = 0; t < T; t++){ var n = r() < 0.15 ? 12 + Math.floor(r() * 10) : Math.floor(r() * 3); for (i = 0; i < n; i++) ev.push(t + r()); } }
+    return ev.sort(function(a,b){ return a - b; });
+  }
+  function decide(ev){
+    var out = [], log = [], tokens = L, last = 0, counts = {};
+    ev.forEach(function(t){
+      var ok;
+      if (alg === 'fixed'){ var w = Math.floor(t / WIN); counts[w] = counts[w] || 0; ok = counts[w] < L; if (ok) counts[w]++; }
+      else if (alg === 'log'){ while (log.length && log[0] <= t - WIN) log.shift(); ok = log.length < L; if (ok) log.push(t); }
+      else if (alg === 'swc'){ var cw = Math.floor(t / WIN), cur = counts[cw] || 0, prev = counts[cw - 1] || 0, est = cur + prev * (1 - (t % WIN) / WIN); ok = est < L; if (ok) counts[cw] = cur + 1; }
+      else { tokens = Math.min(L, tokens + (t - last) * (L / WIN)); last = t; ok = tokens >= 1; if (ok) tokens -= 1; }
+      out.push([t, ok]);
+    });
+    return out;
+  }
+  function run(){
+    var res = decide(traffic()), allowed = res.filter(function(x){ return x[1]; }).map(function(x){ return x[0]; });
+    var peak = 0, j = 0; for (var i = 0; i < allowed.length; i++){ while (allowed[i] - allowed[j] >= WIN) j++; peak = Math.max(peak, i - j + 1); }
+    var ok = new Array(T).fill(0), no = new Array(T).fill(0); res.forEach(function(x){ var s = Math.min(T - 1, Math.floor(x[0])); if (x[1]) ok[s]++; else no[s]++; });
+    var top = Math.max.apply(null, ok.map(function(v,i){ return v + no[i]; })), top2 = Math.max(top, 5), bw = 650 / T, svg = '';
+    for (var w = 0; w <= T; w += WIN) svg += '<line x1="' + (40 + w * bw) + '" y1="16" x2="' + (40 + w * bw) + '" y2="160" stroke="var(--line)" stroke-dasharray="3 3"/><text x="' + (40 + w * bw) + '" y="178" text-anchor="middle">' + w + ' s</text>';
+    for (i = 0; i < T; i++){
+      var h1 = ok[i] / top2 * 140, h2 = no[i] / top2 * 140, x = 40 + i * bw + 1;
+      if (ok[i]) svg += '<rect x="' + x + '" y="' + (160 - h1) + '" width="' + (bw - 2) + '" height="' + h1 + '" fill="var(--c-kb)"/>';
+      if (no[i]) svg += '<rect x="' + x + '" y="' + (160 - h1 - h2) + '" width="' + (bw - 2) + '" height="' + h2 + '" fill="var(--c-dlq)" opacity=".75"/>';
+    }
+    svg += '<line x1="40" y1="160" x2="690" y2="160" stroke="var(--line-strong)"/><text x="36" y="24" text-anchor="end">' + top2 + '/s</text><text x="690" y="12" text-anchor="end"><tspan fill="var(--c-kb)">■</tspan> allowed  <tspan fill="var(--c-dlq)">■</tspan> rejected (429)</text>';
+    $('rl-chart').innerHTML = svg;
+    var nOk = allowed.length, nAll = res.length;
+    $('rl-m').innerHTML = '<div class="metric"><span class="n">' + nOk + ' / ' + nAll + '</span><span class="l">allowed</span></div><div class="metric"><span class="n" style="color:' + (peak > L ? 'var(--c-dlq)' : 'inherit') + '">' + peak + '</span><span class="l">most in any 10 s</span><small>limit is ' + L + '</small></div>';
+    var msg;
+    if (alg === 'fixed' && peak > L * 1.3) msg = 'The fixed window let through ' + peak + ' requests within 10 seconds, ' + (peak / L).toFixed(1) + '× the limit: a full window’s worth just before the boundary and another just after. Try the sliding log on the same traffic.';
+    else if (alg === 'log') msg = 'The sliding log is exact: no 10-second span ever has more than ' + L + '. The price is storing a timestamp for every recent request, per client.';
+    else if (alg === 'swc') msg = 'The sliding counter estimates the last 10 seconds from two counters. It stays close to the true limit (peak ' + peak + ') with almost no memory, which is why it is a popular choice at scale.';
+    else if (alg === 'tb') msg = 'The token bucket lets a client burst up to ' + L + ' when it has saved tokens, then holds it to 2 per second. Its peak in a 10 s span can exceed ' + L + ' (here ' + peak + ') because tokens refill during the span. That is by design: you choose the burst size and the long-run rate separately.';
+    else msg = 'With this traffic the fixed window stays close to the limit. Switch to "Bursts at window edges" to see its weak spot.';
+    $('rl-out').textContent = msg;
+  }
+  function seg(id, set){ $(id).addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; set(b.dataset.v); this.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); run(); }); }
+  seg('rl-a', function(v){ alg = v; }); seg('rl-p', function(v){ pat = v; });
+  run();
+})();
+</script>
+</body>
+</html>

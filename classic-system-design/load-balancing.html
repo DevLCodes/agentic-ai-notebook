@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Load balancing · Classic System Designs</title>
+<meta name="description" content="Load balancing for system design: L4 vs L7, round robin, least connections, power of two choices, consistent hashing, health checks, and a simulator.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+
+<style>
+  .lab-chart { display: block; width: 100%; height: auto; margin: 4px 0 0; }
+  .lab-chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+  .grid-cells { display: grid; gap: 4px; }
+  .srv { display: grid; grid-template-columns: 92px minmax(0,1fr) 70px; gap: 10px; align-items: center; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .lab select { font: 14px var(--font-body); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab input[type=number] { width: 9ch; font: 14px var(--font-mono); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Classic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="index.html#blocks">Building blocks</a><a href="numbers.html">Numbers</a><a href="../system-design/index.html">Agentic designs</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Building block · traffic</p><h1>Load balancing</h1><p class="lead">Spreading requests across many servers so no single one is overloaded, and so one failing server does not take the service down.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#what">What a load balancer does</a></li><li><a href="#layers">Layer 4 or layer 7</a></li><li><a href="#algorithms">Choosing a server</a></li><li><a href="#lab">Try it: one slow server</a></li><li><a href="#health">Health checks and failure</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article>
+<section id="what"><h2>What a load balancer does</h2>
+<p class="lead">A load balancer sits in front of a pool of identical servers. Clients talk to one address; the balancer picks a healthy server for each connection or request.</p>
+<figure class="fig"><svg viewBox="0 0 722 210" class="dg" role="img" aria-label="Clients send traffic to a load balancer, which forwards to three servers and stops sending to the one that fails its health check">
+<rect x="10" y="40" width="110" height="36" rx="8" class="k-user"/><text x="65" y="63" class="small b" text-anchor="middle">Web clients</text>
+<rect x="10" y="130" width="110" height="36" rx="8" class="k-user"/><text x="65" y="153" class="small b" text-anchor="middle">Mobile apps</text>
+<path d="M120 58 L232 100" class="wire" marker-end="url(#ah)"/><path d="M120 148 L232 112" class="wire" marker-end="url(#ah)"/>
+<rect x="236" y="82" width="150" height="46" rx="10" class="k-serve"/><text x="311" y="102" class="small b" text-anchor="middle">Load balancer</text><text x="311" y="119" class="sm" text-anchor="middle">one public address</text>
+<path d="M386 96 L520 40" class="wire hot" marker-end="url(#ah)"/><path d="M386 105 L520 105" class="wire hot" marker-end="url(#ah)"/><path d="M386 114 L520 170" class="wire red dash"/>
+<rect x="524" y="22" width="130" height="36" rx="8" class="k-kb"/><text x="589" y="45" class="small b" text-anchor="middle">App server 1</text>
+<rect x="524" y="87" width="130" height="36" rx="8" class="k-kb"/><text x="589" y="110" class="small b" text-anchor="middle">App server 2</text>
+<rect x="524" y="152" width="130" height="36" rx="8" class="k-dlq"/><text x="589" y="175" class="small b" text-anchor="middle">App server 3</text>
+<path d="M664 163 l10 10 m0 -10 l-10 10" class="xmark"/><text x="589" y="204" class="sm" text-anchor="middle">failed health check: removed</text>
+</svg><figcaption>The balancer health-checks every server and only sends traffic to the ones that pass.</figcaption></figure>
+<p>It gives you three things at once: <strong>scale</strong> (add servers to add capacity), <strong>availability</strong> (a dead server is skipped), and <strong>a single stable entry point</strong> where you can terminate TLS, apply rate limits and roll out new versions gradually.</p>
+<p>For this to work, the servers behind it should be <strong>stateless</strong>: any server can handle any request because session data lives in a shared store such as Redis or the database, not in one server's memory.</p></section>
+
+<section id="layers"><h2>Layer 4 or layer 7</h2>
+<div class="table"><table><thead><tr><th></th><th>Layer 4 (transport)</th><th>Layer 7 (application)</th></tr></thead><tbody>
+<tr><td>Sees</td><td>IP addresses and ports, TCP or UDP</td><td>Full HTTP: path, headers, cookies, body</td></tr>
+<tr><td>Decides per</td><td>Connection</td><td>Request</td></tr>
+<tr><td>Can do</td><td>Very fast forwarding, millions of connections, any protocol</td><td>Route <code>/api</code> and <code>/images</code> to different pools, TLS termination, retries, header rewrites, canary splits</td></tr>
+<tr><td>Cost</td><td>Low latency, little CPU</td><td>More CPU per request; must parse and often decrypt traffic</td></tr>
+<tr><td>Examples</td><td>AWS NLB, Google passthrough Network LB, IPVS, Maglev</td><td>AWS ALB, NGINX, Envoy, HAProxy in HTTP mode</td></tr>
+</tbody></table></div>
+<p>Large systems often use both: an L4 tier spreads connections across a fleet of L7 proxies, which then make per-request routing decisions.</p></section>
+
+<section id="algorithms"><h2>Choosing a server</h2>
+<div class="table"><table><thead><tr><th>Algorithm</th><th>How it picks</th><th>Good for</th><th>Watch out for</th></tr></thead><tbody>
+<tr><td>Round robin</td><td>Next server in turn</td><td>Identical servers, similar requests</td><td>Ignores load; a slow server still gets its full share</td></tr>
+<tr><td>Weighted round robin</td><td>Turns in proportion to a weight</td><td>Mixed instance sizes</td><td>Weights are static guesses</td></tr>
+<tr><td>Least connections</td><td>Server with the fewest open requests</td><td>Requests of very different lengths</td><td>Needs a global view of counts; hard across many balancers</td></tr>
+<tr><td>Power of two choices</td><td>Pick two at random, send to the less busy one</td><td>Many balancers, large pools</td><td>Slightly worse than perfect least-connections, far better than random</td></tr>
+<tr><td>Hashing (IP, user, key)</td><td>Same key always goes to the same server</td><td>Caches and sticky sessions</td><td>Plain <code>hash % N</code> reshuffles almost everything when N changes; use <a href="sharding.html#consistent">consistent hashing</a></td></tr>
+</tbody></table></div>
+<p>Power of two choices is worth remembering: checking just two random servers instead of one makes the worst queue dramatically shorter, without every balancer needing up-to-date counts for every server.</p></section>
+
+<section id="lab"><h2>Try it: one slow server</h2>
+<p>Four servers each take about 20 ms per request. Tick the box to make server 4 three times slower, as if it had a noisy neighbour or a bad disk. Then compare algorithms at the same traffic level.</p>
+<div class="lab" id="lblab">
+  <div class="lab-row"><span class="lab-k">Algorithm</span><span class="seg" role="group" aria-label="Algorithm" id="lb-alg"><button type="button" data-v="rr" aria-pressed="true">Round robin</button><button type="button" data-v="rand" aria-pressed="false">Random</button><button type="button" data-v="lc" aria-pressed="false">Least connections</button><button type="button" data-v="p2" aria-pressed="false">Power of two</button></span></div>
+  <div class="lab-row"><label for="lb-load">Traffic, % of total capacity <input type="range" id="lb-load" min="30" max="95" step="5" value="70"><output id="lb-load-o"></output></label><label><input type="checkbox" id="lb-slow" checked> Server 4 is 3× slower</label></div>
+  <div class="bars" id="lb-bars"></div>
+  <div class="metrics" id="lb-m"></div>
+  <p class="lab-out" id="lb-out" aria-live="polite"></p>
+</div>
+<p class="muted" style="font-size:13.5px">A small queueing simulation runs in the page: 20,000 requests arrive at random, each server works through its own queue in order, and service times vary randomly around the average. The numbers are illustrative, but the shape matches real systems.</p></section>
+
+<section id="health"><h2>Health checks and failure</h2>
+<h3>Health checks</h3>
+<p>The balancer calls something like <code>GET /healthz</code> every few seconds. After a few failures in a row the server is taken out; after a few successes it goes back in. A <strong>liveness</strong> check asks "is the process up?"; a <strong>readiness</strong> check asks "can it serve right now?" (database reachable, caches warm). Keep the readiness check cheap, or the checks themselves become load.</p>
+<h3>Connection draining</h3>
+<p>When you deploy or scale in, stop sending new requests to a server but let in-flight ones finish for a grace period, often 30 seconds. Without this, every deploy produces a burst of errors.</p>
+<h3>Sticky sessions</h3>
+<p>Pinning a user to one server with a cookie makes in-memory sessions work, but it fights the balancer: load becomes uneven and a server failure logs everyone on it out. Prefer stateless servers with a shared session store.</p>
+<h3>The balancer itself</h3>
+<p>A single balancer is a single point of failure. Run them in pairs or fleets, behind DNS with several addresses or an anycast IP, and spread servers across availability zones so losing one zone loses a fraction of capacity, not the service. Managed cloud balancers handle this for you.</p>
+<h3>Retries</h3>
+<p>Retrying a failed request on another server hides individual failures, but retries add load exactly when the system is struggling. Cap them (one retry, or a retry budget of about 10% of traffic), only retry safe or idempotent requests, and add jittered backoff.</p></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>"Clients hit a managed L7 load balancer that terminates TLS and spreads requests across stateless app servers in three zones; sessions live in Redis so any server can take any request. I'd use least-outstanding-requests or power of two choices rather than round robin, so one slow instance doesn't build a queue. Health checks remove bad instances, deploys drain connections, and retries are capped to one, only for idempotent calls, so a partial outage doesn't turn into a retry storm."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Managed cloud balancers</td><td>AWS ALB and NLB, Google Cloud Load Balancing, Azure Load Balancer and Application Gateway</td><td>Health checks, zones and scaling handled for you</td></tr>
+<tr><td>Self-hosted proxies</td><td>NGINX, HAProxy, Envoy, Traefik</td><td>Full control; Envoy is the usual service-mesh data plane</td></tr>
+<tr><td>Global and edge</td><td>Cloudflare Load Balancing, AWS Global Accelerator, DNS-based routing (Route 53)</td><td>Send users to the nearest healthy region</td></tr>
+<tr><td>Inside Kubernetes</td><td>Services with kube-proxy, ingress controllers, Gateway API</td><td>The same ideas, configured as cluster objects</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="caching.html">Caching</a></li><li><a href="sharding.html">Sharding and consistent hashing</a></li><li><a href="rate-limiting.html">Rate limiting</a></li><li><a href="numbers.html">Numbers to know</a></li><li><a href="../system-design/routing.html">Routing for agents</a></li></ul></section>
+  </article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(function(){
+  function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  var alg = 'rr', $ = function(id){ return document.getElementById(id); };
+  function sim(){
+    var load = +$('lb-load').value / 100, slow = $('lb-slow').checked;
+    var mu = [1, 1, 1, slow ? 1/3 : 1];             // requests per unit time; 1 unit = 20 ms
+    var cap = mu.reduce(function(a,b){return a+b;}, 0), lam = load * cap;
+    var r = rng(42), q = [[],[],[],[]], count = [0,0,0,0], lat = [], latS = [[],[],[],[]], t = 0, rrI = 0, N = 20000;
+    for (var i = 0; i < N; i++){
+      t += -Math.log(1 - r()) / lam;
+      for (var s = 0; s < 4; s++){ while (q[s].length && q[s][0] <= t) q[s].shift(); }
+      var pick;
+      if (alg === 'rr') { pick = rrI; rrI = (rrI + 1) % 4; }
+      else if (alg === 'rand') pick = Math.floor(r() * 4);
+      else if (alg === 'lc') { pick = 0; for (s = 1; s < 4; s++) if (q[s].length < q[pick].length) pick = s; }
+      else { var a = Math.floor(r() * 4), b = Math.floor(r() * 3); if (b >= a) b++; pick = q[b].length < q[a].length ? b : a; }
+      var start = q[pick].length ? Math.max(t, q[pick][q[pick].length-1]) : t;
+      var done = start + (-Math.log(1 - r()) / mu[pick]);
+      q[pick].push(done); count[pick]++;
+      var l = (done - t) * 20; lat.push(l); latS[pick].push(l);
+    }
+    lat.sort(function(a,b){return a-b;});
+    var p = function(x){ return lat[Math.min(lat.length-1, Math.floor(x * lat.length))]; };
+    var mean = function(a){ return a.length ? a.reduce(function(x,y){return x+y;},0) / a.length : 0; };
+    var bars = '';
+    for (s = 0; s < 4; s++){
+      var share = count[s] / N, util = (share * lam) / mu[s];
+      bars += '<div class="bar-row"><span>Server ' + (s+1) + (s===3 && slow ? ' (slow)' : '') + '</span><span class="bar"><i style="width:' + (share*100).toFixed(1) + '%;background:' + (util > 0.98 ? 'var(--c-dlq)' : 'var(--c-kb)') + '"></i></span><span class="v">' + Math.round(share*100) + '%</span></div>';
+    }
+    $('lb-bars').innerHTML = bars;
+    var fmt = function(ms){ return ms >= 1000 ? (ms/1000).toFixed(1) + ' s' : Math.round(ms) + ' ms'; };
+    $('lb-m').innerHTML = '<div class="metric"><span class="n">' + fmt(p(0.5)) + '</span><span class="l">p50 latency</span></div><div class="metric"><span class="n">' + fmt(p(0.99)) + '</span><span class="l">p99 latency</span></div><div class="metric"><span class="n">' + fmt(mean(latS[3])) + '</span><span class="l">avg on server 4</span></div>';
+    var u4 = (count[3] / N * lam) / mu[3], msg;
+    if (slow && u4 > 0.98) msg = '<strong>Server 4 is overloaded.</strong> It gets ' + Math.round(count[3]/N*100) + '% of requests but can only handle about ' + Math.round(mu[3]/lam*100) + '% at this traffic level, so its queue grows for as long as traffic lasts. One in four users waits on that queue.';
+    else if (slow && (alg === 'lc' || alg === 'p2')) msg = 'The balancer notices server 4 has a longer queue and sends it less work, so latency stays close to the healthy case. That is why load-aware algorithms beat round robin when servers are not identical.';
+    else if (!slow) msg = 'With identical servers every algorithm works. Round robin and least connections are close; random is a little worse because short-term bad luck builds queues. Push traffic above 85% to see tail latency rise.';
+    else msg = 'Server 4 keeps up for now, but it runs hotter than the rest, and its users see slower responses.';
+    $('lb-out').innerHTML = msg;
+    $('lb-load-o').textContent = $('lb-load').value + '%';
+  }
+  $('lb-alg').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; alg = b.dataset.v; this.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); sim(); });
+  $('lb-load').addEventListener('input', sim); $('lb-slow').addEventListener('change', sim);
+  sim();
+})();
+</script>
+</body>
+</html>
