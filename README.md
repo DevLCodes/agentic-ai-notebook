@@ -43,7 +43,11 @@ Non-agentic building blocks, in [`classic-system-design/`](classic-system-design
 - [Consistency and CAP](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/consistency.html): CAP and PACELC, consistency models, quorums, sagas; lab: tune R, W and N
 - [Numbers to know](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/numbers.html): latency by layer, per-node throughput, availability; lab: daily users to QPS and storage
 
-Full classic design walkthroughs (URL shortener, news feed, chat, payments and more) come next.
+Walkthroughs:
+
+- [URL Shortener](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/url-shortener.html): 100M links a month and 100× the clicks, covering random codes with conditional writes, a three-layer redirect cache, viral links and takedowns, async click analytics and multi-region writes; two 3D scenes and a keyspace lab
+
+More walkthroughs (news feed, chat, payments and more) come next.
 
 ## System design walkthroughs
 

@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>URL Shortener · Classic System Designs</title>
+<meta name="description" content="URL shortener system design walkthrough: requirements, estimates, API, short code generation, storage, the redirect path and caching, click analytics, abuse, multi-region deployment, observability and a 45-minute interview script, with 3D scenes and a keyspace lab.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+
+<style>
+  .lab-chart { display: block; width: 100%; height: auto; margin: 4px 0 0; }
+  .lab-chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+  .grid-cells { display: grid; gap: 4px; }
+  .srv { display: grid; grid-template-columns: 92px minmax(0,1fr) 70px; gap: 10px; align-items: center; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .lab select { font: 14px var(--font-body); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab input[type=number] { width: 9ch; font: 14px var(--font-mono); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+</style><style>
+  .prompt { margin: 0; font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .prompt q { font-style: italic; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .tags li { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  @media (max-width: 640px) { .prompt { font-size: 16.5px; } }
+</style>
+<link rel="stylesheet" href="../assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">Classic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="index.html#blocks">Building blocks</a><a href="numbers.html">Numbers</a><a href="../system-design/index.html">Agentic designs</a><a href="../index.html">Notebook</a></nav></div></header>
+<main>
+<header class="wrap"><div class="intro"><p class="eyebrow">Classic system design walkthrough</p><h1>URL Shortener</h1><p class="prompt"><q>Design a service like a link shortener: users paste a long URL and get a short one such as sho.rt/aZ3k9Qx. Anyone who opens the short link is redirected to the original. Expect 100 million new links a month and a hundred times as many clicks.</q></p><ul class="legend" aria-label="Colour key"><li><i style="background:var(--c-ingest)"></i>Write path</li><li><i style="background:var(--c-serve)"></i>Read path</li><li><i style="background:var(--c-kb)"></i>Storage</li><li><i style="background:var(--c-cross)"></i>Async and analytics</li><li><i style="background:var(--c-gov)"></i>Safety</li></ul></div></header>
+<div class="wrap"><figure class="fig3d hero" id="hero">
+  <div class="stage3d" role="img" aria-label="Animated 3D view of the whole system: a creator submits a long URL to the API, which checks it and stores a random short code in the database with a conditional write. A visitor opens the short link through a CDN edge to the redirect service, which misses Redis the first time, reads the database, fills the cache and returns a 302. The redirect emits a click event to Kafka for analytics without waiting. Later clicks hit the cache."><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The sections below cover the same ground.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. The top row is the write path, the middle row the redirect path, and the back row click analytics.</figcaption>
+</figure></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="Sections"><p>The solution</p><ol><li><a href="#requirements">Requirements</a></li><li><a href="#success">Success metrics</a></li><li><a href="#estimates">Estimates</a></li><li><a href="#api">API</a></li><li><a href="#architecture">Architecture</a></li><li><a href="#codes">Generating short codes</a></li><li><a href="#lab">Try it: how long should codes be?</a></li><li><a href="#storage">Storage</a></li><li><a href="#redirect">The redirect path and caching</a></li><li><a href="#analytics">Click analytics</a></li><li><a href="#abuse">Abuse and safety</a></li><li><a href="#deployment">Deployment and regions</a></li><li><a href="#observability">Observability</a></li><li><a href="#risks">Risks and v2</a></li><li><a href="#presenting">Presenting it in 45 minutes</a></li><li><a href="#numbers">Numbers to remember</a></li></ol></nav>
+  <article>
+
+<section id="requirements">
+  <h2>Requirements</h2>
+  <ul class="tags"><li>Clarify</li></ul>
+  <p class="lead">A URL shortener looks trivial, so the interview is about the numbers and the edges: read-heavy traffic, unguessable codes, hot links and abuse.</p>
+  <div class="table"><table>
+    <thead><tr><th>Question</th><th>Assumption</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>New links</td><td class="num">100M a month</td><td>Sets write load and how many codes we need</td></tr>
+      <tr><td>Clicks</td><td class="num">100:1 reads to writes</td><td>The redirect path is the system; optimise it first</td></tr>
+      <tr><td>Redirect latency</td><td class="num">p99 under 50 ms at our edge</td><td>A shortener that feels slow makes every link feel broken</td></tr>
+      <tr><td>Availability</td><td class="num">99.99% for redirects</td><td>Links are printed on posters and in emails; they can't go down</td></tr>
+      <tr><td>Retention</td><td>Kept forever by default; optional expiry</td><td>Storage grows without limit, and codes are never reused</td></tr>
+      <tr><td>Custom aliases</td><td>Yes, for signed-in users (<code>sho.rt/spring-sale</code>)</td><td>Same namespace as generated codes; needs reserved words</td></tr>
+      <tr><td>Analytics</td><td>Click counts by day, country and referrer, minutes behind</td><td>Can be asynchronous and approximate</td></tr>
+      <tr><td>Abuse</td><td>Block malware and phishing destinations</td><td>Otherwise our domain ends up on blocklists and every link breaks</td></tr>
+    </tbody>
+  </table></div>
+  <p>Out of scope for v1: editing a link's destination after creation, link-in-bio pages and QR codes. Say so explicitly, so the interviewer knows you chose rather than forgot.</p>
+</section>
+
+<section id="success">
+  <h2>Success metrics</h2>
+  <ul class="tags"><li>Define success</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Kind</th><th>Metric</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr><td>Product</td><td>Links created per week; share of links clicked at least once</td><td class="num">growing; &gt; 60%</td></tr>
+      <tr><td>Reliability</td><td>Redirect success rate (3xx for valid codes); p99 redirect latency</td><td class="num">99.99%; &lt; 50 ms</td></tr>
+      <tr><td>Guardrail</td><td>Malicious links live more than an hour; analytics lag</td><td class="num">near zero; &lt; 5 min</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="estimates">
+  <h2>Estimates</h2>
+  <ul class="tags"><li>Back of the envelope</li><li><a href="numbers.html">Numbers</a></li></ul>
+  <figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Key numbers: 40 writes a second, 4,000 redirects a second on average, 20,000 at peak, 6 billion links and 3 TB over five years">
+    <rect x="10" y="10" width="134" height="92" rx="8" class="box"/><text x="24" y="52" class="big">40/s</text><text x="24" y="78" class="sm">new links, average</text><text x="24" y="94" class="sm">~120/s at peak</text>
+    <rect x="154" y="10" width="134" height="92" rx="8" class="k-serve"/><text x="168" y="52" class="big">4k/s</text><text x="168" y="78" class="sm">redirects, average</text><text x="168" y="94" class="sm">plan for 20k+/s</text>
+    <rect x="298" y="10" width="134" height="92" rx="8" class="k-kb"/><text x="312" y="52" class="big">6B</text><text x="312" y="78" class="sm">links in 5 years</text><text x="312" y="94" class="sm">100M × 60 months</text>
+    <rect x="442" y="10" width="134" height="92" rx="8" class="k-kb"/><text x="456" y="52" class="big">3 TB</text><text x="456" y="78" class="sm">at ~500 B a link</text><text x="456" y="94" class="sm">~9 TB with 3 replicas</text>
+    <rect x="586" y="10" width="126" height="92" rx="8" class="k-cross"/><text x="600" y="52" class="big">66 GB</text><text x="600" y="78" class="sm">click events a day</text><text x="600" y="94" class="sm">330M × ~200 B</text>
+    <text x="10" y="132" class="small">Writes are tiny. The design is driven by read volume, read latency and the slow, steady growth of storage.</text>
+  </svg></figure>
+  <ul class="plain">
+    <li><strong>Writes:</strong> 100M ÷ 30 days ÷ 86,400 s ≈ 40 per second; peaks of about 3× are about 120 per second. One database leader could take that.</li>
+    <li><strong>Reads:</strong> 10B clicks a month ≈ 4,000 per second on average. Clicks are spiky (a link shared in a big newsletter), so plan for 20,000+ per second and burst beyond that at the edge.</li>
+    <li><strong>Storage:</strong> 6B links × ~500 bytes (code, URL averaging ~200 bytes, owner, timestamps, flags) ≈ 3 TB, about 9 TB with three replicas. Too big to be comfortable on one node, easy for a partitioned key-value store.</li>
+    <li><strong>Cache:</strong> if ~50M distinct links are clicked on a given day, caching all of them is 50M × 500 B ≈ 25 GB, which fits in a small Redis cluster.</li>
+  </ul>
+</section>
+
+<section id="api">
+  <h2>API</h2>
+  <ul class="tags"><li>Interface</li></ul>
+<pre><code>POST /api/links            (auth optional, rate limited)
+  { "url": "https://example.com/a/very/long/path?utm=…",
+    "alias": "spring-sale",          // optional, signed-in users
+    "expires_at": "2027-01-01" }     // optional
+→ 201 { "code": "aZ3k9Qx", "short_url": "https://sho.rt/aZ3k9Qx" }
+
+GET /{code}
+→ 302 Location: https://example.com/a/very/long/path?utm=…
+→ 404 if unknown, 410 if expired or taken down
+
+GET /api/links/{code}/stats?from=…&amp;to=…   (owner only)
+→ { "clicks": 18234, "by_day": […], "by_country": {…} }</code></pre>
+  <h3>301 or 302?</h3>
+  <p>A <strong>301</strong> (permanent) is cached by browsers, which saves us traffic but means repeat clicks never reach us: no analytics, and no way to take down a phishing link for people who already opened it. A <strong>302</strong> (or 307) is temporary, so every click comes back. Use 302 with a short <code>Cache-Control: max-age</code>, so the CDN can still absorb bursts for a few seconds while we keep control.</p>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <ul class="tags"><li>Whole system</li></ul>
+  <figure class="fig"><svg viewBox="0 0 722 300" class="dg" role="img" aria-label="Architecture: write path through the API to the links table; read path through CDN, redirect service, Redis and the links table; click events to Kafka and analytics">
+    <text x="10" y="22" class="cap">WRITE PATH · ~40/S</text>
+    <rect x="10" y="34" width="96" height="40" rx="8" class="k-user"/><text x="58" y="58" class="small b" text-anchor="middle">Creator</text>
+    <path d="M106 54 L140 54" class="wire" marker-end="url(#ah)"/>
+    <rect x="142" y="34" width="120" height="40" rx="8" class="k-ingest"/><text x="202" y="52" class="small b" text-anchor="middle">Link API</text><text x="202" y="67" class="sm" text-anchor="middle">rate limit · validate</text>
+    <path d="M202 34 L202 20 L320 20" class="wire dash" marker-end="url(#ah)"/><rect x="322" y="6" width="130" height="28" rx="8" class="k-gov"/><text x="387" y="25" class="small b" text-anchor="middle">URL safety checks</text>
+    <path d="M262 54 L470 54 L470 120" class="wire" marker-end="url(#ah)"/><text x="360" y="48" class="sm" text-anchor="middle">PUT code IF NOT EXISTS</text>
+    <text x="10" y="112" class="cap">READ PATH · 4K–20K+/S</text>
+    <rect x="10" y="150" width="96" height="40" rx="8" class="k-user"/><text x="58" y="174" class="small b" text-anchor="middle">Visitor</text>
+    <path d="M106 170 L140 170" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="142" y="150" width="96" height="40" rx="8" class="k-serve"/><text x="190" y="168" class="small b" text-anchor="middle">CDN edge</text><text x="190" y="183" class="sm" text-anchor="middle">302s for ~60 s</text>
+    <path d="M238 170 L272 170" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="274" y="150" width="120" height="40" rx="8" class="k-serve"/><text x="334" y="168" class="small b" text-anchor="middle">Redirect service</text><text x="334" y="183" class="sm" text-anchor="middle">stateless</text>
+    <path d="M394 162 L430 136" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="410" y="122" width="120" height="36" rx="18" class="k-kb"/><text x="470" y="145" class="small b" text-anchor="middle">Links table</text>
+    <path d="M394 178 L572 178" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="574" y="160" width="138" height="38" rx="8" class="k-ingest"/><text x="643" y="178" class="small b" text-anchor="middle">Redis cache</text><text x="643" y="192" class="sm" text-anchor="middle">~25 GB hot links</text>
+    <text x="440" y="200" class="sm">1. cache first</text><text x="404" y="118" class="sm">2. on a miss</text>
+    <path d="M334 190 L334 236" class="wire dash" marker-end="url(#ah)"/><text x="342" y="220" class="sm">click event, fire and forget</text>
+    <text x="10" y="232" class="cap">ANALYTICS · ASYNC</text>
+    <rect x="274" y="238" width="120" height="40" rx="20" class="k-cross"/><text x="334" y="262" class="small b" text-anchor="middle">Kafka: clicks</text>
+    <path d="M394 258 L440 258" class="wire" marker-end="url(#ah)"/>
+    <rect x="442" y="238" width="120" height="40" rx="8" class="k-cross"/><text x="502" y="256" class="small b" text-anchor="middle">Stream job</text><text x="502" y="271" class="sm" text-anchor="middle">dedupe · aggregate</text>
+    <path d="M562 258 L598 258" class="wire" marker-end="url(#ah)"/>
+    <rect x="600" y="238" width="112" height="40" rx="8" class="k-cross"/><text x="656" y="256" class="small b" text-anchor="middle">Stats store</text><text x="656" y="271" class="sm" text-anchor="middle">ClickHouse</text>
+  </svg><figcaption>Writes and reads share only the links table. Analytics hangs off the redirect path asynchronously so it can never slow a redirect down.</figcaption></figure>
+  <p>Four pieces, each sized for its own load:</p>
+  <ul class="plain">
+    <li><strong>Link API</strong> creates links. Low volume, but it must never hand out the same code twice and must refuse dangerous URLs.</li>
+    <li><strong>Redirect service</strong> turns a code into a 302. It is tiny, stateless and replicated widely; nearly all traffic is here.</li>
+    <li><strong>Links table</strong> in a partitioned key-value store, keyed by code, with Redis in front for hot links and a CDN in front of that for bursts.</li>
+    <li><strong>Analytics</strong>: click events go to Kafka without blocking, and a stream job aggregates them into a stats store.</li>
+  </ul>
+  <p>Splitting create and redirect into separate services lets them scale, deploy and fail independently. A bad deploy of the dashboard should never break links printed on billboards.</p>
+</section>
+
+<section id="codes">
+  <h2>Generating short codes</h2>
+  <ul class="tags"><li>Deep dive 1</li><li><a href="sharding.html">Keys and hashing</a></li></ul>
+  <p class="lead">The core question: how do many API servers hand out codes that are short, never collide, and can't be guessed in order?</p>
+  <p>Codes use <strong>base62</strong> (a–z, A–Z, 0–9). Seven characters give 62⁷ ≈ 3.5 trillion codes, nearly 600 times the 6 billion we need in five years.</p>
+  <div class="table"><table>
+    <thead><tr><th>Approach</th><th>How</th><th>Pros</th><th>Cons</th></tr></thead>
+    <tbody>
+      <tr><td>Hash the URL</td><td>Take the first 7 base62 characters of a hash of the long URL</td><td>Same URL gives the same code; no coordination</td><td>Truncated hashes collide, so you still need a check and a fallback; two users can't get separate links (and stats) for the same URL</td></tr>
+      <tr><td>Counter</td><td>A global sequence, encoded in base62: 1 → <code>b</code>, 125 → <code>cb</code> …</td><td>Never collides; shortest possible codes</td><td>A single counter is a bottleneck and a single point of failure; codes are sequential, so anyone can enumerate every link</td></tr>
+      <tr><td>Counter ranges</td><td>Each API server leases a block of 10,000 IDs from a coordinator (a database row or ZooKeeper), then scrambles each ID with a reversible permutation before encoding</td><td>No per-write coordination; never collides</td><td>More moving parts; a crashed server wastes its unused block (fine)</td></tr>
+      <tr><td><strong>Random + conditional write</strong></td><td>Generate 7 random base62 characters; insert with "only if this key doesn't exist"; on conflict, retry with a new code</td><td>Stateless, unguessable, simple</td><td>A retry now and then, more often as the space fills (see the lab)</td></tr>
+    </tbody>
+  </table></div>
+  <p>I'd pick <strong>random codes with a conditional write</strong>. Every key-value store supports "put if absent" (DynamoDB condition expressions, Cassandra lightweight transactions, <code>INSERT … ON CONFLICT DO NOTHING</code> in Postgres), so uniqueness is enforced by the database rather than by our own coordination. Random codes are also unguessable, which matters because a sequential scheme lets a scraper walk through every link anyone has ever made, including private documents shared by link.</p>
+  <p>Custom aliases go through the same conditional write, after checking a reserved list (<code>api</code>, <code>login</code>, <code>admin</code>, offensive words) and a minimum length so people can't squat the short random space.</p>
+</section>
+
+<section id="lab">
+  <h2>Try it: how long should codes be?</h2>
+  <ul class="tags"><li>Lab</li></ul>
+  <p>Pick an alphabet, a code length and how many links exist. The same number tells you two things: how often a new random code collides, and how often a scraper's random guess hits a real link.</p>
+  <div class="lab" id="kslab">
+    <div class="lab-row"><span class="lab-k">Alphabet</span><span class="seg" role="group" aria-label="Alphabet" id="ks-a"><button type="button" data-v="62" aria-pressed="true">base62</button><button type="button" data-v="58" aria-pressed="false">base58 (no 0 O l I)</button><button type="button" data-v="36" aria-pressed="false">base36 (lowercase)</button></span></div>
+    <div class="lab-row"><label for="ks-l">Code length <input type="range" id="ks-l" min="4" max="10" step="1" value="7"><output id="ks-l-o"></output></label><label for="ks-n">Links stored <input type="range" id="ks-n" min="6" max="11" step="0.25" value="9.75"><output id="ks-n-o"></output></label></div>
+    <div class="metrics" id="ks-m"></div>
+    <p class="lab-out" id="ks-out" aria-live="polite"></p>
+  </div>
+  <p class="muted" style="font-size:13.5px">Assumes 3.3M new links a day and a scraper making 1,000 random guesses a second. Collision chance per insert = links stored ÷ keyspace.</p>
+</section>
+
+<section id="storage">
+  <h2>Storage</h2>
+  <ul class="tags"><li><a href="databases.html">Databases</a></li></ul>
+<pre><code>links
+  code         string   PRIMARY KEY      -- "aZ3k9Qx"
+  long_url     string                    -- up to ~2 KB
+  owner_id     string   NULL
+  created_at   timestamp
+  expires_at   timestamp NULL
+  status       enum     -- active | expired | blocked
+
+index: (owner_id, created_at)            -- "my links" page</code></pre>
+  <p>Every redirect is a lookup by primary key, and there are no joins or multi-row transactions. That is exactly what a partitioned key-value store does best, so I'd use <strong>DynamoDB</strong> (or Cassandra/ScyllaDB if self-hosted), partitioned by <code>code</code>. Random codes spread evenly across partitions with no hot spots from creation order.</p>
+  <p>Postgres also works if the team knows it well: 9 TB means sharding by a hash of <code>code</code> (for example with Citus), and the "my links" query becomes a scatter-gather unless you keep a separate per-owner table. The key-value store makes that per-owner index a built-in secondary index.</p>
+  <p>Back it up: point-in-time recovery plus daily snapshots to another account. Losing the mapping breaks every link ever printed, and that can't be fixed.</p>
+</section>
+
+<section id="redirect">
+  <h2>The redirect path and caching</h2>
+  <ul class="tags"><li>Deep dive 2</li><li><a href="caching.html">Caching</a></li></ul>
+  <p class="lead">Three layers keep the hot path fast: the CDN edge, Redis, then the database. Each one absorbs most of what reaches it.</p>
+  <ol class="plain">
+    <li><strong>CDN edge.</strong> The redirect response carries <code>Cache-Control: public, max-age=60</code>. A viral link is answered at the edge, so a million clicks a minute become one request per edge location per minute.</li>
+    <li><strong>Redis.</strong> Cache-aside, keyed by code, with a TTL of a day plus jitter. Unknown codes are cached as "not found" for a minute, so scrapers guessing random codes don't hammer the database.</li>
+    <li><strong>Database.</strong> Only misses arrive here, usually links that haven't been clicked today.</li>
+  </ol>
+  <p>The redirect service itself does almost nothing: parse the code, look it up, check <code>status</code> and <code>expires_at</code>, emit a click event into an in-memory buffer, and return the 302. It runs in several regions and zones behind a load balancer; see <a href="load-balancing.html">Load balancing</a>.</p>
+  <figure class="fig3d" id="viral3d">
+    <div class="stage3d" role="img" aria-label="A viral link: thousands of visitors hit CDN edges, which serve a cached 302; only one request per minute per edge reaches the redirect service, which hits Redis; the database sees nothing. A takedown then sets the link to blocked, deletes the Redis key and purges the CDN, so the next clicks get a warning page."><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Each layer shields the one behind it; a takedown has to clear every layer.</figcaption>
+  </figure>
+  <h3>Changing or removing a link</h3>
+  <p>Caching makes changes slow to take effect. When a link is blocked or expires, the API writes the new status, deletes the Redis key and sends a purge to the CDN for that path. Keep the CDN TTL short (about a minute) so even a missed purge heals quickly.</p>
+</section>
+
+<section id="analytics">
+  <h2>Click analytics</h2>
+  <ul class="tags"><li><a href="queues.html">Queues and streams</a></li></ul>
+  <p>The redirect must not wait for analytics. Each redirect server appends a small event (code, time, country from the edge, referrer, user agent hash) to a local buffer and a background thread sends batches to a Kafka topic. If Kafka is unreachable the buffer fills and old events are dropped: losing a few clicks is better than slowing redirects.</p>
+  <p>A stream job (Flink, or Kafka Streams) filters obvious bots, deduplicates rapid repeats from the same client, and adds counts per code per minute into a column store such as ClickHouse or BigQuery. The stats API reads those pre-aggregated rows, so a dashboard for a link with 10 million clicks is still one small query.</p>
+  <p>Clicks served by the CDN never reach the redirect service, so edge clicks come from CDN logs instead, streamed into the same topic. That's an extra pipeline, but it's the price of edge caching; mention it before the interviewer does.</p>
+</section>
+
+<section id="abuse">
+  <h2>Abuse and safety</h2>
+  <ul class="tags"><li>Governance</li><li><a href="rate-limiting.html">Rate limiting</a></li></ul>
+  <ul class="plain">
+    <li><strong>Check destinations.</strong> On create, check the URL against threat lists such as Google Safe Browsing and our own blocklist; rescan new links again after an hour and every link periodically, because pages turn malicious after they're shared.</li>
+    <li><strong>Rate limit creation.</strong> A token bucket per account and per IP; anonymous users get low limits and must pass a challenge at volume.</li>
+    <li><strong>Fast takedown.</strong> A reported or flagged link flips to <code>blocked</code>, its caches are purged, and visitors see a warning page instead of a redirect.</li>
+    <li><strong>Protect the domain.</strong> If email providers or browsers flag <code>sho.rt</code> itself, every customer's links break. Track the domain's reputation and keep abuse response in hours, not days.</li>
+    <li><strong>Private links.</strong> Codes are unguessable, but not secret. Tell users that anyone with the link can open it, and cache "not found" so scraping is cheap for us and slow for them.</li>
+  </ul>
+</section>
+
+<section id="deployment">
+  <h2>Deployment and regions</h2>
+  <ul class="tags"><li>Production</li></ul>
+  <p>Redirects are served from at least two regions, with users routed to the nearest healthy one by DNS latency routing or anycast. The links table is replicated to every region (DynamoDB global tables or a multi-region Cassandra cluster), so a redirect never crosses an ocean.</p>
+  <div class="note"><p><strong>A subtle trap:</strong> a conditional write only checks the local region's copy. If two regions both accept creates, they could each hand out the same random code within the replication delay, and last-writer-wins would silently overwrite one link. At 40 writes a second, the simple fix is to send all creates to one home region, failing over if it goes down. The alternative is to give each region its own slice of the code space (a region character in the code).</p></div>
+  <p>Services are stateless containers behind load balancers, autoscaled on CPU and request rate. Deploy the redirect service with canaries: send 1% of traffic to the new version, watch error rate and p99, then roll forward. Keep the redirect service's dependencies minimal so a failure elsewhere (dashboard, analytics, even the API) can't take redirects down.</p>
+</section>
+
+<section id="observability">
+  <h2>Observability</h2>
+  <ul class="tags"><li>Production</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Signal</th><th>Why</th><th>Alert when</th></tr></thead>
+    <tbody>
+      <tr><td>Redirect success rate and p99 latency, per region</td><td>The core SLO</td><td>Error budget burning fast (multi-window burn-rate alert)</td></tr>
+      <tr><td>Cache hit ratio (edge and Redis)</td><td>A drop sends load straight to the database</td><td>Redis hit ratio falls below ~90%</td></tr>
+      <tr><td>404 rate</td><td>A spike means scraping, a bad deploy, or a broken partner integration</td><td>Several times normal</td></tr>
+      <tr><td>Create conflicts and retries</td><td>Confirms the keyspace still has room</td><td>Retries per create trending up</td></tr>
+      <tr><td>Kafka consumer lag, dropped events</td><td>Analytics freshness</td><td>Lag over 5 minutes</td></tr>
+      <tr><td>Blocked links created per hour, time to takedown</td><td>Abuse is getting through</td><td>Sudden spikes from one account or network</td></tr>
+    </tbody>
+  </table></div>
+  <p>Trace a sample of redirects end to end (edge, service, Redis, database) so a latency regression can be pinned to a layer in minutes.</p>
+</section>
+
+<section id="risks">
+  <h2>Risks and v2</h2>
+  <ul class="tags"><li>Wrap-up</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Risk</th><th>How you detect it</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Viral link overloads one cache shard</td><td>Per-node Redis CPU, hot-key sampling</td><td>CDN caching, a small in-process cache, key replicas</td></tr>
+      <tr><td>Domain flagged for phishing</td><td>Reputation monitoring, abuse reports</td><td>URL scanning, rescans, fast takedown, limits on anonymous creation</td></tr>
+      <tr><td>Mapping data lost or corrupted</td><td>Restore drills; consistency checks between regions</td><td>Point-in-time recovery, cross-account backups</td></tr>
+      <tr><td>Duplicate codes across regions</td><td>Conflict metrics, periodic scans</td><td>Single write region or partitioned code space</td></tr>
+      <tr><td>Analytics undercounts</td><td>Compare CDN log totals with service counts</td><td>Ingest CDN logs; alert on dropped events</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>v2 ideas:</strong> editable destinations (requires short TTLs everywhere), branded custom domains for businesses, QR codes, A/B destinations, and link-level permissions for private links.</p>
+</section>
+
+<section id="presenting">
+  <h2>Presenting it in 45 minutes</h2>
+  <ul class="tags"><li>Interview script</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Step</th><th>Time</th><th>What to cover</th></tr></thead>
+    <tbody>
+      <tr><td>1. Clarify</td><td class="num">5 min</td><td>Volume, read:write ratio, latency, retention, custom aliases, analytics, abuse</td></tr>
+      <tr><td>2. Estimate</td><td class="num">4 min</td><td>40 writes/s, 4k–20k reads/s, 6B links, 3 TB, 25 GB hot set</td></tr>
+      <tr><td>3. API</td><td class="num">3 min</td><td>Create, redirect, stats; 301 vs 302</td></tr>
+      <tr><td>4. Draw the whole system</td><td class="num">8 min</td><td>API, redirect service, key-value store, Redis, CDN, Kafka and analytics</td></tr>
+      <tr><td>5. Deep dive: codes</td><td class="num">10 min</td><td>Hash vs counter vs random; conditional writes; length and guessability</td></tr>
+      <tr><td>6. Deep dive: scale and failure</td><td class="num">10 min</td><td>Caching layers, viral links, takedown, regions and the duplicate-code trap</td></tr>
+      <tr><td>7. Risks and v2</td><td class="num">5 min</td><td>Abuse, data loss, analytics accuracy; what you'd build next</td></tr>
+    </tbody>
+  </table></div>
+  <div class="say"><p>"Writes are only about 40 a second, so the design is about reads. I'd split it into a small create API and a stateless redirect service. Codes are 7 random base62 characters stored with a conditional put in DynamoDB keyed by code, so uniqueness comes from the database and codes can't be enumerated. Redirects return a 302 with a 60-second cache header, so the CDN absorbs viral links, then Redis, then the table. Clicks go to Kafka asynchronously for analytics. Creates are checked against threat lists and rate limited, and a takedown purges every cache layer."</p></div>
+</section>
+
+<section id="numbers">
+  <h2>Numbers to remember</h2>
+  <ul class="tags"><li>Cheat sheet</li></ul>
+  <div class="table"><table><tbody>
+    <tr><td>62⁶ / 62⁷ / 62⁸</td><td class="num">57 billion / 3.5 trillion / 218 trillion</td></tr>
+    <tr><td>100M a month</td><td class="num">≈ 40 per second</td></tr>
+    <tr><td>10B a month</td><td class="num">≈ 4,000 per second</td></tr>
+    <tr><td>6B links × 500 B</td><td class="num">3 TB (9 TB with 3 replicas)</td></tr>
+    <tr><td>Redis lookup / key-value read</td><td class="num">~1 ms / a few ms</td></tr>
+    <tr><td>CDN max-age on redirects</td><td class="num">~60 s: bursts absorbed, takedowns still fast</td></tr>
+  </tbody></table></div>
+</section>
+  </article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. The 3D views use Three.js loaded from a CDN, so they need a connection; the text and tables cover the same ground. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); }, A = 62;
+  function big(n){ var u = [[1e15,' quadrillion'],[1e12,' trillion'],[1e9,' billion'],[1e6,' million'],[1e3,' thousand']]; for (var i = 0; i < u.length; i++) if (n >= u[i][0]) return (n/u[i][0]).toFixed(n/u[i][0] < 10 ? 1 : 0) + u[i][1]; return Math.round(n).toLocaleString(); }
+  function pct(x){ if (x >= 0.995) return '100%'; if (x >= 0.1) return (x*100).toFixed(0) + '%'; if (x >= 0.001) return (x*100).toFixed(2) + '%'; if (x === 0) return '0%'; return (x*100).toExponential(1) + '%'; }
+  function run(){
+    var L = +$('ks-l').value, N = Math.pow(10, +$('ks-n').value), space = Math.pow(A, L), occ = Math.min(1, N / space);
+    $('ks-l-o').textContent = L + ' chars'; $('ks-n-o').textContent = big(N);
+    var retriesDay = occ >= 1 ? Infinity : 3.3e6 * occ / (1 - occ), hitsHour = 1000 * 3600 * occ;
+    $('ks-m').innerHTML = '<div class="metric"><span class="n">' + big(space) + '</span><span class="l">possible codes</span></div><div class="metric"><span class="n">' + pct(occ) + '</span><span class="l">collision chance per insert</span><small>' + (isFinite(retriesDay) ? Math.round(retriesDay).toLocaleString() + ' retries a day' : 'space is full') + '</small></div><div class="metric"><span class="n">' + (hitsHour >= 1 ? Math.round(hitsHour).toLocaleString() : hitsHour.toFixed(2)) + '</span><span class="l">live links a scraper finds per hour</span></div>';
+    var msg;
+    if (occ >= 1) msg = 'There are more links than codes. This length cannot work at this scale.';
+    else if (occ > 0.3) msg = 'The space is crowded: ' + pct(occ) + ' of codes are taken, so inserts retry often and a scraper finds a live link with almost every few guesses. Add characters.';
+    else if (occ > 0.01) msg = 'Workable for uniqueness (retries are cheap), but a scraper finds about ' + Math.round(hitsHour).toLocaleString() + ' real links an hour. One more character divides that by ' + A + '.';
+    else msg = 'Comfortable. Collisions are rare enough that a retry loop handles them, and random guessing finds ' + (hitsHour >= 1 ? 'only about ' + Math.round(hitsHour).toLocaleString() : 'almost no') + ' links an hour, which caching "not found" and rate limits slow further.';
+    if (A !== 62) msg += ' A ' + (A === 58 ? 'base58 alphabet avoids look-alike characters, which helps for printed links,' : 'lowercase-only alphabet is easier to type and read aloud,') + ' at the cost of a smaller space per character.';
+    $('ks-out').textContent = msg;
+  }
+  $('ks-a').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; A = +b.dataset.v; this.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); run(); });
+  $('ks-l').addEventListener('input', run); $('ks-n').addEventListener('input', run);
+  run();
+})();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from '../assets/scene3d.js';
+const D = {};
+D.hero = {
+  hero: true,
+  loop: 18,
+  view: { target: [-1, 0, 1.6], w: 29, d: 23, el: 50 },
+  steps: [
+    { t: 0.0, text: 'A creator pastes a long URL. The Link API rate limits the request and validates the URL.' },
+    { t: 1.6, text: 'The URL is checked against threat lists before anything is stored, so phishing links never get a code.' },
+    { t: 2.8, text: 'The API picks 7 random base62 characters and writes them with "put only if absent". The database guarantees no two links share a code.' },
+    { t: 4.0, text: 'The creator gets back sho.rt/aZ3k9Qx. That was the write path: about 40 of these a second.' },
+    { t: 5.6, text: 'A visitor opens the short link. The request reaches the nearest CDN edge, which has not seen it yet, and is passed to the redirect service.' },
+    { t: 7.4, text: 'The redirect service checks Redis first. The first click is a miss, so it reads the links table by primary key and fills the cache.' },
+    { t: 10.6, text: 'It returns a 302 with the long URL in a few milliseconds, and drops a click event into Kafka without waiting.' },
+    { t: 12.6, text: 'A stream job aggregates clicks per link per minute into the stats store that powers the dashboard.' },
+    { t: 14.0, text: 'Later clicks are served from Redis or straight from the edge, so the database barely notices even a busy link.' },
+  ],
+  build(c) {
+    const { V, C, P } = c;
+    const creator = c.obj('person', -13, -6, 'Creator');
+    const api = c.obj(c.SHAPES.server({ emi: C.ingest }), -8, -6, 'Link API', 'rate limit · validate');
+    const chk = c.obj(c.SHAPES.shield(C.gov), -3, -6, 'URL checks', 'threat lists');
+    const db = c.obj(c.SHAPES.database(C.kb, { r: 1.3 }), 4.5, -2, 'Links table', 'key: code');
+    const vis = c.obj(c.SHAPES.browser(0xd7932a), -13, 3.5, 'Visitor', 'opens sho.rt/aZ3k9Qx');
+    const cdn = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve, h: 1.3 }), -8, 3.5, 'CDN edge', 'caches 302s ~60 s');
+    const rd = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve }), -2, 3.5, 'Redirect service', 'stateless');
+    const rds = c.obj(c.SHAPES.database(C.ingest, { r: 0.9, tiers: 2 }), 4.5, 3.5, 'Redis', 'hot links');
+    const top = c.obj(c.SHAPES.topic({ parts: 1, len: 4.4, color: C.cross }), 1.2, 9, 'Kafka: clicks');
+    const agg = c.obj(c.SHAPES.server({ emi: C.cross }), 6.4, 9, 'Stream job', 'dedupe · count');
+    const st = c.obj(c.SHAPES.database(C.cross, { r: 0.9 }), 11, 9, 'Stats store');
+    c.lane([V(-13, -6), V(-3, -6), V(4.5, -6), V(4.5, -2)]);
+    c.lane([V(-13, 3.5), V(4.5, 3.5)]);
+    c.lane([V(-2, 3.5), V(-2, -2), V(4.5, -2)]);
+    c.lane([V(-2, 3.5), V(-2, 9), V(11, 9)]);
+    c.packet({ pts: [V(-13, -6), V(-8, -6)], t0: 0.3, t1: 1.3, kind: 'doc', from: creator, to: api, label: 'long URL' });
+    c.packet({ pts: [V(-8, -6), V(-3, -6)], t0: 1.6, t1: 2.4, kind: 'doc', from: api, to: chk });
+    c.packet({ pts: [V(-3, -6), V(4.5, -6), V(4.5, -2)], t0: 2.8, t1: 3.8, kind: 'env', from: chk, to: db, label: 'PUT aZ3k9Qx if absent' });
+    c.packet({ pts: [V(-8, -6), V(-13, -6)], t0: 4.0, t1: 5.0, kind: 'env', color: P.ship, from: api, to: creator, label: 'sho.rt/aZ3k9Qx' });
+    c.packet({ pts: [V(-13, 3.5), V(-8, 3.5)], t0: 5.6, t1: 6.4, kind: 'ask', from: vis, to: cdn, label: 'GET /aZ3k9Qx' });
+    c.packet({ pts: [V(-8, 3.5), V(-2, 3.5)], t0: 6.5, t1: 7.2, kind: 'ask', from: cdn, to: rd });
+    c.packet({ pts: [V(-2, 3.5), V(4.5, 3.5)], t0: 7.4, t1: 8.1, kind: 'span', color: P.bad, to: rds, label: 'miss' });
+    c.packet({ pts: [V(-2, 3.5), V(-2, -2), V(4.5, -2)], t0: 8.2, t1: 9.1, kind: 'span', to: db, label: 'get by key' });
+    c.packet({ pts: [V(4.5, -2), V(-2, -2), V(-2, 3.5)], t0: 9.2, t1: 10.0, kind: 'doc', to: rd, label: 'long URL' });
+    c.packet({ pts: [V(-2, 3.5), V(4.5, 3.5)], t0: 10.0, t1: 10.5, kind: 'span', color: P.ship, to: rds, label: 'fill' });
+    c.packet({ pts: [V(-2, 3.5), V(-8, 3.5), V(-13, 3.5)], t0: 10.6, t1: 11.8, kind: 'env', color: P.ship, to: vis, label: '302 → long URL' });
+    c.packet({ pts: [V(-2, 3.5), V(-2, 9), V(3.4, 9), V(6.4, 9)], t0: 10.7, t1: 12.4, kind: 'span', color: P.span, to: agg, label: 'click event' });
+    c.packet({ pts: [V(6.4, 9), V(11, 9)], t0: 12.6, t1: 13.4, kind: 'chunk', to: st, label: '+1 per minute' });
+    c.packet({ pts: [V(-13, 3.5), V(-8, 3.5), V(-2, 3.5), V(4.5, 3.5)], t0: 14.0, t1: 15.3, n: 4, st: 0.25, kind: 'ask', s: 0.8, to: rds });
+    c.packet({ pts: [V(-13, 3.5), V(-8, 3.5)], t0: 14.2, t1: 14.9, n: 5, st: 0.22, kind: 'ask', s: 0.7, to: cdn });
+    c.packet({ pts: [V(-8, 3.5), V(-13, 3.5)], t0: 15.0, t1: 15.7, n: 5, st: 0.22, kind: 'env', s: 0.7, color: P.ship, to: vis });
+    c.note('write path · ~40/s', -8, -9.4);
+    c.note('read path · 4k–20k+/s', -8, 6.6);
+    c.note('async analytics', 1.2, 11.2);
+  },
+};
+D.viral3d = {
+  loop: 16,
+  view: { target: [-0.6, 0, 0], w: 31, d: 15, el: 48 },
+  steps: [
+    { t: 0.0, text: 'A link goes viral: tens of thousands of clicks a second from all over the world.' },
+    { t: 1.2, text: 'Each CDN edge answers from its cache with the stored 302. Almost every click ends here.' },
+    { t: 3.6, text: 'About once a minute per edge, the cached copy expires and one request goes through to the redirect service, which hits Redis.' },
+    { t: 6.0, text: 'The links table sees nothing at all. Three layers turned a flood into a trickle.' },
+    { t: 8.0, text: 'The link is reported as phishing. The API marks it blocked, deletes the Redis key and purges the CDN path.' },
+    { t: 11.0, text: 'The next clicks miss every cache, reach the database, see "blocked", and get a warning page instead of the redirect.' },
+  ],
+  build(c) {
+    const { V, C, P } = c;
+    const zs = [-4.5, -1.5, 1.5, 4.5];
+    const vis = zs.map((z, i) => c.obj('person', -12, z, i === 0 ? 'Visitors' : '', ''));
+    const cdn = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve, h: 1.4, w: 1.6 }), -5.5, 0, 'CDN edges', 'cached 302');
+    const rd = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve }), 0.5, 0, 'Redirect');
+    const rds = c.obj(c.SHAPES.database(C.ingest, { r: 0.9, tiers: 2 }), 5.5, 0, 'Redis');
+    const db = c.obj(c.SHAPES.database(C.kb, { r: 1.2 }), 11, 0, 'Links table');
+    const mod = c.obj(c.SHAPES.shield(C.gov), 5.5, -5.2, 'Takedown', 'status = blocked');
+    for (const z of zs) c.lane([V(-12, z), V(-9, z), V(-9, 0), V(-5.5, 0)]);
+    c.lane([V(-5.5, 0), V(11, 0)]);
+    c.lane([V(5.5, -5.2), V(5.5, 0)]);
+    zs.forEach((z, i) => {
+      c.packet({ pts: [V(-12, z), V(-9, z), V(-9, 0), V(-5.5, 0)], t0: 0.2 + i * 0.15, t1: 1.4 + i * 0.15, n: 6, st: 0.35, kind: 'ask', s: 0.7, from: vis[i], to: cdn });
+      c.packet({ pts: [V(-5.5, 0), V(-9, 0), V(-9, z), V(-12, z)], t0: 1.6 + i * 0.15, t1: 2.8 + i * 0.15, n: 6, st: 0.35, kind: 'env', s: 0.6, color: P.ship, to: vis[i] });
+    });
+    c.packet({ pts: [V(-5.5, 0), V(0.5, 0), V(5.5, 0)], t0: 3.8, t1: 5.0, kind: 'ask', to: rds, label: 'once a minute' });
+    c.packet({ pts: [V(5.5, 0), V(0.5, 0), V(-5.5, 0)], t0: 5.1, t1: 6.0, kind: 'env', color: P.ship, to: cdn, label: 'hit' });
+    c.note('database: idle', 11, 2.6);
+    c.packet({ pts: [V(5.5, -5.2), V(5.5, 0)], t0: 8.2, t1: 8.9, kind: 'env', color: P.bad, from: mod, to: rds, label: 'delete key' });
+    c.packet({ pts: [V(5.5, -5.2), V(-5.5, -5.2), V(-5.5, 0)], t0: 8.4, t1: 9.8, kind: 'env', color: P.bad, to: cdn, label: 'purge /aZ3k9Qx' });
+    c.packet({ pts: [V(-12, zs[1]), V(-9, zs[1]), V(-9, 0), V(-5.5, 0), V(0.5, 0), V(5.5, 0), V(11, 0)], t0: 11.0, t1: 13.0, kind: 'ask', to: db, label: 'miss everywhere' });
+    c.packet({ pts: [V(11, 0), V(0.5, 0), V(-5.5, 0), V(-9, 0), V(-9, zs[1]), V(-12, zs[1])], t0: 13.1, t1: 15.0, kind: 'env', color: P.bad, to: vis[1], label: 'blocked · warning page' });
+  },
+};
+boot(D);
+</script>
+</body>
+</html>
