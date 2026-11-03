@@ -30,6 +30,10 @@ Then the retrieval and model track:
 
 Coming next: agent memory, production, and fine-tuning.
 
+## Two styles
+
+Beginner pages (the roadmap and concept notebooks at the root) use a hand-written notebook look; the advanced `system-design/` and `classic-system-design/` pages use a clean field-manual look. See [docs/STYLES.md](docs/STYLES.md) before adding a page.
+
 ## Classic system design
 
 Non-agentic building blocks, in [`classic-system-design/`](classic-system-design/): **https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/**
