@@ -40,7 +40,7 @@ This site has two audiences, and each gets its own look. Keep them apart: a page
 - `.fig` with an inline `svg.dg` diagram using the semantic layer classes (`.k-ingest`, `.k-kb`, `.k-serve`…), or a `.fig3d` scene built with `assets/scene3d.js` (three@0.160.0 importmap).
 - `.note` (accent left border), `.formula` (mono, boxed), `.table` wrappers for wide tables, `.related` pill links, `.pager` prev/next.
 - `.lab` blocks for interactive calculators, in the same quiet styling.
-- Progress lives on the roadmap in `system-design/index.html`, stored in the `asd_roadmap` cookie by `system-design/progress.js`. Every page in `system-design/` loads that script.
+- Progress lives on `system-design/roadmap.html` (with a summary card on the home page), stored in the `asd_roadmap` cookie by `system-design/progress.js`. Every page in `system-design/` loads that script.
 
 **Don't**: use handwriting fonts, rotated stickies, highlighter strokes or paper textures. Don't recolour the layer palette; a reader learns "orange is serving" once and relies on it everywhere.
 
@@ -51,5 +51,5 @@ This site has two audiences, and each gets its own look. Keep them apart: a page
 ## Checklist for a new page
 1. Pick the section first; the section decides the style.
 2. Copy the `:root` tokens and base CSS from an existing page in that section (`agentic-loop.html` or `system-design/chunking.html`), not from memory.
-3. Beginner: end with a sticky-note quiz and add the page to the roadmap in `index.html`. Advanced: add `<script src="progress.js"></script>` before `</body>`, a card on `system-design/index.html`, and a node in the roadmap's `STAGES` list.
+3. Beginner: end with a sticky-note quiz and add the page to the roadmap in `index.html`. Advanced: add `<script src="progress.js"></script>` before `</body>`, a card on `system-design/designs.html` or `topics.html`, and a node in the `STAGES` lists of `roadmap.html` and the home page progress card. Keep the shared site header (Home, Designs, Topics, Roadmap, Classic, Glossary, Beginner notebook) identical on every page.
 4. Check it at 390px wide: no horizontal scroll, 16px side gutter.
