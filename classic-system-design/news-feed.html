@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>News Feed · Classic System Designs</title>
+<meta name="description" content="News feed system design walkthrough: requirements, estimates, API, fan-out on write vs read, the celebrity problem, timeline caches, the read path, ranking, media, regions, observability and an interview script.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+
+<style>
+  .lab-chart { display: block; width: 100%; height: auto; margin: 4px 0 0; }
+  .lab-chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+  .grid-cells { display: grid; gap: 4px; }
+  .srv { display: grid; grid-template-columns: 92px minmax(0,1fr) 70px; gap: 10px; align-items: center; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .lab select { font: 14px var(--font-body); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab input[type=number] { width: 9ch; font: 14px var(--font-mono); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+</style><style>
+  .prompt { margin: 0; font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .prompt q { font-style: italic; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .tags li { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  @media (max-width: 640px) { .prompt { font-size: 16.5px; } }
+</style>
+<link rel="stylesheet" href="../assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="../system-design/index.html">System Design</a><nav aria-label="Site"><a href="../system-design/index.html">Home</a><a href="../system-design/designs.html">Designs</a><a href="../system-design/topics.html">Topics</a><a href="../system-design/roadmap.html">Roadmap</a><a href="index.html" aria-current="page">Classic</a><a href="../system-design/glossary.html">Glossary</a><a href="../index.html">Beginner notebook</a></nav></div></header>
+<main>
+<header class="wrap"><div class="intro"><p class="eyebrow">Classic system design walkthrough</p><h1>News Feed</h1><p class="prompt"><q>Design the home feed of a social app: people follow each other, post short updates with photos, and open the app to see recent posts from everyone they follow. Plan for 200 million daily users.</q></p><ul class="legend" aria-label="Colour key"><li><i style="background:var(--c-ingest)"></i>Write path and fan-out</li><li><i style="background:var(--c-serve)"></i>Read path</li><li><i style="background:var(--c-kb)"></i>Storage</li><li><i style="background:var(--c-cross)"></i>Async</li><li><i style="background:var(--c-gov)"></i>Ranking and safety</li></ul></div></header>
+<div class="wrap"><figure class="fig3d hero" id="hero">
+  <div class="stage3d" role="img" aria-label="Animated 3D view of the whole system: an author publishes a post through the Post API, which stores it and puts an event on Kafka. Fan-out workers look up the author's followers in the graph store and push the post ID onto each follower's timeline in Redis. A reader opens the app; the feed service reads post IDs from their timeline, merges in recent posts from celebrities they follow, hydrates the posts from the post cache, ranks them and returns the first page."><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The sections below cover the same ground.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. The back row is the write path and fan-out, the front row is a reader loading their feed.</figcaption>
+</figure></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="Sections"><p>The solution</p><ol><li><a href="#requirements">Requirements</a></li><li><a href="#success">Success metrics</a></li><li><a href="#estimates">Estimates</a></li><li><a href="#api">API</a></li><li><a href="#architecture">Architecture</a></li><li><a href="#fanout">Fan-out: push, pull or both</a></li><li><a href="#lab">Try it: where to draw the celebrity line</a></li><li><a href="#storage">Storage</a></li><li><a href="#read">Reading a feed</a></li><li><a href="#ranking">Ranking</a></li><li><a href="#media">Photos and video</a></li><li><a href="#deployment">Deployment and regions</a></li><li><a href="#observability">Observability</a></li><li><a href="#risks">Risks and v2</a></li><li><a href="#presenting">Presenting it in 45 minutes</a></li><li><a href="#numbers">Numbers to remember</a></li></ol></nav>
+  <article>
+
+<section id="requirements">
+  <h2>Requirements</h2>
+  <ul class="tags"><li>Clarify</li></ul>
+  <p class="lead">The feed is read far more than it is written, and follower counts are wildly uneven. Those two facts drive the whole design.</p>
+  <div class="table"><table>
+    <thead><tr><th>Question</th><th>Assumption</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>Daily active users</td><td class="num">200M, each opening the feed ~10 times a day</td><td>Sets read load: billions of feed loads a day</td></tr>
+      <tr><td>New posts</td><td class="num">100M a day</td><td>Sets write load, and fan-out multiplies it</td></tr>
+      <tr><td>Follow graph</td><td>Average user follows ~200 accounts; a few accounts have 10M+ followers</td><td>The skew creates the celebrity problem</td></tr>
+      <tr><td>Feed latency</td><td class="num">p99 under 200 ms for the first page</td><td>The feed is the first screen of the app</td></tr>
+      <tr><td>Freshness</td><td>A new post appears for followers within ~5 seconds; celebrities within ~1 minute is fine</td><td>Lets fan-out be asynchronous</td></tr>
+      <tr><td>Order</td><td>Ranked by default, with a "latest" chronological option</td><td>Ranking needs candidates and features, not just a list</td></tr>
+      <tr><td>Media</td><td>Photos and short videos on ~20% of posts</td><td>Bytes go to object storage and a CDN, never through the feed service</td></tr>
+      <tr><td>Consistency</td><td>Eventual: a post can appear for one follower a second before another</td><td>We can cache aggressively and fan out in the background</td></tr>
+    </tbody>
+  </table></div>
+  <p>Out of scope for v1: comments and likes as full features (we only show counts), direct messages, search and ads. Say so explicitly, so the interviewer knows you chose rather than forgot.</p>
+</section>
+
+<section id="success">
+  <h2>Success metrics</h2>
+  <ul class="tags"><li>Define success</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Kind</th><th>Metric</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr><td>Product</td><td>Feed sessions per user per day; time spent; share of sessions with an engagement</td><td class="num">growing</td></tr>
+      <tr><td>Reliability</td><td>Feed load success rate; p99 first-page latency</td><td class="num">99.95%; &lt; 200 ms</td></tr>
+      <tr><td>Freshness</td><td>Post-to-follower-timeline delay, p99</td><td class="num">&lt; 5 s (non-celebrity)</td></tr>
+      <tr><td>Guardrail</td><td>Removed or blocked content still shown in feeds; empty-feed rate for new users</td><td class="num">near zero</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="estimates">
+  <h2>Estimates</h2>
+  <ul class="tags"><li>Back of the envelope</li><li><a href="numbers.html">Numbers</a></li></ul>
+  <figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Key numbers: 1,200 posts a second, 23,000 feed loads a second on average and 70,000 at peak, hundreds of thousands of timeline writes a second, and about 1.6 TB of timeline cache">
+    <rect x="10" y="10" width="134" height="92" rx="8" class="k-ingest"/><text x="24" y="52" class="big">1.2k/s</text><text x="24" y="78" class="sm">new posts, average</text><text x="24" y="94" class="sm">~3.5k/s at peak</text>
+    <rect x="154" y="10" width="134" height="92" rx="8" class="k-serve"/><text x="168" y="52" class="big">23k/s</text><text x="168" y="78" class="sm">feed loads, average</text><text x="168" y="94" class="sm">~70k/s at peak</text>
+    <rect x="298" y="10" width="134" height="92" rx="8" class="k-ingest"/><text x="312" y="52" class="big">400k/s</text><text x="312" y="78" class="sm">timeline inserts</text><text x="312" y="94" class="sm">after the hybrid split</text>
+    <rect x="442" y="10" width="134" height="92" rx="8" class="k-kb"/><text x="456" y="52" class="big">1.6 TB</text><text x="456" y="78" class="sm">timeline cache</text><text x="456" y="94" class="sm">500 IDs × 200M users</text>
+    <rect x="586" y="10" width="126" height="92" rx="8" class="k-kb"/><text x="600" y="52" class="big">100 GB</text><text x="600" y="78" class="sm">post rows a day</text><text x="600" y="94" class="sm">+ ~10 TB media</text>
+    <text x="10" y="132" class="small">Reads outnumber posts 20 to 1, and every post is copied to many timelines. Both point at precomputing feeds.</text>
+  </svg></figure>
+  <ul class="plain">
+    <li><strong>Posts:</strong> 100M ÷ 86,400 s ≈ 1,200 a second; peaks of about 3× are 3,500 a second.</li>
+    <li><strong>Feed loads:</strong> 200M users × 10 opens = 2B a day ≈ 23,000 a second, about 70,000 at the evening peak. Each load wants a page of ~20 posts.</li>
+    <li><strong>Fan-out:</strong> follower counts are skewed, so the average <em>post</em> reaches far more people than the average user has followers. With the distribution in the lab, pushing every post to every follower would be over 2 million timeline inserts a second. Pulling celebrities instead brings that to around 400,000.</li>
+    <li><strong>Timeline cache:</strong> keep the newest 500 post IDs per user, at ~16 bytes each (8-byte ID plus a score): 8 KB a user, ≈ 1.6 TB for 200M users. That's a big Redis cluster (around 100 nodes with replicas), so keep timelines only for users active in the last few weeks and rebuild the rest on demand.</li>
+    <li><strong>Posts:</strong> ~1 KB of text and metadata each is 100 GB a day, ~36 TB a year before replication. Media on 20% of posts at ~500 KB is ~10 TB a day, which belongs in object storage.</li>
+  </ul>
+</section>
+
+<section id="api">
+  <h2>API</h2>
+  <ul class="tags"><li>Interface</li></ul>
+<pre><code>POST /v1/posts                       (auth)
+  { "text": "Sunset from the pier", "media_ids": ["m_81f…"],
+    "idempotency_key": "c1f0…" }
+→ 201 { "post_id": "1852467133012938752", "created_at": "…" }
+
+GET /v1/feed?mode=ranked&amp;limit=20&amp;cursor=…
+→ 200 { "posts": [ { "post_id": "…", "author": {…}, "text": "…",
+                      "media": [ { "url": "https://cdn…/m_81f….jpg" } ],
+                      "like_count": 120, "liked_by_me": false } … ],
+        "next_cursor": "eyJzY29yZSI6…" }
+
+POST   /v1/follows/{user_id}         DELETE /v1/follows/{user_id}
+POST   /v1/media/uploads  → 200 { "media_id": "m_81f…", "upload_url": "https://…signed…" }</code></pre>
+  <h3>Cursors, not page numbers</h3>
+  <p>New posts arrive at the top while you scroll, so <code>?page=2</code> would show duplicates or skip posts. The cursor encodes where the last page ended (the last post's ID for "latest", or a snapshot ID plus position for ranked), so the next page continues from exactly there. The <code>idempotency_key</code> on create stops a retried request on a flaky phone connection from posting twice.</p>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <ul class="tags"><li>Whole system</li></ul>
+  <figure class="fig"><svg viewBox="0 0 722 312" class="dg" role="img" aria-label="Architecture: write path from author through Post API to the posts store and a Kafka topic, fan-out workers read the follow graph and write to timeline caches; read path from reader through the feed service to timeline cache, celebrity posts, post cache and ranker">
+    <text x="10" y="22" class="cap">WRITE PATH · ~1.2K POSTS/S</text>
+    <rect x="10" y="34" width="90" height="40" rx="8" class="k-user"/><text x="55" y="58" class="small b" text-anchor="middle">Author</text>
+    <path d="M100 54 L132 54" class="wire" marker-end="url(#ah)"/>
+    <rect x="134" y="34" width="110" height="40" rx="8" class="k-ingest"/><text x="189" y="52" class="small b" text-anchor="middle">Post API</text><text x="189" y="67" class="sm" text-anchor="middle">validate · store</text>
+    <path d="M244 46 L290 46" class="wire" marker-end="url(#ah)"/>
+    <rect x="292" y="28" width="116" height="36" rx="18" class="k-kb"/><text x="350" y="51" class="small b" text-anchor="middle">Posts store</text>
+    <path d="M189 74 L189 106 L290 106" class="wire" marker-end="url(#ah)"/>
+    <rect x="292" y="88" width="116" height="36" rx="18" class="k-cross"/><text x="350" y="111" class="small b" text-anchor="middle">Kafka: new posts</text>
+    <path d="M408 106 L446 106" class="wire" marker-end="url(#ah)"/>
+    <rect x="448" y="86" width="116" height="40" rx="8" class="k-ingest"/><text x="506" y="104" class="small b" text-anchor="middle">Fan-out workers</text><text x="506" y="119" class="sm" text-anchor="middle">skip celebrities</text>
+    <path d="M506 86 L506 60" class="wire" marker-end="url(#ah)"/>
+    <rect x="448" y="24" width="116" height="36" rx="18" class="k-kb"/><text x="506" y="47" class="small b" text-anchor="middle">Follow graph</text>
+    <path d="M564 106 L600 106 L600 160" class="wire" marker-end="url(#ah)"/><text x="608" y="140" class="sm">push post ID</text>
+    <rect x="560" y="162" width="152" height="40" rx="8" class="k-ingest"/><text x="636" y="180" class="small b" text-anchor="middle">Timeline cache</text><text x="636" y="195" class="sm" text-anchor="middle">Redis · 500 IDs a user</text>
+    <text x="10" y="160" class="cap">READ PATH · 23K–70K FEEDS/S</text>
+    <rect x="10" y="226" width="90" height="40" rx="8" class="k-user"/><text x="55" y="250" class="small b" text-anchor="middle">Reader</text>
+    <path d="M100 246 L132 246" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="134" y="226" width="110" height="40" rx="8" class="k-serve"/><text x="189" y="244" class="small b" text-anchor="middle">Feed service</text><text x="189" y="259" class="sm" text-anchor="middle">stateless</text>
+    <path d="M244 236 L560 186" class="wire hot" marker-end="url(#ah)"/><text x="376" y="200" class="sm">1. my timeline IDs</text>
+    <path d="M244 246 L290 246" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="292" y="228" width="130" height="36" rx="8" class="k-serve"/><text x="357" y="244" class="small b" text-anchor="middle">Celebrity posts</text><text x="357" y="257" class="sm" text-anchor="middle">2. merge at read</text>
+    <path d="M244 258 L244 290 L290 290" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="292" y="274" width="160" height="34" rx="17" class="k-kb"/><text x="372" y="295" class="small b" text-anchor="middle">Post cache · 3. hydrate</text>
+    <path d="M422 246 L470 246" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="472" y="228" width="120" height="36" rx="8" class="k-gov"/><text x="532" y="244" class="small b" text-anchor="middle">Ranker</text><text x="532" y="257" class="sm" text-anchor="middle">4. score · filter</text>
+  </svg><figcaption>Writes fan out in the background into per-user timelines. Reads assemble a page from the precomputed timeline, a few pulled celebrity posts, the post cache and a ranker.</figcaption></figure>
+  <ul class="plain">
+    <li><strong>Post API</strong> stores the post, then publishes a small "new post" event. It never touches followers' timelines itself, so posting stays fast even for a celebrity.</li>
+    <li><strong>Fan-out workers</strong> consume those events, page through the author's followers in the <strong>follow graph</strong>, and push the post ID onto each follower's timeline. Celebrities are skipped.</li>
+    <li><strong>Timeline cache</strong> holds, per user, a sorted list of the newest ~500 post IDs. It holds IDs only, never post bodies, so an edit or delete changes one row, not millions of copies.</li>
+    <li><strong>Feed service</strong> reads the timeline, merges in recent posts from celebrities the reader follows, fetches post bodies and counts from the <strong>post cache</strong>, asks the <strong>ranker</strong> to order them, and returns a page.</li>
+  </ul>
+</section>
+
+<section id="fanout">
+  <h2>Fan-out: push, pull or both</h2>
+  <ul class="tags"><li>Deep dive 1</li><li><a href="queues.html">Queues</a></li></ul>
+  <p class="lead">The central decision: do we build each feed when someone posts (push), when someone reads (pull), or mix the two?</p>
+  <div class="table"><table>
+    <thead><tr><th>Approach</th><th>How</th><th>Pros</th><th>Cons</th></tr></thead>
+    <tbody>
+      <tr><td>Pull (fan-out on read)</td><td>On every feed load, look up everyone I follow, fetch their recent posts, merge and sort</td><td>Posting is one write; no wasted work for people who never open the app</td><td>A feed load touches ~200 accounts; at 70k loads a second that's 14M lookups a second on the hot path, and latency is set by the slowest one</td></tr>
+      <tr><td>Push (fan-out on write)</td><td>When someone posts, append the post ID to every follower's timeline</td><td>A feed load is one cache read plus hydration: fast and predictable</td><td>One post by an account with 50M followers is 50M writes; followers see it minutes late; work is wasted on inactive followers</td></tr>
+      <tr><td><strong>Hybrid</strong></td><td>Push for ordinary accounts; for accounts above a follower threshold, skip the push and merge their recent posts at read time</td><td>Fast reads, bounded write storms</td><td>Two code paths; the read side must merge, dedupe and paginate across sources</td></tr>
+    </tbody>
+  </table></div>
+  <p>I'd use the <strong>hybrid</strong>. Each account has a <code>fanout_mode</code> flag, flipped to <code>pull</code> when it crosses a threshold (say 10,000 followers). Celebrity posts go into a small per-author "recent posts" list that every feed service instance caches heavily, since millions of readers ask for the same few lists.</p>
+  <h3>Making fan-out safe</h3>
+  <ul class="plain">
+    <li><strong>Batch it.</strong> A worker reads followers 1,000 at a time and writes with Redis pipelines, then checkpoints its position, so a crash resumes instead of restarting.</li>
+    <li><strong>Idempotent inserts.</strong> Timelines are sorted sets keyed by post ID, so a retried batch re-adds the same members and nothing duplicates.</li>
+    <li><strong>Skip the inactive.</strong> Followers who haven't opened the app in 30 days have no cached timeline. Don't write to them; their feed is rebuilt by pull when they return.</li>
+    <li><strong>Trim on write.</strong> After each insert, trim the timeline to 500 entries. Older posts come from the posts store if someone scrolls that far.</li>
+    <li><strong>Separate queues by size.</strong> A 90,000-follower fan-out shouldn't sit in front of a thousand 200-follower ones. Route big jobs to their own partition so small posts stay within the 5-second freshness target.</li>
+  </ul>
+</section>
+
+<section id="lab">
+  <h2>Try it: where to draw the celebrity line</h2>
+  <ul class="tags"><li>Lab</li></ul>
+  <p>Move the threshold. Accounts at or below it are pushed into followers' timelines when they post; accounts above it are pulled when someone loads their feed. Watch the write rate, the extra work on every feed load, and how long the slowest push takes.</p>
+  <div class="lab" id="folab">
+    <div class="lab-row"><label for="fo-t">Push accounts with up to <input type="range" id="fo-t" min="0" max="7" step="1" value="3"><output id="fo-t-o"></output></label></div>
+    <div class="metrics" id="fo-m"></div>
+    <p class="lab-out" id="fo-out" aria-live="polite"></p>
+  </div>
+  <p class="muted" style="font-size:13.5px">Illustrative model: 1,200 posts a second; 70,000 feed loads a second at peak; fan-out workers write 200,000 timeline entries a second for any one post. Share of posts by author size: 50 followers 50%, 300 37.8%, 2,000 10%, 20k 2%, 200k 0.2%, 2M 0.02%, 20M 0.002%. A typical user follows 30 accounts with ~2,000 followers, 15 with ~20k, 8 with ~200k, 5 with ~2M and 3 with ~20M.</p>
+</section>
+
+<section id="storage">
+  <h2>Storage</h2>
+  <ul class="tags"><li><a href="databases.html">Databases</a></li><li><a href="sharding.html">Sharding</a></li></ul>
+<pre><code>posts            -- Cassandra / DynamoDB, partition by post_id
+  post_id     bigint   PRIMARY KEY     -- Snowflake ID: time-sortable
+  author_id   bigint
+  text        string
+  media       list&lt;media_ref&gt;
+  created_at  timestamp
+  status      enum      -- live | deleted | removed
+
+posts_by_author  -- partition by author_id, cluster by post_id DESC
+  author_id, post_id                  -- "recent posts by X", used for pull
+
+follows          -- two tables, both directions
+  followers(user_id, follower_id)     -- who to fan out to
+  following(user_id, followee_id)     -- who I follow, for pull and rebuilds
+
+timeline:{user_id}  -- Redis sorted set: member = post_id, score = post_id</code></pre>
+  <ul class="plain">
+    <li><strong>Post IDs are time-sortable</strong> (Snowflake-style: timestamp, machine ID, sequence), so sorting by ID is sorting by time, timelines can use the ID as the score, and no central counter is needed.</li>
+    <li><strong>The follow graph is stored twice</strong>, once per direction, because fan-out asks "who follows X?" and pull asks "who does Y follow?". Both are a single partition read. A celebrity's follower list is huge, so page through it in chunks.</li>
+    <li><strong>Counts live elsewhere.</strong> Like and reply counts change constantly. Keep them in a separate counter service (sharded counters in Redis, flushed to a store) so hot posts don't hammer the posts table.</li>
+  </ul>
+</section>
+
+<section id="read">
+  <h2>Reading a feed</h2>
+  <ul class="tags"><li>Deep dive 2</li><li><a href="caching.html">Caching</a></li></ul>
+  <p class="lead">Every feed load does four things inside a 200 ms budget: gather candidates, hydrate them, rank them, and return a page.</p>
+  <ol class="plain">
+    <li><strong>Gather candidates</strong> (~10 ms). Read the top few hundred IDs from <code>timeline:{me}</code>, and in parallel fetch recent posts for each celebrity I follow from their cached "recent posts" lists. Merge and drop duplicates.</li>
+    <li><strong>Hydrate</strong> (~20 ms). Fetch post bodies, author names and avatars, and counts with one batched multi-get against the post cache (Redis or Memcached in front of the posts store). Drop posts that are deleted, removed, or by people I've since blocked or muted.</li>
+    <li><strong>Rank</strong> (~50 ms). Send a few hundred candidates with features to the ranker; keep the top ones.</li>
+    <li><strong>Return a page</strong> of 20, with a cursor. Store the ranked list briefly (a few minutes, keyed by a snapshot ID) so the next page continues the same order instead of re-ranking and reshuffling.</li>
+  </ol>
+  <h3>Rebuilding a cold timeline</h3>
+  <p>A user who returns after two months has no cached timeline. The feed service falls back to pull for that one load: read <code>following</code>, fetch recent posts per followee (in parallel, capped), merge, then write the result back into the cache so the next load is fast. Do the same for a brand-new user, who also needs suggested accounts so their first feed isn't empty.</p>
+  <h3>Deletes and edits</h3>
+  <p>Because timelines hold IDs, a deleted post only needs its status set and its post-cache entry purged. It vanishes from every feed at hydration time, without hunting down millions of timeline entries.</p>
+  <figure class="fig3d" id="celeb3d">
+    <div class="stage3d" role="img" aria-label="A celebrity with 20 million followers posts. With pure push, fan-out workers would have to write 20 million timeline entries, a storm that takes minutes. With the hybrid, the post goes only into the celebrity's recent-posts list. When a follower opens the app, the feed service reads their timeline and the celebrity list in parallel, merges them and returns the page."><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Pushing a celebrity's post is a write storm; pulling it is one cached list that every reader shares.</figcaption>
+  </figure>
+</section>
+
+<section id="ranking">
+  <h2>Ranking</h2>
+  <ul class="tags"><li>Relevance</li></ul>
+  <p>Chronological order is a sort by post ID. A ranked feed scores each candidate with the predicted chance that this reader engages with it: like, reply, share, or dwell for a few seconds.</p>
+  <ul class="plain">
+    <li><strong>Features:</strong> how often I interact with the author, post age, the post's early engagement rate, media type, and whether people like me engaged.</li>
+    <li><strong>Two stages.</strong> A cheap model or heuristic trims ~500 candidates to ~100; a heavier model (gradient-boosted trees or a small neural net) scores those. Precompute per-user and per-author features offline and keep them in a feature store, so ranking time is spent scoring, not fetching.</li>
+    <li><strong>Rules after the model:</strong> no more than two posts in a row from one author, demote content flagged by trust and safety, and always include fresh posts from close friends.</li>
+    <li><strong>Degrade gracefully.</strong> If the ranker is slow or down, serve the chronological timeline. A slightly worse feed beats an error screen.</li>
+  </ul>
+  <p>Ranking quality is measured online with A/B tests on sessions and engagement, and guarded by metrics such as hides, reports and unfollows.</p>
+</section>
+
+<section id="media">
+  <h2>Photos and video</h2>
+  <ul class="tags"><li>Media</li></ul>
+  <p>Media never passes through the feed service. The app asks for an upload URL, uploads the file directly to object storage (S3 or GCS) with that pre-signed URL, then creates the post with the returned <code>media_id</code>. A background pipeline makes thumbnails and several sizes (and transcodes video into a few bitrates for adaptive streaming), and the feed returns CDN URLs. A post whose media is still processing shows a placeholder, or is held back from fan-out until the media is ready.</p>
+</section>
+
+<section id="deployment">
+  <h2>Deployment and regions</h2>
+  <ul class="tags"><li>Production</li><li><a href="load-balancing.html">Load balancing</a></li></ul>
+  <p>Users are served from the nearest of several regions. Posts and the follow graph are replicated to every region (multi-region Cassandra or DynamoDB global tables). Kafka topics are mirrored between regions, and each region runs its own fan-out into its own timeline caches, so a feed load never crosses an ocean.</p>
+  <div class="note"><p><strong>Timeline caches are rebuildable.</strong> They are derived data: if a Redis node or a whole region's cache is lost, timelines can be rebuilt from posts and follows. Make that rebuild path a tested, rate-limited job, because after an outage every user's first load is a cold miss, and a thundering herd of pull rebuilds can take down the posts store.</p></div>
+  <p>Services are stateless containers, autoscaled on request rate; fan-out workers autoscale on Kafka consumer lag. Roll out feed-service and ranker changes as canaries, watching latency, error rate and engagement before going wide.</p>
+</section>
+
+<section id="observability">
+  <h2>Observability</h2>
+  <ul class="tags"><li>Production</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Signal</th><th>Why</th><th>Alert when</th></tr></thead>
+    <tbody>
+      <tr><td>Feed success rate and p99 latency, per stage (gather, hydrate, rank)</td><td>The core SLO, and which stage is slow</td><td>Error budget burning fast</td></tr>
+      <tr><td>Fan-out lag: post created to last timeline written, by author size</td><td>The freshness promise</td><td>p99 over 5 s for ordinary accounts</td></tr>
+      <tr><td>Kafka consumer lag on new posts</td><td>Workers falling behind</td><td>Growing for more than a few minutes</td></tr>
+      <tr><td>Timeline cache hit ratio, cold rebuilds per second</td><td>Misses push load onto the posts store</td><td>Rebuilds spike, e.g. after a cache failover</td></tr>
+      <tr><td>Ranker timeouts and fallbacks to chronological</td><td>Silent quality loss</td><td>Fallback rate above ~1%</td></tr>
+      <tr><td>Empty or near-empty feeds served</td><td>New-user experience and data bugs</td><td>Rate rises after a deploy</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="risks">
+  <h2>Risks and v2</h2>
+  <ul class="tags"><li>Wrap-up</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Risk</th><th>How you detect it</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>A rising account crosses the threshold mid-fan-out</td><td>Fan-out jobs above a size limit</td><td>Check follower count when the job starts; switch to pull and stop pushing</td></tr>
+      <tr><td>Hot celebrity list or viral post overloads one cache shard</td><td>Per-node CPU, hot-key sampling</td><td>In-process caches in the feed service, replicated hot keys</td></tr>
+      <tr><td>Thundering herd of rebuilds after cache loss</td><td>Rebuild rate, posts-store latency</td><td>Rate-limited rebuilds, serve a partial feed first</td></tr>
+      <tr><td>Removed content still visible</td><td>Audits, user reports</td><td>Filter at hydration time; purge the post cache on removal</td></tr>
+      <tr><td>Ranking optimises for outrage</td><td>Hides, reports and unfollows; survey metrics</td><td>Guardrail metrics in every A/B test, integrity signals in the model</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>v2 ideas:</strong> recommended posts from accounts you don't follow, a real-time "new posts" banner over a persistent connection, per-topic feeds, and ads slotted into the ranked page.</p>
+</section>
+
+<section id="presenting">
+  <h2>Presenting it in 45 minutes</h2>
+  <ul class="tags"><li>Interview script</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Step</th><th>Time</th><th>What to cover</th></tr></thead>
+    <tbody>
+      <tr><td>1. Clarify</td><td class="num">5 min</td><td>Users, posts a day, follower skew, latency, freshness, ranked or chronological, media</td></tr>
+      <tr><td>2. Estimate</td><td class="num">4 min</td><td>1.2k posts/s, 23k–70k feed loads/s, fan-out multiplier, 1.6 TB of timelines</td></tr>
+      <tr><td>3. API</td><td class="num">3 min</td><td>Create post, get feed with a cursor, follow, media upload</td></tr>
+      <tr><td>4. Draw the whole system</td><td class="num">8 min</td><td>Post API, posts store, Kafka, fan-out workers, follow graph, timeline cache, feed service, ranker</td></tr>
+      <tr><td>5. Deep dive: fan-out</td><td class="num">10 min</td><td>Push vs pull vs hybrid; the celebrity threshold; batching and idempotency</td></tr>
+      <tr><td>6. Deep dive: the read path</td><td class="num">10 min</td><td>Gather, hydrate, rank, paginate; cold timelines; deletes</td></tr>
+      <tr><td>7. Risks and v2</td><td class="num">5 min</td><td>Hot keys, rebuild storms, content safety, ranking guardrails</td></tr>
+    </tbody>
+  </table></div>
+  <div class="say"><p>"Feed loads outnumber posts about twenty to one, so I'd precompute feeds. A post is stored once and an event goes to Kafka; fan-out workers push the post ID into each active follower's Redis timeline. Accounts above about 10,000 followers are not pushed. Their posts are merged in at read time from a heavily cached recent-posts list, which caps the write storm; a reader merges a few dozen of those. A feed load reads the timeline, merges celebrity posts, hydrates bodies from the post cache, ranks a few hundred candidates and returns 20 with a cursor. Timelines hold IDs only, so deletes are instant, and they're rebuildable, so losing the cache costs latency, not data."</p></div>
+</section>
+
+<section id="numbers">
+  <h2>Numbers to remember</h2>
+  <ul class="tags"><li>Cheat sheet</li></ul>
+  <div class="table"><table><tbody>
+    <tr><td>100M posts a day</td><td class="num">≈ 1,200 per second</td></tr>
+    <tr><td>200M users × 10 feed loads</td><td class="num">≈ 23,000 per second, ~70,000 at peak</td></tr>
+    <tr><td>Timeline entry</td><td class="num">~16 B; 500 entries ≈ 8 KB a user</td></tr>
+    <tr><td>Celebrity threshold</td><td class="num">~10k followers: push below, pull above</td></tr>
+    <tr><td>Feed budget</td><td class="num">gather ~10 ms · hydrate ~20 ms · rank ~50 ms</td></tr>
+    <tr><td>Freshness target</td><td class="num">&lt; 5 s ordinary accounts, ~1 min celebrities</td></tr>
+  </tbody></table></div>
+</section>
+  </article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. The 3D views use Three.js loaded from a CDN, so they need a connection; the text and tables cover the same ground. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var TIERS = [[50, 0.5], [300, 0.37778], [2000, 0.1], [2e4, 0.02], [2e5, 0.002], [2e6, 0.0002], [2e7, 0.00002]];
+  var FOLLOWED = { 2000: 30, 20000: 15, 200000: 8, 2000000: 5, 20000000: 3 };
+  var LABELS = ['nobody (pull everything)', '50 followers', '300 followers', '2,000 followers', '20,000 followers', '200,000 followers', '2 million followers', 'everyone (push everything)'];
+  var POSTS = 1200, LOADS = 70000, RATE = 200000;
+  function fmt(n){ if (n >= 1e6) return (n/1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M'; if (n >= 1e3) return Math.round(n/1e3) + 'k'; return Math.round(n).toString(); }
+  function dur(s){ if (s < 1) return 'under 1 s'; if (s < 90) return Math.round(s) + ' s'; return (s/60).toFixed(1) + ' min'; }
+  function run(){
+    var k = +$('fo-t').value, push = 0, pulled = 0, biggest = 0;
+    TIERS.forEach(function(t, i){
+      if (i < k) { push += t[0] * t[1]; biggest = t[0]; }
+      else pulled += FOLLOWED[t[0]] || 0;
+    });
+    if (k === 0) pulled = 200;
+    var writes = POSTS * push, reads = LOADS * pulled;
+    $('fo-t-o').textContent = LABELS[k];
+    $('fo-m').innerHTML = '<div class="metric"><span class="n">' + fmt(writes) + '/s</span><span class="l">timeline inserts</span></div>' +
+      '<div class="metric"><span class="n">' + pulled + '</span><span class="l">accounts pulled on every feed load</span><small>' + fmt(reads) + ' lookups/s at peak</small></div>' +
+      '<div class="metric"><span class="n">' + (biggest ? dur(biggest / RATE) : '—') + '</span><span class="l">slowest single fan-out</span><small>' + (biggest ? biggest.toLocaleString() + ' followers' : 'nothing pushed') + '</small></div>';
+    var msg;
+    if (k === 0) msg = 'Pure pull. Posting is one write, but every feed load fans out to all ~200 accounts the reader follows: about ' + fmt(reads) + ' lookups a second at peak, and each page waits for the slowest one.';
+    else if (k === 7) msg = 'Pure push. Feed loads are a single cache read, but timelines take ' + fmt(writes) + ' inserts a second, and one post from a 20M-follower account takes ' + dur(2e7 / RATE) + ' to reach everyone while it blocks the workers.';
+    else if (biggest > 2e5) msg = 'Feeds are cheap to read, but pushing accounts this large keeps write storms: one post takes ' + dur(biggest / RATE) + ' to fan out, past the freshness target. Lower the line.';
+    else if (biggest < 2000) msg = 'Writes are tiny, but ' + pulled + ' accounts are pulled on every load. You have moved most of the work back onto the read path, where latency hurts most.';
+    else if (biggest > 2e4) msg = 'Workable: the slowest push takes ' + dur(biggest / RATE) + ' and only ' + pulled + ' lists are pulled per load, but timelines now absorb ' + fmt(writes) + ' inserts a second. Pulling one more tier roughly halves that.';
+    else msg = 'A good balance: writes are bounded at about ' + fmt(writes) + ' a second, the slowest push finishes in ' + dur(biggest / RATE) + ', and each feed load merges only ' + pulled + ' cached celebrity lists, which every reader shares.';
+    $('fo-out').textContent = msg;
+  }
+  $('fo-t').addEventListener('input', run);
+  run();
+})();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from '../assets/scene3d.js';
+const D = {};
+D.hero = {
+  hero: true,
+  loop: 19,
+  view: { target: [-0.5, 0, 1.5], w: 30, d: 23, el: 50 },
+  steps: [
+    { t: 0.0, text: 'An author posts a photo. The Post API stores it once in the posts store, keyed by a time-sortable ID.' },
+    { t: 2.0, text: 'The API publishes a small "new post" event to Kafka and returns immediately. Posting never waits for followers.' },
+    { t: 3.6, text: 'A fan-out worker picks up the event and pages through the author’s followers in the follow graph.' },
+    { t: 5.4, text: 'It pushes the post ID onto each active follower’s timeline in Redis, a sorted list of the newest 500 IDs.' },
+    { t: 8.2, text: 'A reader opens the app. The feed service reads the top post IDs from their timeline.' },
+    { t: 9.8, text: 'In parallel it fetches the recent posts of the few celebrities they follow, which were never pushed.' },
+    { t: 11.4, text: 'It hydrates the merged IDs into full posts with one batched read from the post cache.' },
+    { t: 13.2, text: 'The ranker scores a few hundred candidates, and the feed service returns the first 20 with a cursor, well inside 200 ms.' },
+  ],
+  build(c) {
+    const { V, C, P } = c;
+    const author = c.obj('person', -13, -6, 'Author');
+    const api = c.obj(c.SHAPES.server({ emi: C.ingest }), -8, -6, 'Post API');
+    const posts = c.obj(c.SHAPES.database(C.kb, { r: 1.2 }), -3, -9.5, 'Posts store');
+    const top = c.obj(c.SHAPES.topic({ parts: 3, len: 4, color: C.cross }), -2, -6, 'Kafka: new posts');
+    const fan = c.obj(c.SHAPES.server({ emi: C.ingest, w: 1.5 }), 4, -6, 'Fan-out workers', 'skip celebrities');
+    const graph = c.obj(c.SHAPES.database(C.kb, { r: 1 }), 4, -10, 'Follow graph');
+    const tl = c.obj(c.SHAPES.database(C.ingest, { r: 1.2, tiers: 3 }), 10, -1, 'Timeline cache', 'Redis · IDs only');
+    const reader = c.obj(c.SHAPES.browser(0xd7932a), -13, 4, 'Reader', 'opens the app');
+    const feed = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve }), -6, 4, 'Feed service', 'stateless');
+    const celeb = c.obj(c.SHAPES.cards(), -1, 8.5, 'Celebrity posts', 'cached lists');
+    const pc = c.obj(c.SHAPES.database(C.kb, { r: 0.9, tiers: 2 }), 4, 8.5, 'Post cache');
+    const rank = c.obj(c.SHAPES.shield(C.gov), 4, 4, 'Ranker', 'score · filter');
+    c.lane([V(-13, -6), V(-2, -6), V(4, -6)]);
+    c.lane([V(-8, -6), V(-8, -9.5), V(-3, -9.5)]);
+    c.lane([V(4, -6), V(4, -10)]);
+    c.lane([V(4, -6), V(10, -6), V(10, -1)]);
+    c.lane([V(-13, 4), V(-6, 4), V(4, 4)]);
+    c.lane([V(-6, 4), V(-6, -1), V(10, -1)]);
+    c.lane([V(-6, 4), V(-6, 8.5), V(4, 8.5)]);
+    c.packet({ pts: [V(-13, -6), V(-8, -6)], t0: 0.2, t1: 1.0, kind: 'doc', from: author, to: api, label: 'new post' });
+    c.packet({ pts: [V(-8, -6), V(-8, -9.5), V(-3, -9.5)], t0: 1.1, t1: 1.9, kind: 'doc', to: posts, label: 'store once' });
+    c.packet({ pts: [V(-8, -6), V(-2, -6)], t0: 2.0, t1: 2.8, kind: 'env', to: top, label: 'post 1852…' });
+    c.packet({ pts: [V(-8, -6), V(-13, -6)], t0: 2.2, t1: 3.0, kind: 'env', color: P.ship, to: author, label: '201 created' });
+    c.packet({ pts: [V(-2, -6), V(4, -6)], t0: 3.6, t1: 4.3, kind: 'env', to: fan });
+    c.packet({ pts: [V(4, -6), V(4, -10)], t0: 4.4, t1: 5.0, kind: 'span', to: graph, label: 'followers, 1,000 at a time' });
+    c.packet({ pts: [V(4, -6), V(10, -6), V(10, -1)], t0: 5.4, t1: 7.4, n: 6, st: 0.3, kind: 'chunk', s: 0.8, to: tl, label: 'ZADD × followers' });
+    c.packet({ pts: [V(-13, 4), V(-6, 4)], t0: 8.2, t1: 8.9, kind: 'ask', from: reader, to: feed, label: 'GET /feed' });
+    c.packet({ pts: [V(-6, 4), V(-6, -1), V(10, -1)], t0: 9.0, t1: 9.7, kind: 'span', to: tl, label: 'top IDs' });
+    c.packet({ pts: [V(-6, 4), V(-6, 8.5), V(-1, 8.5)], t0: 9.8, t1: 10.6, kind: 'span', to: celeb, label: 'merge celebrities' });
+    c.packet({ pts: [V(-1, 8.5), V(4, 8.5)], t0: 11.4, t1: 12.2, kind: 'doc', n: 3, st: 0.2, to: pc, label: 'hydrate' });
+    c.packet({ pts: [V(-6, 4), V(4, 4)], t0: 12.6, t1: 13.4, kind: 'doc', n: 3, st: 0.15, to: rank, label: 'rank ~300' });
+    c.packet({ pts: [V(4, 4), V(-6, 4), V(-13, 4)], t0: 14.2, t1: 15.6, kind: 'env', color: P.ship, to: reader, label: '20 posts + cursor' });
+    c.note('write path · fan-out in the background', 11.5, -9);
+    c.note('read path · < 200 ms', -6, 11.4);
+  },
+};
+D.celeb3d = {
+  loop: 16,
+  view: { target: [0, 0, 0], w: 30, d: 15, el: 48 },
+  steps: [
+    { t: 0.0, text: 'An account with 20 million followers posts.' },
+    { t: 1.2, text: 'With pure push, fan-out workers would write 20 million timeline entries: about 100 seconds of work that delays everyone else’s posts too.' },
+    { t: 5.2, text: 'With the hybrid, the post goes only into the celebrity’s own recent-posts list. One write.' },
+    { t: 7.4, text: 'A follower opens the app. The feed service reads their timeline and the celebrity list in parallel.' },
+    { t: 10.0, text: 'It merges both, dedupes and ranks. Millions of readers share the same cached celebrity list, so it stays hot.' },
+  ],
+  build(c) {
+    const { V, C, P } = c;
+    const star = c.obj('person', -12, 0, 'Celebrity', '20M followers');
+    const fan = c.obj(c.SHAPES.server({ emi: C.ingest, w: 1.5 }), -5, -4.5, 'Fan-out', 'pure push');
+    const zs = [-6.5, -4.5, -2.5];
+    const tls = zs.map((z, i) => c.obj(c.SHAPES.database(C.ingest, { r: 0.7, tiers: 2 }), 2 + i * 3.2, -6, i === 1 ? '20M timelines' : ''));
+    const list = c.obj(c.SHAPES.database(C.serve, { r: 0.9 }), -5, 3.5, 'Recent posts', 'by this author');
+    const feed = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve }), 3, 3.5, 'Feed service');
+    const tl = c.obj(c.SHAPES.database(C.ingest, { r: 0.8, tiers: 2 }), 3, 0, 'My timeline');
+    const reader = c.obj(c.SHAPES.browser(0xd7932a), 10, 3.5, 'Follower');
+    c.lane([V(-12, 0), V(-5, 0), V(-5, -4.5)]);
+    c.lane([V(-5, -4.5), V(-5, -6), V(8.4, -6)]);
+    c.lane([V(-12, 0), V(-12, 3.5), V(-5, 3.5)]);
+    c.lane([V(-5, 3.5), V(10, 3.5)]);
+    c.lane([V(3, 3.5), V(3, 0)]);
+    c.packet({ pts: [V(-12, 0), V(-5, 0), V(-5, -4.5)], t0: 0.3, t1: 1.1, kind: 'doc', from: star, to: fan });
+    c.packet({ pts: [V(-5, -4.5), V(-5, -6), V(8.4, -6)], t0: 1.3, t1: 4.6, n: 14, st: 0.22, kind: 'chunk', s: 0.6, color: P.bad, label: '20M writes · ~100 s' });
+    c.packet({ pts: [V(-12, 0), V(-12, 3.5), V(-5, 3.5)], t0: 5.3, t1: 6.4, kind: 'doc', color: P.ship, to: list, label: 'one write' });
+    c.packet({ pts: [V(10, 3.5), V(3, 3.5)], t0: 7.4, t1: 8.1, kind: 'ask', from: reader, to: feed, label: 'GET /feed' });
+    c.packet({ pts: [V(3, 3.5), V(3, 0)], t0: 8.3, t1: 8.9, kind: 'span', to: tl, label: 'my IDs' });
+    c.packet({ pts: [V(3, 3.5), V(-5, 3.5)], t0: 8.3, t1: 9.2, kind: 'span', to: list, label: 'celebrity list' });
+    c.packet({ pts: [V(-5, 3.5), V(3, 3.5)], t0: 9.3, t1: 10.0, kind: 'doc', n: 2, st: 0.2, to: feed });
+    c.packet({ pts: [V(3, 3.5), V(10, 3.5)], t0: 10.4, t1: 11.4, kind: 'env', color: P.ship, to: reader, label: 'merged · ranked' });
+    c.note('pure push: a write storm', 5.2, -3.4);
+    c.note('hybrid: pull at read time', -1, 6.2);
+  },
+};
+boot(D);
+</script>
+</body>
+</html>
