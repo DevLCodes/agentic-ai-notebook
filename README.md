@@ -50,6 +50,7 @@ Non-agentic building blocks, in [`classic-system-design/`](classic-system-design
 Walkthroughs:
 
 - [URL Shortener](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/url-shortener.html): 100M links a month and 100× the clicks, covering random codes with conditional writes, a three-layer redirect cache, viral links and takedowns, async click analytics and multi-region writes; two 3D scenes and a keyspace lab
+- [News Feed](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/news-feed.html): 200M daily users, covering push vs pull vs hybrid fan-out, the celebrity threshold, ID-only timeline caches, the gather-hydrate-rank read path, cursors and cold rebuilds; two 3D scenes and a fan-out lab
 
 More walkthroughs (news feed, chat, payments and more) come next.
 
