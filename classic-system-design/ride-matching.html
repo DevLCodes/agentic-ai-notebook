@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ride Matching · Classic System Designs</title>
+<meta name="description" content="Design a ride-hailing matching system: H3 geospatial indexing, location updates at scale, dispatch with reservations, ETAs and surge pricing.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+<style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+
+<style>
+  .lab-chart { display: block; width: 100%; height: auto; margin: 4px 0 0; }
+  .lab-chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+  .grid-cells { display: grid; gap: 4px; }
+  .srv { display: grid; grid-template-columns: 92px minmax(0,1fr) 70px; gap: 10px; align-items: center; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .lab select { font: 14px var(--font-body); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab input[type=number] { width: 9ch; font: 14px var(--font-mono); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+</style><style>
+  .prompt { margin: 0; font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .prompt q { font-style: italic; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .tags li { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  @media (max-width: 640px) { .prompt { font-size: 16.5px; } }
+</style>
+<link rel="stylesheet" href="../assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="../system-design/index.html">System Design</a><nav aria-label="Site"><a href="../system-design/index.html">Home</a><a href="../system-design/designs.html">Designs</a><a href="../system-design/topics.html">Topics</a><a href="../system-design/roadmap.html">Roadmap</a><a href="index.html" aria-current="page">Classic</a><a href="../system-design/glossary.html">Glossary</a><a href="../index.html">Beginner notebook</a></nav></div></header>
+<main>
+<header class="wrap"><div class="intro"><p class="eyebrow">Classic system design walkthrough</p><h1>Ride Matching</h1><p class="prompt"><q>Design the matching system for a ride-hailing app. Drivers' phones report their location every few seconds; a rider asks for a ride and should be matched with a nearby driver who accepts within seconds, at a price that reflects demand. Plan for 20 million rides a day and 5 million drivers online at peak, across hundreds of cities.</q></p><ul class="legend" aria-label="Colour key"><li><i style="background:var(--c-ingest)"></i>Location stream</li><li><i style="background:var(--c-serve)"></i>Ride request and dispatch</li><li><i style="background:var(--c-kb)"></i>Geo index and storage</li><li><i style="background:var(--c-cross)"></i>Async</li><li><i style="background:var(--c-gov)"></i>Pricing and safety</li></ul></div></header>
+<div class="wrap"><figure class="fig3d hero" id="hero">
+  <div class="stage3d" role="img" aria-label="Animated 3D view of the whole system: driver phones send location pings every four seconds to the location service, which updates an in-memory geo index of hexagonal cells and streams the points to Kafka. A rider requests a ride; the ride service gets a price from the pricing service, then asks dispatch for a match. Dispatch looks up available drivers in the rider's cell and the rings around it, asks the ETA service for real road times, and offers the ride to the best driver. The driver accepts, dispatch atomically marks the driver as assigned, and the trip service tells the rider their driver is on the way."><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The sections below cover the same ground.</p></div>
+  <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+  <div class="track3"><div class="fill3"></div></div>
+  <p class="out3" aria-live="polite"></p>
+  <figcaption>Illustrative. The back row is the constant stream of driver locations; the front row is one rider being matched.</figcaption>
+</figure></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="Sections"><p>The solution</p><ol><li><a href="#requirements">Requirements</a></li><li><a href="#success">Success metrics</a></li><li><a href="#estimates">Estimates</a></li><li><a href="#api">API</a></li><li><a href="#architecture">Architecture</a></li><li><a href="#geo">Finding nearby drivers</a></li><li><a href="#lab">Try it: how big a search area?</a></li><li><a href="#locations">A million location updates a second</a></li><li><a href="#dispatch">Dispatch: offer, accept, never double-book</a></li><li><a href="#eta">ETAs and routing</a></li><li><a href="#pricing">Surge pricing</a></li><li><a href="#trip">The trip</a></li><li><a href="#deployment">Deployment and cities</a></li><li><a href="#observability">Observability</a></li><li><a href="#risks">Risks and v2</a></li><li><a href="#presenting">Presenting it in 45 minutes</a></li><li><a href="#numbers">Numbers to remember</a></li></ol></nav>
+  <article>
+
+<section id="requirements">
+  <h2>Requirements</h2>
+  <ul class="tags"><li>Clarify</li></ul>
+  <p class="lead">Two very different workloads meet here: a firehose of location updates, and a much smaller stream of ride requests that each need a fast, correct, one-driver-only decision.</p>
+  <div class="table"><table>
+    <thead><tr><th>Question</th><th>Assumption</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>Rides</td><td class="num">20M a day; peaks at rush hour and after events</td><td>~230/s average, ~1,000/s at peak</td></tr>
+      <tr><td>Drivers online</td><td class="num">5M at peak, each pinging every 4 s</td><td>~1.25M location writes a second: the biggest load</td></tr>
+      <tr><td>Match time</td><td class="num">Driver offered within ~2 s; accepted ride within ~15 s typical</td><td>The search must be in-memory and local</td></tr>
+      <tr><td>Quality</td><td>Shortest pickup time by road, not straight-line distance</td><td>Needs an ETA service on the hot path</td></tr>
+      <tr><td>Correctness</td><td>A driver is never assigned two rides at once; a rider gets one driver</td><td>Atomic state changes on the driver</td></tr>
+      <tr><td>Pricing</td><td>Upfront price with surge when demand outstrips supply</td><td>Supply and demand counted per area, every minute</td></tr>
+      <tr><td>Geography</td><td>Hundreds of cities; a trip never spans two</td><td>Shard everything by city or region</td></tr>
+      <tr><td>Freshness</td><td>A driver's position in the index is at most ~5–10 s old</td><td>Location data can be lossy; only the latest point matters</td></tr>
+    </tbody>
+  </table></div>
+  <p>Out of scope for v1: shared rides (pooling), scheduled rides, driver payouts and maps rendering. Say so explicitly, so the interviewer knows you chose rather than forgot.</p>
+</section>
+
+<section id="success">
+  <h2>Success metrics</h2>
+  <ul class="tags"><li>Define success</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Kind</th><th>Metric</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr><td>Product</td><td>Request-to-match rate; average pickup ETA; cancellations after match</td><td class="num">&gt; 95%; low; low</td></tr>
+      <tr><td>Latency</td><td>Request to first driver offer, p99</td><td class="num">&lt; 2 s</td></tr>
+      <tr><td>Correctness</td><td>Drivers double-assigned</td><td class="num">0</td></tr>
+      <tr><td>Supply</td><td>Driver utilisation (time with a rider); idle time between trips</td><td class="num">high; low</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="estimates">
+  <h2>Estimates</h2>
+  <ul class="tags"><li>Back of the envelope</li><li><a href="numbers.html">Numbers</a></li></ul>
+  <figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Key numbers: 1.25 million location updates a second, 1,000 ride requests a second at peak, 500 MB for the whole live driver index, about 10 TB of raw location points a day, and tens of ETA computations per request">
+    <rect x="10" y="10" width="134" height="92" rx="8" class="k-ingest"/><text x="24" y="52" class="big">1.25M/s</text><text x="24" y="78" class="sm">location updates</text><text x="24" y="94" class="sm">5M drivers ÷ 4 s</text>
+    <rect x="154" y="10" width="134" height="92" rx="8" class="k-serve"/><text x="168" y="52" class="big">1k/s</text><text x="168" y="78" class="sm">ride requests, peak</text><text x="168" y="94" class="sm">~230/s average</text>
+    <rect x="298" y="10" width="134" height="92" rx="8" class="k-kb"/><text x="312" y="52" class="big">500 MB</text><text x="312" y="78" class="sm">live driver index</text><text x="312" y="94" class="sm">5M × ~100 B, in RAM</text>
+    <rect x="442" y="10" width="134" height="92" rx="8" class="k-cross"/><text x="456" y="52" class="big">~10 TB</text><text x="456" y="78" class="sm">raw points a day</text><text x="456" y="94" class="sm">compress · sample</text>
+    <rect x="586" y="10" width="126" height="92" rx="8" class="k-serve"/><text x="600" y="52" class="big">20–50</text><text x="600" y="78" class="sm">ETAs per request</text><text x="600" y="94" class="sm">~50k/s at peak</text>
+    <text x="10" y="132" class="small">Location writes outnumber ride requests a thousand to one. The live state is small; the update rate is the challenge.</text>
+  </svg></figure>
+  <ul class="plain">
+    <li><strong>Location updates:</strong> 5M drivers ÷ 4 s = 1.25M writes a second. Each is ~100 bytes (driver ID, lat, lng, heading, speed, timestamp, status), so ~125 MB/s coming in.</li>
+    <li><strong>Live index:</strong> only the latest point per driver matters: 5M × ~100 B ≈ 500 MB in total, and far less per city. It fits in memory on a handful of machines.</li>
+    <li><strong>History:</strong> keeping every point is 1.25M × 100 B × 86,400 ≈ 10 TB a day raw. Trips need their route (for fares and disputes), so keep trip points in full, compress them, and sample idle driving.</li>
+    <li><strong>Requests:</strong> 1,000 a second at peak, each comparing 20–50 candidate drivers by road ETA: ~50,000 ETA calculations a second, which is why ETAs use precomputed road graphs.</li>
+  </ul>
+</section>
+
+<section id="api">
+  <h2>API</h2>
+  <ul class="tags"><li>Interface</li></ul>
+<pre><code>// driver app → location service, every ~4 s (over a persistent connection)
+{ "driver_id": "d_771", "lat": 12.9718, "lng": 77.5946, "heading": 82,
+  "speed_kmh": 31, "status": "available", "ts": 1762170000123 }
+
+POST /v1/rides/estimate   { "pickup": {…}, "dropoff": {…}, "product": "standard" }
+→ { "quote_id": "q_12", "price": 21400, "currency": "INR", "surge": 1.3,
+    "pickup_eta_s": 240, "expires_at": "…" }
+
+POST /v1/rides            { "quote_id": "q_12" }    Idempotency-Key: …
+→ 202 { "ride_id": "r_909", "status": "matching" }
+
+// server → driver (push):  { "type": "offer", "ride_id": "r_909", "pickup": {…}, "expires_in_s": 15 }
+POST /v1/offers/{ride_id}/accept      (driver)
+// server → rider (push):   { "type": "matched", "driver": {…}, "eta_s": 210 }</code></pre>
+  <p>The quote locks the price for a few minutes, so the rider pays what they saw. Ride creation is idempotent, because riders double-tap on bad networks.</p>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <ul class="tags"><li>Whole system</li></ul>
+  <figure class="fig"><svg viewBox="0 0 722 300" class="dg" role="img" aria-label="Architecture: driver apps stream locations to a location service, which updates a geo index and Kafka; rider app requests go to the ride service, pricing, and dispatch; dispatch queries the geo index and the ETA service, offers rides to drivers, and assigns them via the driver state store; the trip service tracks the ride">
+    <text x="10" y="22" class="cap">LOCATION STREAM · 1.25M/S</text>
+    <rect x="10" y="36" width="90" height="40" rx="8" class="k-user"/><text x="55" y="60" class="small b" text-anchor="middle">Drivers</text>
+    <path d="M100 56 L132 56" class="wire" marker-end="url(#ah)"/>
+    <rect x="134" y="36" width="120" height="40" rx="8" class="k-ingest"/><text x="194" y="54" class="small b" text-anchor="middle">Location service</text><text x="194" y="69" class="sm" text-anchor="middle">sharded by city</text>
+    <path d="M254 56 L300 56" class="wire" marker-end="url(#ah)"/>
+    <rect x="302" y="32" width="140" height="48" rx="8" class="k-kb"/><text x="372" y="52" class="small b" text-anchor="middle">Geo index</text><text x="372" y="68" class="sm" text-anchor="middle">H3 cell → drivers · RAM</text>
+    <path d="M194 76 L194 106 L300 106" class="wire dash" marker-end="url(#ah)"/>
+    <rect x="302" y="92" width="120" height="30" rx="15" class="k-cross"/><text x="362" y="111" class="small b" text-anchor="middle">Kafka: locations</text>
+    <path d="M422 107 L470 107" class="wire dash" marker-end="url(#ah)"/><rect x="472" y="92" width="110" height="30" rx="8" class="k-cross"/><text x="527" y="111" class="small b" text-anchor="middle">History · surge</text>
+    <text x="10" y="160" class="cap">RIDE REQUEST · 1K/S PEAK</text>
+    <rect x="10" y="176" width="90" height="40" rx="8" class="k-user"/><text x="55" y="200" class="small b" text-anchor="middle">Rider</text>
+    <path d="M100 196 L132 196" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="134" y="176" width="110" height="40" rx="8" class="k-serve"/><text x="189" y="194" class="small b" text-anchor="middle">Ride service</text><text x="189" y="209" class="sm" text-anchor="middle">quote · request</text>
+    <path d="M189 216 L189 244" class="wire" marker-end="url(#ah)"/><rect x="134" y="246" width="110" height="34" rx="8" class="k-gov"/><text x="189" y="267" class="small b" text-anchor="middle">Pricing · surge</text>
+    <path d="M244 196 L300 196" class="wire hot" marker-end="url(#ah)"/>
+    <rect x="302" y="174" width="140" height="44" rx="8" class="k-serve"/><text x="372" y="193" class="small b" text-anchor="middle">Dispatch</text><text x="372" y="209" class="sm" text-anchor="middle">search · rank · offer</text>
+    <path d="M432 174 L432 82" class="wire hot" marker-end="url(#ah)"/><text x="440" y="150" class="sm">nearby available</text>
+    <path d="M442 186 L486 186" class="wire hot" marker-end="url(#ah)"/><rect x="488" y="168" width="100" height="36" rx="8" class="k-serve"/><text x="538" y="191" class="small b" text-anchor="middle">ETA service</text>
+    <path d="M442 210 L486 246" class="wire hot" marker-end="url(#ah)"/><rect x="488" y="234" width="120" height="40" rx="8" class="k-kb"/><text x="548" y="252" class="small b" text-anchor="middle">Driver state</text><text x="548" y="267" class="sm" text-anchor="middle">CAS → assigned</text>
+    <path d="M608 254 L632 254" class="wire" marker-end="url(#ah)"/><rect x="634" y="234" width="78" height="40" rx="8" class="k-serve"/><text x="673" y="258" class="small b" text-anchor="middle">Trip svc</text>
+  </svg><figcaption>Locations flow through a city-sharded in-memory index. Requests go through pricing and dispatch, which searches the index, ranks by road ETA, and assigns a driver with an atomic state change.</figcaption></figure>
+  <ul class="plain">
+    <li><strong>Location service</strong> receives pings over persistent connections, updates the in-memory <strong>geo index</strong> for the driver's city, and streams the points to Kafka for trip routes, analytics and surge.</li>
+    <li><strong>Ride service</strong> issues quotes (with the <strong>pricing</strong> service) and creates ride requests.</li>
+    <li><strong>Dispatch</strong> finds nearby available drivers, ranks them by ETA from the <strong>ETA service</strong>, offers the ride, and on acceptance flips the driver's state atomically in the <strong>driver state</strong> store.</li>
+    <li><strong>Trip service</strong> owns the ride's lifecycle from assignment to drop-off and fare.</li>
+  </ul>
+</section>
+
+<section id="geo">
+  <h2>Finding nearby drivers</h2>
+  <ul class="tags"><li>Deep dive 1</li><li><a href="sharding.html">Partitioning</a></li></ul>
+  <p class="lead">"Who's within 2 km of this point?" must be answered in milliseconds over a set of drivers that changes 1.25 million times a second.</p>
+  <p>Scanning every driver in a city and computing distances is too slow, and a database range query on latitude and longitude can't use one index for both. The answer is to divide the map into <strong>cells</strong>, so a location becomes a cell ID and "nearby" becomes "these few cells".</p>
+  <div class="table"><table>
+    <thead><tr><th>Index</th><th>How</th><th>Trade-off</th></tr></thead>
+    <tbody>
+      <tr><td>Geohash</td><td>Interleave lat/lng bits into a string; a shared prefix means nearby</td><td>Simple and works in any key-value store (Redis <code>GEOADD</code>/<code>GEOSEARCH</code> use it). Cells are rectangles that distort with latitude, and neighbours across a cell edge can have very different prefixes</td></tr>
+      <tr><td>Quadtree</td><td>Split a region into four until each leaf holds at most N drivers</td><td>Adapts to density (small cells downtown, big ones in suburbs); rebalancing as drivers move is fiddly</td></tr>
+      <tr><td><strong>H3 hexagons</strong></td><td>Uber's hierarchical grid of hexagons at fixed resolutions</td><td>Every neighbour is the same distance away, and "rings" around a cell are cheap to enumerate. Fixed resolution, so pick it per city</td></tr>
+    </tbody>
+  </table></div>
+  <p>I'd use <strong>H3 at resolution 8 or 9</strong> (cells ~0.7 km² or ~0.1 km²). The index is a map from cell ID to the set of available drivers in it. To search, take the rider's cell plus <em>k</em> rings of neighbours (1, 7, 19, 37 cells for <em>k</em> = 0–3), read those sets, and widen <em>k</em> until there are enough candidates. Then compute exact distances only for those few dozen drivers.</p>
+  <p>Only <em>available</em> drivers are in the searchable sets. A driver on a trip is in a separate structure (still tracked, but not offered), and drivers who stop pinging drop out after a short TTL.</p>
+</section>
+
+<section id="lab">
+  <h2>Try it: how big a search area?</h2>
+  <ul class="tags"><li>Lab</li></ul>
+  <p>Pick how dense available drivers are, the H3 cell size, and how many rings to search. You want enough candidates to choose a good driver, but not so many that you waste ETA calculations.</p>
+  <div class="lab" id="h3lab">
+    <div class="lab-row"><label for="h3-d">Available drivers per km² <input type="range" id="h3-d" min="0" max="6" step="1" value="3"><output id="h3-d-o"></output></label></div>
+    <div class="lab-row"><span class="lab-k">Cell size</span><span class="seg" role="group" aria-label="H3 resolution" id="h3-r"><button type="button" data-v="7" aria-pressed="false">res 7 · 5.2 km²</button><button type="button" data-v="8" aria-pressed="true">res 8 · 0.74 km²</button><button type="button" data-v="9" aria-pressed="false">res 9 · 0.11 km²</button></span></div>
+    <div class="lab-row"><label for="h3-k">Rings searched <input type="range" id="h3-k" min="0" max="4" step="1" value="1"><output id="h3-k-o"></output></label></div>
+    <div class="metrics" id="h3-m"></div>
+    <p class="lab-out" id="h3-out" aria-live="polite"></p>
+  </div>
+  <p class="muted" style="font-size:13.5px">Illustrative model: average H3 cell areas; cells searched = 1 + 3k(k+1); expected candidates = density × area; radius is that of a circle with the same area. Real densities vary block by block, which is why dispatch widens the search adaptively.</p>
+</section>
+
+<section id="locations">
+  <h2>A million location updates a second</h2>
+  <ul class="tags"><li>Scale</li><li><a href="queues.html">Streams</a></li></ul>
+  <ul class="plain">
+    <li><strong>Shard by city.</strong> Every update and every search for a city goes to the same few location servers, which hold that city's index in memory. A big city (hundreds of thousands of drivers) is split further by region of the map. No query ever needs data from two cities.</li>
+    <li><strong>Update cheaply.</strong> On each ping, compute the H3 cell. If it's the same cell as last time (most pings), just update the driver's record. If it changed, remove the driver from the old cell's set and add them to the new one. That's two set operations, in memory.</li>
+    <li><strong>Lossy is fine.</strong> If a ping is dropped, the next one arrives in 4 seconds. Don't queue, retry or persist live pings synchronously; only the newest point matters, so an older point arriving late is discarded by timestamp.</li>
+    <li><strong>Survive a node loss.</strong> The index is rebuildable: replicas of each city shard receive the same stream, and a fresh node fills up from pings within one ping interval. Losing a shard means a few seconds of thinner search results, not lost data.</li>
+    <li><strong>Persist asynchronously.</strong> The same pings go to Kafka, where consumers write trip routes (in full, for fares and disputes), feed surge pricing, and keep sampled history for ETA model training.</li>
+  </ul>
+  <div class="note"><p><strong>Adaptive ping rate.</strong> An idle driver parked for ten minutes doesn't need to ping every 4 seconds, and one moving fast on a highway might ping more often. Letting the server tell the app how often to report cuts load and battery use without making the index stale where it matters.</p></div>
+</section>
+
+<section id="dispatch">
+  <h2>Dispatch: offer, accept, never double-book</h2>
+  <ul class="tags"><li>Deep dive 2</li><li><a href="consistency.html">Consistency</a></li></ul>
+  <p class="lead">Finding candidates is half the job. The other half is offering the ride to one driver at a time, handling silence and refusals, and making sure two riders never get the same driver.</p>
+  <ol class="plain">
+    <li><strong>Rank candidates</strong> by road ETA to the pickup (not straight-line distance: the closest driver may be across a river), adjusted for heading, driver rating and fairness to drivers who've waited longest.</li>
+    <li><strong>Reserve, then offer.</strong> Atomically move the best driver from <code>available</code> to <code>offered:r_909</code> with an expiry: <code>UPDATE drivers SET state='offered', ride=$r, offer_expires=now()+15s WHERE id=$d AND state='available'</code> (or a Redis Lua script / <code>SET NX</code> with TTL). If zero rows change, someone else got them; take the next candidate.</li>
+    <li><strong>Push the offer</strong> to the driver's app with a 15-second countdown.</li>
+    <li><strong>Accept</strong> flips <code>offered:r_909</code> → <code>assigned:r_909</code> with the same guarded update, and the trip service tells the rider. A late accept after expiry fails the guard and the driver sees "this ride is no longer available".</li>
+    <li><strong>Decline or silence</strong>: the reservation expires (or is released) and dispatch offers the next candidate. After a few misses, widen the search.</li>
+  </ol>
+  <p>The guarded compare-and-set on the driver's state is what prevents double-booking. It doesn't matter how many dispatchers race for the same driver: only one update can succeed.</p>
+  <h3>Greedy or batched?</h3>
+  <p>Matching each request the moment it arrives (greedy) is simple, but can make poor choices for the city as a whole: it gives the only nearby driver to a rider who had another option a minute away. Batched matching collects requests for 1–2 seconds per area and solves an assignment problem (minimise total pickup time across all riders and drivers in the batch). It adds a second of latency for noticeably better ETAs at busy times. Many systems switch to batching only in dense areas at peak.</p>
+  <figure class="fig3d" id="race3d">
+    <div class="stage3d" role="img" aria-label="Two riders request at the same moment and dispatch picks the same driver as best for both. Both try to reserve the driver with a compare-and-set from available to offered. Only the first succeeds; the second sees zero rows changed and reserves the next-best driver instead. Both riders get a driver, and no driver gets two rides."><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. A guarded state change turns a race into a clean "you lost, try the next one".</figcaption>
+  </figure>
+</section>
+
+<section id="eta">
+  <h2>ETAs and routing</h2>
+  <ul class="tags"><li>Quality</li></ul>
+  <p>Dispatch needs 20–50 pickup ETAs per request within a few milliseconds each. Shortest-path search over a city's road graph from scratch (Dijkstra) is too slow at 50,000 a second, so the routing engine uses <strong>precomputed graphs</strong> (contraction hierarchies or similar) that answer point-to-point queries in about a millisecond, with live traffic applied as edge weights updated every few minutes.</p>
+  <p>On top of the graph estimate, an ML model corrects ETAs from historical trips (time of day, weather, events, pickup spot quirks like airport ramps). For ranking candidates, a slightly stale ETA is fine. For what the rider sees, use the better estimate.</p>
+</section>
+
+<section id="pricing">
+  <h2>Surge pricing</h2>
+  <ul class="tags"><li>Marketplace</li></ul>
+  <p>Every minute or so, a stream job reads requests and available drivers per H3 cell (coarser, say resolution 7) from Kafka and computes a demand-to-supply ratio. Where demand outstrips supply, a multiplier raises the price, which both damps demand and draws drivers in. Smooth the multiplier across neighbouring cells and over time, so prices don't jump block to block or second to second, and cap it, with stricter caps during emergencies.</p>
+  <p>The quote captures the multiplier at request time, so the rider pays the price they agreed to even if surge changes before pickup.</p>
+</section>
+
+<section id="trip">
+  <h2>The trip</h2>
+  <ul class="tags"><li>State</li></ul>
+  <p>The trip service owns a state machine: <code>MATCHING → DRIVER_ASSIGNED → DRIVER_ARRIVED → ON_TRIP → COMPLETED</code>, with <code>CANCELLED</code> branches carrying who cancelled and when (for fees). Each transition is a guarded update in a relational database (one row per trip), and an event to Kafka for payments, receipts and analytics. While the trip is active, the rider's app receives the driver's position from the location stream (a few times a second during the final approach), and the route points are stored for fare calculation and disputes.</p>
+  <p>Payment runs at the end through the <a href="payments.html">payments</a> system: authorise at request, capture at completion.</p>
+</section>
+
+<section id="deployment">
+  <h2>Deployment and cities</h2>
+  <ul class="tags"><li>Production</li><li><a href="load-balancing.html">Load balancing</a></li></ul>
+  <p>Cities are assigned to regions close to them, and each city's location, dispatch and pricing shards run in that region. That keeps latency low, and an incident in one region affects only its cities. Rider and trip records replicate to a backup region; the live geo index doesn't need to, because it rebuilds from pings within seconds.</p>
+  <div class="note"><p><strong>Launch a new city without a deploy.</strong> City boundaries, H3 resolution, surge caps and product types are configuration. A new city is a config change plus shard assignment, rather than code.</p></div>
+  <p>Roll out dispatch changes city by city with experiments, watching match rate, pickup ETAs and cancellations. Matching algorithms are compared with switchback tests (alternating the algorithm by time window in a city), because riders and drivers in one city affect each other and can't be split cleanly into A and B.</p>
+</section>
+
+<section id="observability">
+  <h2>Observability</h2>
+  <ul class="tags"><li>Production</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Signal</th><th>Why</th><th>Alert when</th></tr></thead>
+    <tbody>
+      <tr><td>Request-to-offer latency and match rate, per city</td><td>The core experience</td><td>Match rate drops, or p99 over 2 s</td></tr>
+      <tr><td>Location ingest rate and index freshness (age of newest ping per driver)</td><td>A stale index sends drivers who already left</td><td>Median age over ~10 s</td></tr>
+      <tr><td>Offer acceptance rate and timeouts</td><td>Bad offers, app or push problems</td><td>Sudden drop in a city</td></tr>
+      <tr><td>Reservation conflicts (CAS failures)</td><td>Contention, or batching needed</td><td>Rising at peak</td></tr>
+      <tr><td>ETA error (predicted vs actual pickup time)</td><td>Ranking and rider trust</td><td>Error grows after a map or model update</td></tr>
+      <tr><td>Surge multiplier distribution</td><td>Runaway pricing</td><td>Hits caps widely</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="risks">
+  <h2>Risks and v2</h2>
+  <ul class="tags"><li>Wrap-up</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Risk</th><th>How you detect it</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Double-assigned driver</td><td>Trips overlapping per driver</td><td>Guarded state changes with expiry; one owner of driver state</td></tr>
+      <tr><td>City shard overloaded (a stadium lets out)</td><td>Shard CPU, request queueing</td><td>Split hot regions, batch matching, admission control</td></tr>
+      <tr><td>Stale or spoofed locations</td><td>Impossible jumps, GPS mock flags</td><td>TTL on index entries, speed sanity checks, device integrity checks</td></tr>
+      <tr><td>Bad ETAs after a map change</td><td>ETA error metric</td><td>Staged map rollouts, fall back to the previous graph</td></tr>
+      <tr><td>Surge during an emergency</td><td>Multiplier vs events</td><td>Caps and manual overrides</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>v2 ideas:</strong> shared rides (matching several riders to one route), scheduled rides, demand forecasting that nudges idle drivers before surge, and driver destination filters.</p>
+</section>
+
+<section id="presenting">
+  <h2>Presenting it in 45 minutes</h2>
+  <ul class="tags"><li>Interview script</li></ul>
+  <div class="table"><table>
+    <thead><tr><th>Step</th><th>Time</th><th>What to cover</th></tr></thead>
+    <tbody>
+      <tr><td>1. Clarify</td><td class="num">5 min</td><td>Rides, drivers online, ping rate, match time, ETA quality, pricing, cities</td></tr>
+      <tr><td>2. Estimate</td><td class="num">4 min</td><td>1.25M pings/s, 1k requests/s, 500 MB live index, 50k ETAs/s</td></tr>
+      <tr><td>3. API</td><td class="num">3 min</td><td>Location pings, quote, request, offer and accept</td></tr>
+      <tr><td>4. Draw the whole system</td><td class="num">7 min</td><td>Location service, geo index, Kafka, ride service, pricing, dispatch, ETA, driver state, trip</td></tr>
+      <tr><td>5. Deep dive: geo index</td><td class="num">10 min</td><td>Geohash vs quadtree vs H3; rings; sharding by city; cheap updates</td></tr>
+      <tr><td>6. Deep dive: dispatch</td><td class="num">11 min</td><td>Rank by ETA, reserve with CAS, offer with expiry, greedy vs batched</td></tr>
+      <tr><td>7. Risks and v2</td><td class="num">5 min</td><td>Hot shards, stale locations, surge caps, pooling</td></tr>
+    </tbody>
+  </table></div>
+  <div class="say"><p>"Driver pings arrive at 1.25 million a second, so the live index lives in memory, sharded by city: each ping maps to an H3 cell, and only drivers who change cell cost two set operations. Pings also go to Kafka for trip routes and surge. A ride request gets a locked quote, then dispatch reads the rider's cell and a few rings of neighbours, widens until it has enough candidates, and ranks them by road ETA from precomputed graphs. It reserves the best driver with a compare-and-set from available to offered with a 15-second expiry, pushes the offer, and on accept flips to assigned. A race means a failed update and the next candidate, so no driver is ever double-booked. At peak in dense areas, batching requests for a second gives better matches overall."</p></div>
+</section>
+
+<section id="numbers">
+  <h2>Numbers to remember</h2>
+  <ul class="tags"><li>Cheat sheet</li></ul>
+  <div class="table"><table><tbody>
+    <tr><td>5M drivers pinging every 4 s</td><td class="num">1.25M updates a second</td></tr>
+    <tr><td>Live driver index</td><td class="num">~100 B a driver → 500 MB total</td></tr>
+    <tr><td>H3 res 7 / 8 / 9</td><td class="num">~5.2 / 0.74 / 0.11 km² per cell</td></tr>
+    <tr><td>Cells in k rings</td><td class="num">1 + 3k(k+1): 1, 7, 19, 37</td></tr>
+    <tr><td>Offer expiry</td><td class="num">~15 s, then the next driver</td></tr>
+    <tr><td>Point-to-point ETA on a precomputed graph</td><td class="num">~1 ms</td></tr>
+  </tbody></table></div>
+</section>
+  </article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. The 3D views use Three.js loaded from a CDN, so they need a connection; the text and tables cover the same ground. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); }, RES = 8;
+  var AREA = { 7: 5.16, 8: 0.737, 9: 0.105 }, DENS = [0.2, 0.5, 1, 3, 10, 30, 80];
+  var DLAB = ['0.2 (rural)', '0.5 (suburb)', '1', '3 (city)', '10 (busy city)', '30 (downtown)', '80 (event let-out)'];
+  function fmt(n){ return n >= 100 ? Math.round(n).toLocaleString() : n >= 10 ? n.toFixed(0) : n.toFixed(1); }
+  function run(){
+    var d = DENS[+$('h3-d').value], k = +$('h3-k').value, cells = 1 + 3 * k * (k + 1), area = cells * AREA[RES], n = d * area, r = Math.sqrt(area / Math.PI);
+    $('h3-d-o').textContent = DLAB[+$('h3-d').value]; $('h3-k-o').textContent = k + (k === 1 ? ' ring' : ' rings');
+    $('h3-m').innerHTML = '<div class="metric"><span class="n">' + cells + '</span><span class="l">cells read</span></div>' +
+      '<div class="metric"><span class="n">' + fmt(area) + ' km²</span><span class="l">area searched</span><small>radius ≈ ' + r.toFixed(1) + ' km</small></div>' +
+      '<div class="metric"><span class="n">' + fmt(n) + '</span><span class="l">expected candidates</span><small>' + fmt(Math.min(n, 50)) + ' ETA calls if capped at 50</small></div>';
+    var msg;
+    if (n < 3) msg = 'Too few candidates: ' + (n < 0.05 ? 'almost no drivers' : 'about ' + fmt(n) + ' drivers') + '. The first offer may go to a poor choice, and one decline leaves nobody. Widen the search: more rings, or larger cells here.';
+    else if (r > 5) msg = 'Plenty of candidates, but the search reaches ' + r.toFixed(1) + ' km out. Pickups that far are bad for riders and drivers. In sparse areas, say so up front ("no cars nearby") rather than matching a 20-minute pickup.';
+    else if (n > 150) msg = 'Far more candidates (' + fmt(n) + ') than needed. Computing road ETAs for all of them wastes the routing service; use fewer rings or smaller cells, or keep only the closest ~50 by straight-line distance.';
+    else msg = 'A good search: about ' + fmt(n) + ' candidates within ~' + r.toFixed(1) + ' km, enough to rank by road ETA and survive a decline or two, with only ' + cells + ' cell lookups.';
+    $('h3-out').textContent = msg;
+  }
+  $('h3-r').addEventListener('click', function(e){ var b = e.target.closest('button'); if (!b) return; RES = +b.dataset.v; this.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); run(); });
+  $('h3-d').addEventListener('input', run); $('h3-k').addEventListener('input', run);
+  run();
+})();
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from '../assets/scene3d.js';
+const D = {};
+D.hero = {
+  hero: true,
+  loop: 19,
+  view: { target: [0, 0, 0.5], w: 31, d: 22, el: 50 },
+  steps: [
+    { t: 0.0, text: 'Driver phones send their position every four seconds. That is 1.25 million pings a second across all cities.' },
+    { t: 1.8, text: 'The location service for this city maps each ping to an H3 cell and updates the in-memory index. Pings also stream to Kafka.' },
+    { t: 4.0, text: 'A rider asks for a ride. The ride service gets an upfront price, with surge if demand is high in this area.' },
+    { t: 6.0, text: 'Dispatch reads the available drivers in the rider’s cell and the ring of cells around it.' },
+    { t: 7.8, text: 'It asks the ETA service for real road times for each candidate, and ranks them.' },
+    { t: 9.6, text: 'It reserves the best driver with a compare-and-set (available → offered, 15 s expiry) and pushes the offer.' },
+    { t: 11.8, text: 'The driver accepts. The same guarded update moves them to assigned, so no one else can book them.' },
+    { t: 13.6, text: 'The trip service tells the rider their driver is on the way, with a live position and ETA.' },
+  ],
+  build(c) {
+    const { V, C, P } = c;
+    const dx = [-13, -11, -9];
+    const drivers = dx.map((x, i) => c.obj('person', x, -7 + (i % 2) * 1.2, i === 1 ? 'Drivers' : ''));
+    const loc = c.obj(c.SHAPES.server({ emi: C.ingest, w: 1.5 }), -3, -6, 'Location service', 'city shard');
+    const geo = c.obj(c.SHAPES.database(C.kb, { r: 1.2, tiers: 2 }), 3.5, -6, 'Geo index', 'H3 cell → drivers');
+    const top = c.obj(c.SHAPES.topic({ parts: 2, len: 3.6, color: C.cross }), 9.5, -6, 'Kafka');
+    const rider = c.obj(c.SHAPES.browser(0xd7932a), -13, 3.5, 'Rider');
+    const ride = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve }), -7.5, 3.5, 'Ride service');
+    const price = c.obj(c.SHAPES.shield(C.gov), -7.5, 8, 'Pricing', 'surge');
+    const disp = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve, w: 1.6 }), -1, 3.5, 'Dispatch', 'search · rank · offer');
+    const eta = c.obj(c.SHAPES.signpost(), 4.5, 8, 'ETA service');
+    const st = c.obj(c.SHAPES.database(C.kb, { r: 0.8 }), 4.5, 3.5, 'Driver state', 'CAS');
+    const trip = c.obj(c.SHAPES.server({ emi: C.serve }), 10, 3.5, 'Trip service');
+    dx.forEach((x, i) => c.lane([V(x, -7 + (i % 2) * 1.2), V(x, -6), V(-3, -6)]));
+    c.lane([V(-3, -6), V(9.5, -6)]);
+    c.lane([V(-13, 3.5), V(10, 3.5)]);
+    c.lane([V(-7.5, 3.5), V(-7.5, 8)]);
+    c.lane([V(-1, 3.5), V(-1, -2), V(3.5, -2), V(3.5, -6)]);
+    c.lane([V(-1, 3.5), V(-1, 8), V(4.5, 8)]);
+    c.lane([V(10, 3.5), V(10, -1), V(-11, -1), V(-11, -5.8)]);
+    dx.forEach((x, i) => c.packet({ pts: [V(x, -7 + (i % 2) * 1.2), V(x, -6), V(-3, -6)], t0: 0.2 + i * 0.3, t1: 1.4 + i * 0.3, n: 3, st: 0.5, kind: 'span', to: loc }));
+    c.packet({ pts: [V(-3, -6), V(3.5, -6)], t0: 1.9, t1: 2.7, kind: 'span', color: P.chunk, n: 3, st: 0.2, to: geo, label: 'cell 8a2a…' });
+    c.packet({ pts: [V(3.5, -6), V(9.5, -6)], t0: 2.4, t1: 3.4, kind: 'span', n: 3, st: 0.2, to: top });
+    c.packet({ pts: [V(-13, 3.5), V(-7.5, 3.5)], t0: 4.0, t1: 4.8, kind: 'ask', from: rider, to: ride, label: 'request' });
+    c.packet({ pts: [V(-7.5, 3.5), V(-7.5, 8)], t0: 4.9, t1: 5.5, kind: 'span', to: price, label: 'quote ×1.3' });
+    c.packet({ pts: [V(-7.5, 3.5), V(-1, 3.5)], t0: 5.6, t1: 6.2, kind: 'ask', to: disp });
+    c.packet({ pts: [V(-1, 3.5), V(-1, -2), V(3.5, -2), V(3.5, -6)], t0: 6.3, t1: 7.3, kind: 'span', to: geo, label: 'cell + 1 ring' });
+    c.packet({ pts: [V(3.5, -6), V(3.5, -2), V(-1, -2), V(-1, 3.5)], t0: 7.3, t1: 7.9, kind: 'vec', n: 4, st: 0.1, to: disp, label: '24 drivers' });
+    c.packet({ pts: [V(-1, 3.5), V(-1, 8), V(4.5, 8)], t0: 8.0, t1: 8.8, kind: 'span', to: eta, label: 'road ETAs' });
+    c.packet({ pts: [V(-1, 3.5), V(4.5, 3.5)], t0: 9.7, t1: 10.4, kind: 'env', to: st, label: 'available → offered' });
+    c.packet({ pts: [V(-1, 3.5), V(-1, -1), V(-11, -1), V(-11, -5.8)], t0: 10.5, t1: 11.6, kind: 'env', color: P.ask, to: drivers[1], label: 'offer · 15 s' });
+    c.packet({ pts: [V(-11, -5.8), V(-11, -1), V(-1, -1), V(-1, 3.5), V(4.5, 3.5)], t0: 11.9, t1: 13.2, kind: 'env', color: P.ship, to: st, label: 'accept → assigned' });
+    c.packet({ pts: [V(4.5, 3.5), V(10, 3.5)], t0: 13.3, t1: 13.9, kind: 'span', to: trip });
+    c.packet({ pts: [V(10, 3.5), V(-13, 3.5)], t0: 14.0, t1: 15.8, kind: 'env', color: P.ship, to: rider, label: 'driver on the way · 4 min' });
+    c.note('location stream · 1.25M/s', 3, -9.4);
+  },
+};
+D.race3d = {
+  loop: 15,
+  view: { target: [-1.5, 0, 0], w: 30, d: 15, el: 50 },
+  steps: [
+    { t: 0.0, text: 'Two riders request at the same moment. For both, driver D1 is the closest.' },
+    { t: 1.8, text: 'Both dispatchers try to reserve D1: "set offered WHERE state = available".' },
+    { t: 3.6, text: 'Only the first update changes a row. D1 is now offered to rider A.' },
+    { t: 5.2, text: 'The second sees zero rows changed: it lost the race. It moves to its next candidate, D2.' },
+    { t: 7.2, text: 'D2 is reserved for rider B. Both riders get offers, and no driver has two rides.' },
+  ],
+  build(c) {
+    const { V, C, P } = c;
+    const ra = c.obj(c.SHAPES.browser(0xd7932a), -12, -3.5, 'Rider A');
+    const rb = c.obj(c.SHAPES.browser(0x2a9d8f), -12, 3.5, 'Rider B');
+    const da = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve }), -5, -3.5, 'Dispatch');
+    const db2 = c.obj(c.SHAPES.server({ color: 0x8a6a2e, emi: C.serve }), -5, 3.5, 'Dispatch');
+    const st = c.obj(c.SHAPES.database(C.kb, { r: 1.1 }), 2, 0, 'Driver state', 'compare-and-set');
+    const d1 = c.obj('person', 9, -2.5, 'D1', 'closest');
+    const d2 = c.obj('person', 9, 2.5, 'D2', 'next best');
+    c.lane([V(-12, -3.5), V(-5, -3.5), V(2, -3.5), V(2, 0)]);
+    c.lane([V(-12, 3.5), V(-5, 3.5), V(2, 3.5), V(2, 0)]);
+    c.lane([V(2, 0), V(6, 0), V(6, -2.5), V(9, -2.5)]);
+    c.lane([V(6, 0), V(6, 2.5), V(9, 2.5)]);
+    c.packet({ pts: [V(-12, -3.5), V(-5, -3.5)], t0: 0.2, t1: 1.0, kind: 'ask', from: ra, to: da });
+    c.packet({ pts: [V(-12, 3.5), V(-5, 3.5)], t0: 0.2, t1: 1.0, kind: 'ask', from: rb, to: db2 });
+    c.packet({ pts: [V(-5, -3.5), V(2, -3.5), V(2, 0)], t0: 1.8, t1: 3.0, kind: 'env', to: st, label: 'reserve D1' });
+    c.packet({ pts: [V(-5, 3.5), V(2, 3.5), V(2, 0)], t0: 1.9, t1: 3.1, kind: 'env', to: st, label: 'reserve D1' });
+    c.packet({ pts: [V(2, 0), V(6, 0), V(6, -2.5), V(9, -2.5)], t0: 3.6, t1: 4.6, kind: 'env', color: P.ship, to: d1, label: 'offer: rider A' });
+    c.packet({ pts: [V(2, 0), V(2, 3.5), V(-5, 3.5)], t0: 5.2, t1: 6.2, kind: 'span', color: P.bad, to: db2, label: '0 rows: taken' });
+    c.packet({ pts: [V(-5, 3.5), V(2, 3.5), V(2, 0)], t0: 6.4, t1: 7.2, kind: 'env', to: st, label: 'reserve D2' });
+    c.packet({ pts: [V(2, 0), V(6, 0), V(6, 2.5), V(9, 2.5)], t0: 7.3, t1: 8.3, kind: 'env', color: P.ship, to: d2, label: 'offer: rider B' });
+  },
+};
+boot(D);
+</script>
+</body>
+</html>

@@ -192,7 +192,7 @@
 <p class="lead">The building blocks behind every large web system, before any AI is involved: how traffic is spread, data is stored and copied, work is queued, and systems stay correct under load. Each page has a hands-on lab.</p></div></div>
 <div class="wrap" style="padding-bottom:56px">
   <ul class="doors">
-    <li><a class="door" href="#blocks"><span class="k">8 topic pages · 8 labs · 5 walkthroughs</span><h2>Building blocks →</h2><p>Load balancing, caching, databases, sharding, queues, consistency, rate limiting and the numbers to size them.</p></a></li>
+    <li><a class="door" href="#blocks"><span class="k">8 topic pages · 8 labs · 6 walkthroughs</span><h2>Building blocks →</h2><p>Load balancing, caching, databases, sharding, queues, consistency, rate limiting and the numbers to size them.</p></a></li>
     <li><a class="door" href="../system-design/index.html"><span class="k">AI systems</span><h2>Agentic designs →</h2><p>The companion section: RAG, agents with actions, text-to-SQL and evals, built on top of these same blocks.</p></a></li>
   </ul>
 
@@ -227,7 +227,7 @@
     <li><a class="card" href="chat.html"><span class="k">Walkthrough · 100M daily users · 25M open connections</span><h3>Chat service</h3><p>WebSocket gateways, a sequence per conversation, at-least-once delivery with dedupe, sync by position, reconnect storms, groups, presence and push. Two 3D scenes and a gateway-sizing lab.</p></a></li>
     <li><a class="card" href="rate-limiter.html"><span class="k">Walkthrough · 1M requests/s · 300 gateways</span><h3>Distributed rate limiter</h3><p>Per-plan limits as a gateway library, token buckets in Redis Lua scripts, local leases and deny caches, hot keys, fail open vs closed, and regions. Two 3D scenes and a lease-size lab.</p></a></li>
     <li><a class="card" href="payments.html"><span class="k">Walkthrough · 10M payments a day · 10× sale peaks</span><h3>Payments</h3><p>Idempotency keys at every hop, the UNKNOWN state after a timeout, a guarded state machine, a double-entry ledger, sagas with an outbox, and reconciliation. Two 3D scenes and a retries lab.</p></a></li>
-    <li><div class="card"><span class="k">Coming soon</span><h3>Ride matching</h3><p>Geospatial indexes, location updates at scale and dispatch.</p></div></li>
+    <li><a class="card" href="ride-matching.html"><span class="k">Walkthrough · 5M drivers pinging every 4 s</span><h3>Ride matching</h3><p>H3 cells as a geospatial index, location sharded by city, dispatch with compare-and-set reservations, ETAs on a road graph, and surge. Two 3D scenes and a search-area lab.</p></a></li>
   </ul>
 </div>
 </main>

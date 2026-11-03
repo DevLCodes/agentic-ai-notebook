@@ -54,6 +54,7 @@ Walkthroughs:
 - [Chat Service](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/chat.html): 100M daily users and 25M open connections, covering WebSocket gateways, per-conversation sequence numbers, at-least-once delivery with dedupe, reconnect storms, group fan-out, presence, receipts and push; two 3D scenes and a gateway-sizing lab
 - [Distributed Rate Limiter](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/rate-limiter.html): per-plan limits at 1M requests a second, covering a gateway limiter library, token buckets in Redis Lua scripts, local leases, hot keys, fail open vs closed and multi-region limits; two 3D scenes and a lease-size lab
 - [Payments](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/payments.html): 10M payments a day through an external processor, covering idempotency keys, the unknown state after timeouts, a payment state machine, a double-entry ledger, sagas with an outbox and reconciliation; two 3D scenes and a retries lab
+- [Ride matching](https://devlcodes.github.io/agentic-ai-notebook/classic-system-design/ride-matching.html): 5M online drivers sending a location every 4 s, covering H3 geospatial cells, city-sharded location storage, dispatch with compare-and-set reservations, ETAs and surge pricing; two 3D scenes and a search-area lab
 
 More walkthroughs (news feed, chat, payments and more) come next.
 
