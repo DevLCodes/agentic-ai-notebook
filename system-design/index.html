@@ -171,6 +171,49 @@
   .sub { margin: -4px 0 12px; color: var(--muted); }
   .concepts .card { border-left: 3px solid var(--c-kb); }
   @media (max-width: 700px) { .doors { grid-template-columns: minmax(0, 1fr); } .walks { grid-template-columns: minmax(0, 1fr); } }
+  /* roadmap */
+  .rm { margin: 28px 0 8px; padding: 22px 24px 24px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
+  .rm-head { display: flex; align-items: baseline; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 6px; }
+  .rm-head h2 { margin: 0; font-size: 26px; margin-right: auto; }
+  .rm-overall { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .rm-bar { height: 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .rm-bar span { display: block; height: 100%; width: 0; background: var(--c-ok); border-radius: inherit; transition: width .3s ease; }
+  @media (prefers-reduced-motion: reduce) { .rm-bar span { transition: none; } }
+  .rm-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 14px 0 4px; font-size: 14px; }
+  .rm-next { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 600; }
+  .rm-next:hover { filter: brightness(1.08); }
+  .rm-reset { font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; padding: 4px 2px; text-decoration: underline; cursor: pointer; margin-left: auto; }
+  .rm-note { margin: 0; font-size: 13px; color: var(--muted); }
+  .rm-stages { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 0; counter-reset: stage; }
+  .rm-stage { position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; padding-bottom: 20px; counter-increment: stage; }
+  .rm-stage::before { content: ""; position: absolute; left: 16px; top: 34px; bottom: 0; width: 2px; background: var(--line); }
+  .rm-stage:last-child { padding-bottom: 0; }
+  .rm-stage:last-child::before { display: none; }
+  .rm-stage.complete::before { background: var(--c-ok); }
+  .rm-dot { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-mono); font-size: 13px; font-weight: 500; background: #fff; border: 2px solid var(--line-strong); color: var(--muted); z-index: 1; }
+  .rm-dot::after { content: counter(stage); }
+  .rm-stage.started .rm-dot { border-color: var(--accent); color: var(--accent); }
+  .rm-stage.complete .rm-dot { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .rm-stage.complete .rm-dot::after { content: "✓"; }
+  .rm-stage h3 { margin: 4px 0 2px; font-size: 18px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .rm-stage h3 small { font-family: var(--font-mono); font-size: 11.5px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .rm-stage > div > p { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+  .rm-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .rm-item { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 14px; overflow: hidden; }
+  .rm-item a { padding: 5px 12px 5px 6px; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; }
+  .rm-item a:hover { text-decoration: underline; }
+  .rm-item button { font: inherit; border: 0; background: none; cursor: pointer; padding: 0 4px 0 10px; display: inline-flex; align-items: center; }
+  .rm-item button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 999px; }
+  .rm-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: inline-block; position: relative; }
+  .rm-item.v { border-color: var(--accent); }
+  .rm-item.v .rm-check { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 3px, transparent 3.5px); }
+  .rm-item.d { border-color: var(--c-ok); background: #eef7f1; }
+  .rm-item.d .rm-check { border-color: var(--c-ok); background: var(--c-ok); }
+  .rm-item.d .rm-check::after { content: ""; position: absolute; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .rm-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
+  .rm-legend li { display: inline-flex; gap: 6px; align-items: center; }
+  .rm-legend .rm-item { border: 0; background: none; }
+  @media (max-width: 640px) { .rm { padding: 18px 16px 20px; } .rm-head h2 { font-size: 22px; } .rm-reset { margin-left: 0; } }
 </style>
 
 </head>
@@ -182,9 +225,18 @@
 <p class="lead">Worked designs for AI systems, and the concepts they are built from. Start with a design to see a whole system, or with the concepts to learn the pieces in order.</p></div></div>
 <div class="wrap" style="padding-bottom:56px">
   <ul class="doors">
-    <li><a class="door" href="#designs"><span class="k">6 walkthroughs · 12 topic pages</span><h2>System designs →</h2><p>Whole systems with animated 3D architectures, the reasoning behind every component, evals and an interview script.</p></a></li>
+    <li><a class="door" href="#designs"><span class="k">9 walkthroughs · 19 topic pages</span><h2>System designs →</h2><p>Whole systems with animated 3D architectures, the reasoning behind every component, evals and an interview script.</p></a></li>
     <li><a class="door" href="#concepts"><span class="k">13 notebooks · labs and quizzes</span><h2>Concepts →</h2><p>The building blocks in learning order, from the agentic loop to evals, governance, retrieval quality and open-weight models.</p></a></li>
   </ul>
+
+  <section class="rm" id="roadmap" aria-labelledby="rm-title">
+    <div class="rm-head"><h2 id="rm-title">Your roadmap</h2><span class="rm-overall" id="rm-overall">0 of 0 done</span></div>
+    <div class="rm-bar" role="progressbar" aria-labelledby="rm-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="rm-bar"><span></span></div>
+    <div class="rm-tools"><a class="rm-next" id="rm-next" href="knowledge-base.html">Start: Knowledge base →</a><p class="rm-note">Pages you open are marked visited. Tick the circle when you have finished one.</p><button type="button" class="rm-reset" id="rm-reset">Reset progress</button></div>
+    <ol class="rm-stages" id="rm-stages"></ol>
+    <ul class="rm-legend" aria-hidden="true"><li><span class="rm-item"><span class="rm-check"></span></span>Not started</li><li><span class="rm-item v"><span class="rm-check"></span></span>Visited</li><li><span class="rm-item d"><span class="rm-check"></span></span>Done</li></ul>
+    <p class="rm-note" style="margin-top:10px">Progress is saved in a cookie in this browser only. Nothing is sent anywhere.</p>
+  </section>
 
   <h2 class="home-h" id="designs">System designs</h2>
   <ul class="grid walks">
@@ -238,5 +290,65 @@
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
 
+<script src="progress.js"></script>
+<script>
+(function () {
+  var STAGES = [
+    { t: 'Load the data', d: 'Get documents in, split well, and keep them fresh.', items: [['knowledge-base', 'Knowledge base'], ['chunking', 'Chunking'], ['backfills', 'Backfills and re-indexing']] },
+    { t: 'Retrieve the right context', d: 'Turn questions into the few passages that matter.', items: [['embeddings', 'Embeddings'], ['vector-databases', 'Vector databases'], ['vector-search', 'Vector search'], ['search-types', 'Search types'], ['reranking', 'Reranking'], ['after-retrieval', 'After retrieval']] },
+    { t: 'Shape the system', d: 'Route requests and give agents memory.', items: [['routing', 'Routing'], ['agent-memory', 'Agent memory']] },
+    { t: 'Measure and govern', d: 'Prove it works, roll it out safely, respect permissions.', items: [['evals', 'Evals'], ['eval-rubrics', 'Evals in practice'], ['testing', 'Testing and rollout'], ['access-control', 'Access control (ACL)']] },
+    { t: 'Put it together', d: 'Whole designs, end to end, in rising difficulty.', items: [['enterprise-search', 'Enterprise Search'], ['knowledge-freshness', 'Fresh Knowledge Base'], ['finsight', 'FinSight'], ['support-agent', 'Support Agent'], ['oncall-assistant', 'On-Call Assistant'], ['ask-your-data', 'Ask Your Data'], ['ads-assistant', 'Ads Assistant'], ['review-insights', 'App Review Insights'], ['coding-agent', 'Coding Agent']] },
+    { t: 'Revise for the interview', d: 'Cheat sheets and practice answers.', items: [['fluency', 'AI fluency Q&A'], ['ml-basics', 'ML basics'], ['metrics', 'Metrics cheat sheet'], ['numbers', 'Numbers cheat sheet'], ['glossary', 'Glossary']] }
+  ];
+  var P = window.ASDProgress, list = document.getElementById('rm-stages');
+  if (!P || !list) return;
+  var LABEL = { '': 'not started', v: 'visited', d: 'done' };
+
+  function render() {
+    var state = P.all(), total = 0, done = 0, next = null;
+    list.textContent = '';
+    STAGES.forEach(function (s) {
+      var sDone = 0, sSeen = 0;
+      var li = document.createElement('li'); li.className = 'rm-stage';
+      var dot = document.createElement('span'); dot.className = 'rm-dot'; dot.setAttribute('aria-hidden', 'true');
+      var body = document.createElement('div');
+      var h = document.createElement('h3'); h.textContent = s.t;
+      var count = document.createElement('small'); h.appendChild(count);
+      var p = document.createElement('p'); p.textContent = s.d;
+      var ul = document.createElement('ul'); ul.className = 'rm-items';
+      s.items.forEach(function (it) {
+        var slug = it[0], st = state[slug] || '';
+        total++; if (st === 'd') { done++; sDone++; } if (st) sSeen++;
+        if (!next && st !== 'd') next = it;
+        var item = document.createElement('li'); item.className = 'rm-item' + (st ? ' ' + st : '');
+        var b = document.createElement('button'); b.type = 'button';
+        b.setAttribute('aria-pressed', st === 'd' ? 'true' : 'false');
+        b.setAttribute('aria-label', 'Mark ' + it[1] + ' as done (now ' + LABEL[st] + ')');
+        b.innerHTML = '<span class="rm-check"></span>';
+        b.addEventListener('click', function () { P.set(slug, st === 'd' ? 'v' : 'd'); render(); list.querySelector('[data-slug="' + slug + '"] button').focus(); });
+        var a = document.createElement('a'); a.href = slug + '.html'; a.textContent = it[1];
+        item.dataset.slug = slug; item.appendChild(b); item.appendChild(a); ul.appendChild(item);
+      });
+      count.textContent = sDone + ' / ' + s.items.length;
+      if (sDone === s.items.length) li.classList.add('complete'); else if (sSeen) li.classList.add('started');
+      body.appendChild(h); body.appendChild(p); body.appendChild(ul);
+      li.appendChild(dot); li.appendChild(body); list.appendChild(li);
+    });
+    var pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById('rm-overall').textContent = done + ' of ' + total + ' done · ' + pct + '%';
+    var bar = document.getElementById('rm-bar'); bar.setAttribute('aria-valuenow', pct); bar.firstElementChild.style.width = pct + '%';
+    var nx = document.getElementById('rm-next');
+    if (next) { nx.hidden = false; nx.href = next[0] + '.html'; nx.textContent = (done || Object.keys(state).length ? 'Continue: ' : 'Start: ') + next[1] + ' →'; }
+    else nx.hidden = true;
+  }
+
+  document.getElementById('rm-reset').addEventListener('click', function () {
+    if (confirm('Clear your roadmap progress in this browser?')) { P.reset(); render(); }
+  });
+  window.addEventListener('pageshow', render);
+  render();
+})();
+</script>
 </body>
 </html>
