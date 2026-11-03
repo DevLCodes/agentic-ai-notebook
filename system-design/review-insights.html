@@ -157,8 +157,20 @@
   .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
   .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
   .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+  /* 3D figures (engine and base styles in ../assets/scene3d.css) */
+  .ctl3 button, .reset3 { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover, .reset3:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible, .reset3:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .steps3 button { padding: 4px 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legend i.pk-ok { background: #46b06a; } .legend i.pk-ask { background: #ffd27a; border-radius: 50%; }
+  .tradeoff td:first-child { font-family: var(--font-mono); font-size: 13.5px; white-space: nowrap; }
 </style>
-
+<link rel="stylesheet" href="../assets/scene3d.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
@@ -180,7 +192,18 @@
 <tr><td>Today's baseline?</td><td>Keyword rules that agree with human raters about 60% of the time</td></tr>
 <tr><td>Business goal?</td><td>More developers reply to reviews, and sooner; developers find issues faster</td></tr>
 </tbody></table></div>
-<p><strong>Non-functional:</strong> cost per review must be tiny at 20M a day; replies are never sent without the developer; personal data in reviews stays protected; per-language quality, not just the average.</p></section><section id="picture"><h2>The one-minute picture</h2><figure class="fig"><svg viewBox="0 0 722 290" class="dg" role="img" aria-label="Every review: prep in code, a small multilingual classifier, a confidence gate; confident tags go to BigQuery, unsure ones to an LLM, and still-unsure ones to raters whose labels retrain the classifier. Every week: SQL counts, spike check, clustering of other, an LLM writes the summary text, shown in Play Console"><text x="10" y="18" class="cap">Every review (streaming)</text><rect x="10" y="28" width="120" height="46" rx="8" class="k-user"/><text x="70" y="47" class="small b" text-anchor="middle">New review</text><text x="70" y="63" class="sm" text-anchor="middle">text, any language</text><path d="M130 51 L148 51" class="wire" marker-end="url(#ah)"/><rect x="150" y="28" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="47" class="small b" text-anchor="middle">Prep (code)</text><text x="210" y="63" class="sm" text-anchor="middle">language · dedupe · PII</text><path d="M270 51 L288 51" class="wire" marker-end="url(#ah)"/><rect x="290" y="28" width="120" height="46" rx="8" class="k-model"/><text x="350" y="47" class="small b" text-anchor="middle">Small classifier</text><text x="350" y="63" class="sm" text-anchor="middle">multilingual encoder</text><path d="M410 51 L428 51" class="wire" marker-end="url(#ah)"/><rect x="430" y="28" width="120" height="46" rx="8" class="k-gov"/><text x="490" y="47" class="small b" text-anchor="middle">Confidence gate</text><text x="490" y="63" class="sm" text-anchor="middle">threshold per tag</text><path d="M550 51 L568 51" class="wire" marker-end="url(#ah)"/><rect x="570" y="28" width="120" height="46" rx="8" class="k-kb"/><text x="630" y="47" class="small b" text-anchor="middle">BigQuery</text><text x="630" y="63" class="sm" text-anchor="middle">tags + scores</text><rect x="430" y="130" width="120" height="46" rx="8" class="k-model"/><text x="490" y="149" class="small b" text-anchor="middle">LLM</text><text x="490" y="165" class="sm" text-anchor="middle">taxonomy + examples</text><rect x="290" y="130" width="120" height="46" rx="8" class="k-src"/><text x="350" y="149" class="small b" text-anchor="middle">Raters</text><text x="350" y="165" class="sm" text-anchor="middle">still unsure</text><path d="M490 74 L490 128" class="wire" marker-end="url(#ah)"/><path d="M550 153 L630 153 L630 76" class="wire" marker-end="url(#ah)"/><path d="M430 153 L412 153" class="wire" marker-end="url(#ah)"/><path d="M350 130 L350 76" class="wire dash" marker-end="url(#ah)"/><text x="496" y="106" class="sm">unsure</text><text x="356" y="106" class="sm">retrain</text><text x="10" y="212" class="cap">Every week (batch)</text><rect x="10" y="222" width="120" height="46" rx="8" class="k-kb"/><text x="70" y="241" class="small b" text-anchor="middle">SQL counts</text><text x="70" y="257" class="sm" text-anchor="middle">per tag, app, version</text><path d="M130 245 L148 245" class="wire" marker-end="url(#ah)"/><rect x="150" y="222" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="241" class="small b" text-anchor="middle">Spike check</text><text x="210" y="257" class="sm" text-anchor="middle">vs baseline</text><path d="M270 245 L288 245" class="wire" marker-end="url(#ah)"/><rect x="290" y="222" width="120" height="46" rx="8" class="k-model"/><text x="350" y="241" class="small b" text-anchor="middle">Cluster &quot;other&quot;</text><text x="350" y="257" class="sm" text-anchor="middle">new issue types</text><path d="M410 245 L428 245" class="wire" marker-end="url(#ah)"/><rect x="430" y="222" width="120" height="46" rx="8" class="k-model"/><text x="490" y="241" class="small b" text-anchor="middle">LLM writes text</text><text x="490" y="257" class="sm" text-anchor="middle">numbers from SQL</text><path d="M550 245 L568 245" class="wire" marker-end="url(#ah)"/><rect x="570" y="222" width="120" height="46" rx="8" class="k-serve"/><text x="630" y="241" class="small b" text-anchor="middle">Play Console</text><text x="630" y="257" class="sm" text-anchor="middle">top issues + examples</text></svg><figcaption>The cheap model handles most reviews; the LLM only sees the unsure ones and writes text. Counts and trends always come from SQL.</figcaption></figure></section><section id="tagging"><h2>Tagging 20M reviews a day: a classifier cascade</h2>
+<p><strong>Non-functional:</strong> cost per review must be tiny at 20M a day; replies are never sent without the developer; personal data in reviews stays protected; per-language quality, not just the average.</p></section><section id="picture"><h2>The one-minute picture</h2>
+<p>Follow three real-looking reviews through the tagging path. The first is easy, the second is unsure, and the third is hard enough that a person decides. Use the step buttons to pause on any stage.</p>
+<figure class="fig3d" id="cascade3d">
+    <div class="stage3d" role="img" aria-label="Three reviews flow through prep, a small classifier and a confidence gate. A confident crash review goes straight to BigQuery. An unsure payments review goes to the LLM, then to BigQuery. A mixed-language sarcastic review is still unsure after the LLM, so raters label it, and their labels flow back to retrain the classifier."><p class="hint3">3D · drag to turn</p><button class="reset3" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagram and text below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <ul class="legend"><li><i class="pk-env"></i>a review</li><li><i class="pk-vec"></i>a score or tag</li><li><i class="pk-doc"></i>a stored or shown result</li><li><i class="pk-ask"></i>labels or feedback</li></ul>
+    <figcaption>Illustrative. Scores and shares are examples, not measurements. The flat 2D map below shows the same pipeline plus the weekly batch.</figcaption>
+  </figure>
+<p><strong>What to notice:</strong> the expensive model sits <em>beside</em> the main path, not on it. Every review pays for the classifier (fractions of a cent per thousand); only the ones the gate rejects pay for the LLM. Raters see the smallest slice of all, and that slice is the most valuable training data you have, because it is exactly where the model is weakest.</p>
+<figure class="fig"><svg viewBox="0 0 722 290" class="dg" role="img" aria-label="Every review: prep in code, a small multilingual classifier, a confidence gate; confident tags go to BigQuery, unsure ones to an LLM, and still-unsure ones to raters whose labels retrain the classifier. Every week: SQL counts, spike check, clustering of other, an LLM writes the summary text, shown in Play Console"><text x="10" y="18" class="cap">Every review (streaming)</text><rect x="10" y="28" width="120" height="46" rx="8" class="k-user"/><text x="70" y="47" class="small b" text-anchor="middle">New review</text><text x="70" y="63" class="sm" text-anchor="middle">text, any language</text><path d="M130 51 L148 51" class="wire" marker-end="url(#ah)"/><rect x="150" y="28" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="47" class="small b" text-anchor="middle">Prep (code)</text><text x="210" y="63" class="sm" text-anchor="middle">language · dedupe · PII</text><path d="M270 51 L288 51" class="wire" marker-end="url(#ah)"/><rect x="290" y="28" width="120" height="46" rx="8" class="k-model"/><text x="350" y="47" class="small b" text-anchor="middle">Small classifier</text><text x="350" y="63" class="sm" text-anchor="middle">multilingual encoder</text><path d="M410 51 L428 51" class="wire" marker-end="url(#ah)"/><rect x="430" y="28" width="120" height="46" rx="8" class="k-gov"/><text x="490" y="47" class="small b" text-anchor="middle">Confidence gate</text><text x="490" y="63" class="sm" text-anchor="middle">threshold per tag</text><path d="M550 51 L568 51" class="wire" marker-end="url(#ah)"/><rect x="570" y="28" width="120" height="46" rx="8" class="k-kb"/><text x="630" y="47" class="small b" text-anchor="middle">BigQuery</text><text x="630" y="63" class="sm" text-anchor="middle">tags + scores</text><rect x="430" y="130" width="120" height="46" rx="8" class="k-model"/><text x="490" y="149" class="small b" text-anchor="middle">LLM</text><text x="490" y="165" class="sm" text-anchor="middle">taxonomy + examples</text><rect x="290" y="130" width="120" height="46" rx="8" class="k-src"/><text x="350" y="149" class="small b" text-anchor="middle">Raters</text><text x="350" y="165" class="sm" text-anchor="middle">still unsure</text><path d="M490 74 L490 128" class="wire" marker-end="url(#ah)"/><path d="M550 153 L630 153 L630 76" class="wire" marker-end="url(#ah)"/><path d="M430 153 L412 153" class="wire" marker-end="url(#ah)"/><path d="M350 130 L350 76" class="wire dash" marker-end="url(#ah)"/><text x="496" y="106" class="sm">unsure</text><text x="356" y="106" class="sm">retrain</text><text x="10" y="212" class="cap">Every week (batch)</text><rect x="10" y="222" width="120" height="46" rx="8" class="k-kb"/><text x="70" y="241" class="small b" text-anchor="middle">SQL counts</text><text x="70" y="257" class="sm" text-anchor="middle">per tag, app, version</text><path d="M130 245 L148 245" class="wire" marker-end="url(#ah)"/><rect x="150" y="222" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="241" class="small b" text-anchor="middle">Spike check</text><text x="210" y="257" class="sm" text-anchor="middle">vs baseline</text><path d="M270 245 L288 245" class="wire" marker-end="url(#ah)"/><rect x="290" y="222" width="120" height="46" rx="8" class="k-model"/><text x="350" y="241" class="small b" text-anchor="middle">Cluster &quot;other&quot;</text><text x="350" y="257" class="sm" text-anchor="middle">new issue types</text><path d="M410 245 L428 245" class="wire" marker-end="url(#ah)"/><rect x="430" y="222" width="120" height="46" rx="8" class="k-model"/><text x="490" y="241" class="small b" text-anchor="middle">LLM writes text</text><text x="490" y="257" class="sm" text-anchor="middle">numbers from SQL</text><path d="M550 245 L568 245" class="wire" marker-end="url(#ah)"/><rect x="570" y="222" width="120" height="46" rx="8" class="k-serve"/><text x="630" y="241" class="small b" text-anchor="middle">Play Console</text><text x="630" y="257" class="sm" text-anchor="middle">top issues + examples</text></svg><figcaption>The cheap model handles most reviews; the LLM only sees the unsure ones and writes text. Counts and trends always come from SQL.</figcaption></figure></section><section id="tagging"><h2>Tagging 20M reviews a day: a classifier cascade</h2>
 <p>Sending every review to an LLM is the expensive default, not the design. At about 400 tokens in and 10 out, a mid-tier LLM costs roughly <strong>$2,900 a day (≈ $87K a month)</strong>, and the 1.8B backfill would cost six figures. The labels are fixed and the volume is high, so this is a job for a small classifier.</p>
 <ol>
 <li><strong>Distillation.</strong> An LLM labels about 50K reviews once, sampled across languages, apps and categories (oversampling rare ones like payments). Experts check a sample of those labels.</li>
@@ -190,6 +213,14 @@
 <li><strong>Backfill</strong> runs the same classifier as a batch job over the 1.8B reviews: hours of GPU time instead of a large LLM bill.</li>
 </ol>
 <p>Rough cost: classifier ≈ $20 to $50 a day of GPU, plus about 10% of reviews at LLM prices ≈ $300 a day, so <strong>about $10K a month instead of $87K</strong>. Tune the threshold so auto-tagged reviews meet the precision target and the share sent to the LLM fits the budget.</p>
+<h3>Turning the threshold knob</h3>
+<p>The confidence threshold is a business dial, not a model setting. Raise it and auto-tags get more precise, but more reviews go to the LLM and the bill rises. Lower it and you save money while more wrong tags reach the weekly summary. Pick it on the golden set, per class, so payments can demand more certainty than praise.</p>
+<div class="table"><table class="tradeoff"><thead><tr><th>Threshold</th><th>Sent to LLM</th><th>Auto-tag precision</th><th>Monthly cost</th></tr></thead><tbody>
+<tr><td>0.5</td><td class="num">≈ 4%</td><td class="num">≈ 86%</td><td class="num">≈ $5K</td></tr>
+<tr><td>0.7 (chosen)</td><td class="num">≈ 10%</td><td class="num">≈ 93%</td><td class="num">≈ $10K</td></tr>
+<tr><td>0.9</td><td class="num">≈ 30%</td><td class="num">≈ 97%</td><td class="num">≈ $27K</td></tr>
+</tbody></table></div>
+<p>Illustrative numbers. The point is the shape: the last few points of precision cost the most, so stop where the summary's error rate is good enough for developers to trust it.</p>
 <p><strong>Why not keywords first?</strong> Keywords fire on almost every review and are confidently wrong about 40% of the time, so they cannot decide which reviews are easy. The classifier's own confidence can.</p></section><section id="labels"><h2>Labels: building the eval set</h2>
 <p>The 5,000 old labels use the wrong taxonomy, and keyword tags cannot be ground truth because they <em>are</em> the 60% baseline. Build a new golden set:</p>
 <ul class="plain">
@@ -208,6 +239,15 @@
 <tr><td>Share sent to the LLM</td><td>Cost and latency</td><td>≤ 10 to 20%</td></tr>
 </tbody></table></div>
 <p>Comparing gold and predicted labels is done in code. An LLM judge adds nothing for classification, because every item already has a gold label.</p></section><section id="summary"><h2>Weekly &quot;top issues&quot; summary</h2>
+<p>The weekly job is mostly SQL. The scene shows why the LLM appears only at the end: every number in the summary has already been computed and is checked again after the text is written.</p>
+<figure class="fig3d" id="summary3d">
+    <div class="stage3d" role="img" aria-label="Weekly batch: tags in BigQuery feed SQL counts, then a spike check that flags crash reports up four times since version 3.2. Reviews tagged other are clustered separately into a new issue, battery drain. An LLM writes the summary text, a number check in code compares every figure with the query, and the summary appears in Play Console."><p class="hint3">3D · drag to turn</p><button class="reset3" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagram and text below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <ul class="legend"><li><i class="pk-env"></i>a review</li><li><i class="pk-vec"></i>a score or tag</li><li><i class="pk-doc"></i>a stored or shown result</li><li><i class="pk-ask"></i>labels or feedback</li></ul>
+    <figcaption>Illustrative. The spike and cluster sizes are examples.</figcaption>
+  </figure>
 <ul class="plain">
 <li><strong>Counts and trends come from SQL</strong> over the tags in BigQuery: per category, app version, country and language. The LLM never counts.</li>
 <li><strong>Top means rising:</strong> compare each tag's weekly count with its baseline (percentage change with a minimum volume, or a z-score) to flag spikes like "crash reports up 4× since version 3.2".</li>
@@ -223,6 +263,16 @@
 <tr><td>Wrong language or tone-deaf reply to an angry user</td><td>Language check in code; tone rules and examples in the prompt; toxicity filter on output</td></tr>
 </tbody></table></div>
 <p>Abusive reviews are still tagged and shown to the developer (flagged, not hidden), and no reply is drafted for them.</p></section><section id="experiment"><h2>Proving the drafts work: the A/B test</h2>
+<p>The unit of randomisation is the developer, because a developer who sees drafts on some reviews will change how they reply to all of them. The scene runs the two groups side by side over the same weeks.</p>
+<figure class="fig3d" id="ab3d">
+    <div class="stage3d" role="img" aria-label="Developers are randomised into two groups at the same time. Group A sees reply drafts, group B does not. Replies flow into a metrics store, which compares the share replied to within 7 days, then checks guardrails on ratings and complaints before a ship decision."><p class="hint3">3D · drag to turn</p><button class="reset3" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The diagram and text below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    
+    <figcaption>Illustrative. The lift and percentages are examples of how a result reads, not real results.</figcaption>
+  </figure>
+<p><strong>Reading the result:</strong> a lift on the primary metric is necessary but not enough. If ratings after a reply fall, or reports about replies rise, the drafts are making developers reply <em>more</em> but <em>worse</em>, and the guardrail blocks the launch even when p &lt; 0.05.</p>
 <ul class="plain">
 <li><strong>Randomise by developer (or app)</strong>, not by review, because one developer sees all their drafts. Half get drafts, half don't, <strong>at the same time</strong>. Before/after comparisons are confused by seasons and launches.</li>
 <li><strong>Primary metric:</strong> share of reviews replied to within 7 days. <strong>Secondary:</strong> median time to reply.</li>
@@ -249,5 +299,145 @@
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
 
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from '../assets/scene3d.js';
+const D = {};
+
+// 1. Tagging cascade: easy, unsure, and hard reviews
+D.cascade3d = {
+  loop: 15,
+  view: { target: [-1, 0, 0.5], w: 27, d: 11, el: 50 },
+  steps: [
+    { t: 0.0, text: 'Review 1 arrives: “App crashes since update 3.2.” Prep in code detects the language, drops duplicates and bot floods, and masks personal data before any model sees it.' },
+    { t: 1.8, text: 'The small multilingual classifier scores it: crash at 0.96, with a clear lead over the next class. This costs a tiny fraction of an LLM call.' },
+    { t: 2.5, text: '0.96 clears the 0.7 threshold and crash is not a high-stakes class, so the tag goes straight to BigQuery. Roughly 90% of reviews take this path.' },
+    { t: 4.5, text: 'Review 2: “UPI payment keeps failing.” The classifier is only 0.62 sure, and payments is a high-stakes class, so the gate will not auto-tag it.' },
+    { t: 7.0, text: 'The gate sends it to the LLM with the taxonomy and labelled examples. The LLM tags it payments, and the row is stored with its source marked as LLM.' },
+    { t: 9.8, text: 'Review 3 mixes Hindi and English and is sarcastic: “great app, never opens.” The classifier gives 0.41, and the LLM is unsure too.' },
+    { t: 12.1, text: 'Still unsure after the LLM, so it goes to trained raters. This is the smallest and most expensive slice of traffic per review.' },
+    { t: 13.2, text: 'Rater labels flow back as training data (active learning), so next month’s classifier handles reviews like this one on its own and the LLM share keeps falling.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, SHAPES } = c;
+    const Z = -2.5, Z2 = 3.5;
+    const src = c.obj('browser', -11.5, Z, 'Play reviews', '20M a day · 40 languages');
+    const prep = c.obj(SHAPES.shield(C.gov), -6.8, Z, 'Prep (code)', 'language · dedupe · PII');
+    const clf = c.obj(SHAPES.modelGem(C.model), -2, Z, 'Small classifier', 'distilled encoder');
+    const gate = c.obj(SHAPES.signpost(C.gov), 2.8, Z, 'Confidence gate', '≥ 0.7 · stricter for payments');
+    const bq = c.obj(SHAPES.database(C.kb), 9.5, Z, 'BigQuery', 'tag · score · source');
+    const llm = c.obj(SHAPES.modelGem(C.serve), 2.8, Z2, 'LLM', 'taxonomy + examples');
+    const raters = c.obj(SHAPES.person(0xf3dde6), -2, Z2, 'Raters', 'native speakers');
+    c.lane([V(-11.5, Z), V(9.5, Z)]);
+    c.lane([V(2.8, Z), V(2.8, Z2)]);
+    c.lane([V(2.8, Z2), V(9.5, Z2), V(9.5, Z)]);
+    c.lane([V(2.8, Z2), V(-2, Z2)]);
+    c.note('≈ 90% of reviews', 6.2, Z - 0.9);
+    c.note('≈ 10% unsure', 3.2, 0.5, 0.3, [0, 0.5]);
+    c.note('≈ 1%', 0.4, Z2 + 0.9);
+    const leg = (a, b) => [V(a, Z), V(b, Z)];
+    // review 1: easy
+    c.packet({ pts: leg(-11.5, -6.8), t0: 0, t1: 0.9, kind: 'env', from: src, to: prep, label: '“crashes since 3.2”' });
+    c.packet({ pts: leg(-6.8, -2), t0: 1.0, t1: 1.7, kind: 'env', to: clf });
+    c.packet({ pts: leg(-2, 2.8), t0: 1.8, t1: 2.4, kind: 'vec', to: gate, label: 'crash 0.96' });
+    c.packet({ pts: leg(2.8, 9.5), t0: 2.5, t1: 3.5, kind: 'doc', color: P.ship, to: bq, label: 'auto-tagged' });
+    // review 2: unsure, LLM decides
+    c.packet({ pts: leg(-11.5, -6.8), t0: 4.5, t1: 5.4, kind: 'env', from: src, to: prep, label: '“UPI payment fails”' });
+    c.packet({ pts: leg(-6.8, -2), t0: 5.5, t1: 6.2, kind: 'env', to: clf });
+    c.packet({ pts: leg(-2, 2.8), t0: 6.3, t1: 6.9, kind: 'vec', color: P.env, to: gate, label: 'payments 0.62' });
+    c.packet({ pts: [V(2.8, Z), V(2.8, Z2)], t0: 7.0, t1: 7.8, kind: 'env', to: llm, label: 'unsure' });
+    c.packet({ pts: [V(2.8, Z2), V(9.5, Z2), V(9.5, Z)], t0: 8.0, t1: 9.2, kind: 'doc', color: P.ship, to: bq, label: 'payments (LLM)' });
+    // review 3: hard, raters decide and retrain
+    c.packet({ pts: leg(-11.5, -2), t0: 9.8, t1: 10.9, kind: 'env', from: src, to: clf, label: '“great app, never opens”' });
+    c.packet({ pts: [V(-2, Z), V(2.8, Z), V(2.8, Z2)], t0: 11.0, t1: 12.0, kind: 'vec', color: P.bad, to: llm, label: 'unsure 0.41' });
+    c.packet({ pts: [V(2.8, Z2), V(-2, Z2)], t0: 12.1, t1: 12.9, kind: 'env', color: P.bad, to: raters, label: 'still unsure' });
+    c.packet({ pts: arc(c.top(raters, 0), c.top(clf, 0), 3.4), t0: 13.2, t1: 14.4, kind: 'span', s: 1.6, color: P.ask, to: clf, label: 'labels → retrain' });
+  },
+};
+
+// 2. Weekly summary: SQL counts, spike, cluster, LLM text, number check
+D.summary3d = {
+  loop: 13,
+  view: { target: [0, 0, 1], w: 31, d: 11, el: 52 },
+  steps: [
+    { t: 0.0, text: 'Once a week, SQL counts this week’s tags in BigQuery per category, app version, country and language. The counts never come from the LLM.' },
+    { t: 1.2, text: 'The spike check compares each count with its 8-week baseline, with a minimum volume: crash reports are 4,120 this week against about 1,030 normally.' },
+    { t: 2.2, text: 'Flagged: crash reports up 4× since version 3.2. “Top” means rising, not just biggest, so steady complaints do not crowd out new problems.' },
+    { t: 3.6, text: 'Reviews tagged “other” take a side path: embed them and cluster. A big new cluster appears, and an LLM names it “battery drain after update”.' },
+    { t: 7.0, text: 'The LLM writes the summary text from the SQL results plus three representative reviews per issue.' },
+    { t: 8.0, text: 'Code checks that every number in the text matches the query results, then the summary appears in Play Console.' },
+    { t: 9.8, text: 'If the text says “up 5×” but the query says 4×, the check fails and the draft goes back for a rewrite. Numbers are never trusted from generated text.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, SHAPES } = c;
+    const Z = -1.5, Z2 = 4;
+    const bq = c.obj(SHAPES.database(C.kb), -12, Z, 'BigQuery', 'a week of tags');
+    const sql = c.obj(SHAPES.server({ color: 0x3c4652, emi: C.kb }), -7.2, Z, 'SQL counts', 'tag · app · version');
+    const spike = c.obj(SHAPES.signpost(C.gov), -2.4, Z, 'Spike check', 'vs 8-week baseline');
+    const writer = c.obj(SHAPES.modelGem(C.serve), 2.4, Z, 'LLM writes text', 'from SQL results');
+    const check = c.obj(SHAPES.shield(C.gov), 7.2, Z, 'Number check', 'code, not a model');
+    const con = c.obj('monitor', 12, Z, 'Play Console', 'top issues + examples');
+    const clus = c.obj(SHAPES.modelGem(C.model), -2.4, Z2, 'Cluster “other”', 'embed + group');
+    c.lane([V(-12, Z), V(12, Z)]);
+    c.lane([V(-12, Z), V(-12, Z2), V(-2.4, Z2)]);
+    c.lane([V(-2.4, Z2), V(2.4, Z2), V(2.4, Z)]);
+    const leg = (a, b) => [V(a, Z), V(b, Z)];
+    c.packet({ pts: leg(-12, -7.2), t0: 0, t1: 1.0, kind: 'span', n: 5, s: 1.4, from: bq, to: sql });
+    c.packet({ pts: leg(-7.2, -2.4), t0: 1.2, t1: 2.0, kind: 'vec', to: spike, label: 'crash 4,120 vs 1,030' });
+    c.packet({ pts: leg(-2.4, 2.4), t0: 2.2, t1: 3.0, kind: 'doc', color: P.bad, to: writer, label: 'crash ×4 since 3.2' });
+    c.packet({ pts: [V(-12, Z), V(-12, Z2), V(-2.4, Z2)], t0: 3.6, t1: 5.0, kind: 'span', n: 6, s: 1.3, color: P.same, from: bq, to: clus, label: '“other” reviews' });
+    c.packet({ pts: [V(-2.4, Z2), V(2.4, Z2), V(2.4, Z)], t0: 5.2, t1: 6.4, kind: 'vec', to: writer, label: 'new: battery drain' });
+    c.packet({ pts: leg(2.4, 7.2), t0: 7.0, t1: 7.8, kind: 'doc', to: check, label: 'draft summary' });
+    c.packet({ pts: leg(7.2, 12), t0: 8.0, t1: 9.2, kind: 'doc', color: P.ship, to: con, label: 'verified' });
+    c.packet({ pts: leg(2.4, 7.2), t0: 9.8, t1: 10.6, kind: 'doc', color: P.env, to: check, label: '“up 5×”' });
+    c.packet({ pts: arc(c.top(check, 0), c.top(writer, 0), 2.4), t0: 10.9, t1: 12.0, kind: 'span', s: 1.6, color: P.bad, to: writer, label: 'mismatch → rewrite' });
+  },
+};
+
+// 3. A/B test randomised by developer
+D.ab3d = {
+  loop: 12,
+  view: { target: [0, 0, 0], w: 30, d: 12, el: 54 },
+  steps: [
+    { t: 0.0, text: 'Developers (or apps) enter the test. Randomising by developer matters: one developer sees all their own drafts, so splitting by review would leak the treatment into the control.' },
+    { t: 1.2, text: 'Half get reply drafts (group A), half do not (group B), over the same weeks, so seasons and launches hit both groups equally.' },
+    { t: 2.8, text: 'Replies flow in from both groups for at least two full weeks, at a size chosen before the start. No peeking and stopping early when the numbers look good.' },
+    { t: 4.8, text: 'Primary metric: share of reviews replied to within 7 days. In this illustrative run, 41% for A against 32% for B, significant at p < 0.05.' },
+    { t: 6.5, text: 'Guardrails: rating change after a reply, and reports about replies. Here they hold, so the lift is not coming from worse replies.' },
+    { t: 8.2, text: 'Lift plus healthy guardrails: ship. If a guardrail had failed, the lift alone would not be enough.' },
+  ],
+  build(c) {
+    const { V, P, C, SHAPES } = c;
+    const ZA = -3.5, ZB = 3.5;
+    const devs = c.obj(SHAPES.person(0xdfe6ee), -11.5, 0, 'Developers', 'apps in the test');
+    const rand = c.obj(SHAPES.signpost(C.gov), -6.5, 0, 'Randomise', 'by developer');
+    const a = c.obj('browser', 0, ZA, 'Group A', 'sees drafts', { args: [0x4255d4] });
+    const b = c.obj('browser', 0, ZB, 'Group B', 'no drafts', { args: [0x8795a3] });
+    const met = c.obj(SHAPES.database(C.kb), 6, 0, 'Metrics', 'same weeks');
+    const ship = c.obj(SHAPES.shield(C.ok), 11.5, 0, 'Ship decision', 'lift + guardrails');
+    c.lane([V(-11.5, 0), V(-6.5, 0)]);
+    const toA = [V(-6.5, 0), V(-3.2, 0), V(-3.2, ZA), V(0, ZA)], toB = [V(-6.5, 0), V(-3.2, 0), V(-3.2, ZB), V(0, ZB)];
+    const fromA = [V(0, ZA), V(3, ZA), V(3, 0), V(6, 0)], fromB = [V(0, ZB), V(3, ZB), V(3, 0), V(6, 0)];
+    [toA, toB, fromA, fromB].forEach((p) => c.lane(p));
+    c.lane([V(6, 0), V(11.5, 0)]);
+    c.packet({ pts: [V(-11.5, 0), V(-6.5, 0)], t0: 0, t1: 1.0, kind: 'env', n: 4, from: devs, to: rand });
+    c.packet({ pts: toA, t0: 1.2, t1: 2.4, kind: 'env', n: 2, to: a, label: 'half' });
+    c.packet({ pts: toB, t0: 1.2, t1: 2.4, kind: 'env', n: 2, to: b, label: 'half' });
+    c.packet({ pts: fromA, t0: 2.8, t1: 4.4, kind: 'doc', n: 5, color: P.ship, to: met, label: 'more replies' });
+    c.packet({ pts: fromB, t0: 2.8, t1: 4.4, kind: 'doc', n: 3, color: P.same, to: met });
+    c.packet({ pts: [V(6, 0), V(11.5, 0)], t0: 4.8, t1: 6.0, kind: 'vec', to: ship, label: '≤ 7 days: 41% vs 32%' });
+    c.packet({ pts: [V(6, 0), V(11.5, 0)], t0: 6.5, t1: 7.6, kind: 'span', s: 1.6, color: P.ship, to: ship, label: 'ratings ✓ · reports ✓' });
+    c.pulse(ship, 8.2, 8.9);
+  },
+};
+boot(D);
+</script>
 </body>
 </html>
