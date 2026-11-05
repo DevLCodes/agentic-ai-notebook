@@ -188,7 +188,7 @@
 <section id="triton"><h2>Triton Inference Server</h2>
 <p>Triton is NVIDIA's general model server. It serves many frameworks through backends (TensorRT, TensorRT-LLM, PyTorch, ONNX Runtime, Python) over HTTP and gRPC, with Prometheus metrics.</p>
 <h3>Dynamic batching</h3>
-<p>Triton's scheduler waits up to a set delay to group requests that arrive together, then runs them as one batch. Use it for models whose work has a fixed size, such as embedders, rerankers and classifiers.</p>
+<p>Triton's scheduler waits up to a set delay to group requests that arrive together, then runs them as one batch. Use it for models whose work has a fixed size, such as embedders, rerankers and classifiers. <a href="batching.html">Batching</a> compares it with static and in-flight batching.</p>
 <pre><code># config.pbtxt for an embedding model
 dynamic_batching {
   preferred_batch_size: [ 8, 16 ]
@@ -228,7 +228,7 @@ instance_group [ { count: 2, kind: KIND_GPU } ]</code></pre>
 <tr><td>Hopper</td><td>H100, H200</td><td>FP8</td></tr>
 <tr><td>Blackwell</td><td>B200, GB200</td><td>FP4</td></tr>
 </tbody></table></div>
-<p>FP8 halves weight memory compared with BF16 on any GPU, but only GPUs with FP8 tensor cores run it faster. On an A100, an FP8 checkpoint saves memory without the speed-up.</p>
+<p>FP8 halves weight memory compared with BF16 on any GPU, but only GPUs with FP8 tensor cores run it faster (see <a href="quantization.html">Quantization</a> for how the formats work). On an A100, an FP8 checkpoint saves memory without the speed-up.</p>
 <div class="note"><p>Validate the quantized model with your eval set before rollout, for example with NeMo Evaluator, and keep a second replica so cost savings never come out of availability.</p></div></section>
 
 <section id="nemo"><h2>NeMo tools</h2>
@@ -251,7 +251,7 @@ instance_group [ { count: 2, kind: KIND_GPU } ]</code></pre>
 <li>Deduplicate training data → Curator. Score a model → Evaluator. Retrieval models → Retriever. Rails → Guardrails.</li>
 </ul></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#nim">Glossary: NIM</a></li></ul>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#nim">Glossary: NIM</a></li></ul>
 <p class="muted" style="font-size:13.5px;color:var(--muted);margin-top:16px">Products change quickly; check current NVIDIA docs before relying on a specific feature or limit.</p></section></article>
 </div>
 </main>

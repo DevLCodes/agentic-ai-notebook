@@ -290,6 +290,7 @@
 </div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Estimates from published configs. Real usage varies with the runtime, paged-cache block size, activations and graph capture; vLLM pre-allocates most free memory for the cache by default.</p></section>
 <section id="serving"><h2>Quantization and serving</h2>
+<p>For how quantization works, with a lab, see <a href="quantization.html">Quantization</a>.</p>
 <p>Quantization stores each weight in fewer bits: a model 2–4× smaller and usually faster, for a small quality loss. Measure that loss on your own eval set, not a leaderboard; the drop tends to show first on long reasoning, maths and non-English text. See <a href="evals.html">evals</a>.</p>
 <div class="table"><table><thead><tr><th>Format</th><th>Runs on</th><th>Typical runtime</th></tr></thead><tbody>
 <tr><td>GGUF (Q8_0, Q5_K_M, Q4_K_M…)</td><td>CPU, Apple Silicon, consumer GPUs</td><td>llama.cpp, Ollama, LM Studio</td></tr>

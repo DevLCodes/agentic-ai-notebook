@@ -183,26 +183,10 @@
 <p>Paging removes the waste of reserving the longest possible sequence for every request, so more requests fit at once. Requests that share a prefix, such as a common system prompt, can reuse its blocks instead of computing them again (prefix caching).</p></section>
 
 <section id="quantization"><h2>Quantization</h2>
-<p>Quantization stores weights, and optionally the KV cache, in fewer bits. Memory falls and throughput usually rises, at a quality cost that must be measured on your own eval set.</p>
-<div class="table"><table><thead><tr><th>Format</th><th>Bytes per weight</th><th>Notes</th></tr></thead><tbody>
-<tr><td>BF16 / FP16</td><td class="num">2</td><td>The usual full-quality serving format</td></tr>
-<tr><td>FP8</td><td class="num">1</td><td>Small quality loss; needs GPUs with FP8 support to run faster</td></tr>
-<tr><td>INT8</td><td class="num">1</td><td>Weight-only or weights and activations</td></tr>
-<tr><td>INT4 (AWQ, GPTQ)</td><td class="num">≈ 0.5</td><td>Biggest saving; quality loss depends on the task</td></tr>
-</tbody></table></div>
-<p>Quantizing the KV cache to 8 bits doubles the tokens that fit, which often matters more than shrinking the weights.</p>
-<div class="note"><p><strong>Pattern:</strong> quantization cuts cost, but pair it with an evaluation before rollout, and keep redundancy so savings never come out of availability.</p></div></section>
+<p>Quantization stores weights, and optionally the KV cache, in 8 or 4 bits instead of 16. The model needs half or a quarter of the memory, and decoding gets faster because each token reads fewer bytes. Quality must be checked on your own eval set. <a href="quantization.html">Quantization</a> explains how it works, with a lab where you can try it.</p></section>
 
 <section id="batching"><h2>Batching</h2>
-<p class="lead">A GPU running one request at a time is mostly idle. Batching runs many requests together; the question is when a request may join.</p>
-<figure class="fig"><svg viewBox="0 0 722 210" class="dg" role="img" aria-label="Static batching waits for the longest request; in-flight batching fills freed slots at once"><text x="10" y="20" class="b">Static: the batch ends when the longest request ends</text><rect x="10" y="32" width="140" height="18" rx="4" class="k-kb"/><rect x="150" y="32" width="260" height="18" rx="4" class="cell gone"/><rect x="10" y="54" width="400" height="18" rx="4" class="k-ingest"/><rect x="10" y="76" width="220" height="18" rx="4" class="k-serve"/><rect x="230" y="76" width="180" height="18" rx="4" class="cell gone"/><rect x="420" y="32" width="200" height="18" rx="4" class="k-gov"/><text x="430" y="68" class="sm">next batch waits</text><text x="10" y="114" class="b">In-flight: a new request takes a slot the moment it frees up</text><rect x="10" y="126" width="140" height="18" rx="4" class="k-kb"/><rect x="150" y="126" width="200" height="18" rx="4" class="k-gov"/><rect x="350" y="126" width="120" height="18" rx="4" class="k-model"/><rect x="10" y="148" width="400" height="18" rx="4" class="k-ingest"/><rect x="10" y="170" width="220" height="18" rx="4" class="k-serve"/><rect x="230" y="170" width="240" height="18" rx="4" class="k-cross"/><text x="490" y="160" class="sm">no idle slots</text><text x="10" y="204" class="sm">Bars are requests over time; grey is a slot doing nothing.</text></svg><figcaption>Illustrative timeline of three batch slots.</figcaption></figure>
-<div class="table"><table><thead><tr><th>Kind</th><th>How it works</th><th>Fits</th></tr></thead><tbody>
-<tr><td><strong>Static</strong></td><td>A fixed group runs to the end together</td><td>Offline scoring where latency doesn't matter</td></tr>
-<tr><td><strong>Dynamic</strong></td><td>The server waits a short delay to group arriving requests, then runs them as one batch</td><td>Fixed-size work: embeddings, rerankers, classifiers</td></tr>
-<tr><td><strong>Continuous (in-flight)</strong></td><td>Batches per generation step; finished requests leave and new ones join between steps</td><td>LLM generation, where output lengths vary widely</td></tr>
-</tbody></table></div>
-<p>A longer batching delay forms bigger batches and more throughput, but adds that wait to every request's latency.</p>
-<div class="note"><p><strong>Pattern:</strong> bursty, variable-length LLM traffic → continuous batching plus a paged KV cache. Together they keep the GPU busy and raise throughput without inflating tail latency.</p></div></section>
+<p>Batching runs many requests through one read of the weights. Static batching suits offline jobs, dynamic batching suits fixed-size models like embedders, and in-flight (continuous) batching suits LLM generation, because short answers don't wait for long ones. <a href="batching.html">Batching</a> compares the three in a simulation.</p></section>
 
 <section id="parallelism"><h2>Parallelism</h2>
 <div class="table"><table><thead><tr><th>To use more GPUs</th><th>How it splits</th><th>Cost</th></tr></thead><tbody>
@@ -243,7 +227,7 @@
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#kv-cache">Glossary: KV cache</a></li></ul></section></article>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#kv-cache">Glossary: KV cache</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
