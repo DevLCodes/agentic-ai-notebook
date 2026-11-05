@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Batching: static, dynamic and in-flight · Agentic System Designs</title>
+<meta name="description" content="When to use static, dynamic and in-flight (continuous) batching for model serving, with an interactive scheduler simulation, prefill and decode, and what limits batch size.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  /* labs */
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · serving</p><h1>Batching: static, dynamic and in-flight</h1><p class="lead">Running many requests through the GPU together, and the three rules for when a request may join. Pick the wrong one and the GPU sits idle while users wait.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#why">Why batch at all</a></li><li><a href="#bus">Three kinds, as buses</a></li><li><a href="#lab">Try it: run the three schedulers</a></li><li><a href="#static">Static batching</a></li><li><a href="#dynamic">Dynamic batching</a></li><li><a href="#inflight">In-flight batching</a></li><li><a href="#choose">Which one to use</a></li><li><a href="#limits">What limits the batch</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="why"><h2>Why batch at all</h2>
+<p class="lead">For each token it generates, the GPU reads every model weight from memory. Reading once and using the weights for many requests is almost as fast as using them for one.</p>
+<p>An 8B model in 16-bit reads 16 GB of weights per generated token. Serving one request, the GPU spends most of its time waiting on that read and its arithmetic units sit idle. Serving 16 requests in the same pass reads the same 16 GB, and the extra maths is cheap. So batching raises throughput, total tokens per second across users, many times over, while each user's speed drops only a little.</p>
+<p>The design question is when a waiting request may join a batch. There are three answers.</p></section>
+
+<section id="bus"><h2>Three kinds, as buses</h2>
+<figure class="fig"><svg viewBox="0 0 722 250" class="dg" role="img" aria-label="Static batching is a bus that leaves when full and returns after the last drop-off; dynamic leaves when full or after a set wait; in-flight is hop-on hop-off"><rect x="10" y="10" width="226" height="230" rx="12" class="k-kb"/><text x="24" y="38" class="b">Static</text><text x="24" y="60" class="small">The bus leaves when every</text><text x="24" y="76" class="small">seat is full, and comes back</text><text x="24" y="92" class="small">only after the last passenger</text><text x="24" y="108" class="small">is dropped off.</text><text x="24" y="140" class="sm">Short trips leave seats empty</text><text x="24" y="156" class="sm">for the rest of the journey.</text><text x="24" y="196" class="small b">Fits: offline jobs</text><text x="24" y="214" class="sm">latency doesn't matter</text>
+<rect x="248" y="10" width="226" height="230" rx="12" class="k-serve"/><text x="262" y="38" class="b">Dynamic</text><text x="262" y="60" class="small">The bus leaves when full, or</text><text x="262" y="76" class="small">after waiting a set time,</text><text x="262" y="92" class="small">whichever comes first. Then</text><text x="262" y="108" class="small">it runs the whole route.</text><text x="262" y="140" class="sm">A short wait caps the delay;</text><text x="262" y="156" class="sm">trips should be similar length.</text><text x="262" y="196" class="small b">Fits: fixed-size work</text><text x="262" y="214" class="sm">embedders, rerankers, classifiers</text>
+<rect x="486" y="10" width="226" height="230" rx="12" class="k-ingest"/><text x="500" y="38" class="b">In-flight</text><text x="500" y="60" class="small">Hop on, hop off. At every</text><text x="500" y="76" class="small">stop, anyone who has arrived</text><text x="500" y="92" class="small">gets off, and the next person</text><text x="500" y="108" class="small">in the queue takes the seat.</text><text x="500" y="140" class="sm">Seats never ride empty while</text><text x="500" y="156" class="sm">people wait.</text><text x="500" y="196" class="small b">Fits: LLM generation</text><text x="500" y="214" class="sm">answers of very different lengths</text></svg><figcaption>A seat is a batch slot. A stop is one generation step, which produces one token for every request in the batch.</figcaption></figure></section>
+
+<section id="lab"><h2>Try it: run the three schedulers</h2>
+<p>Twelve requests arrive at a server with four batch slots. Each bar is one request generating its tokens, one step per token. Grey is a slot held by a finished request while the rest of its batch carries on. Switch the scheduler, the traffic and the answer lengths, and compare the numbers.</p>
+<div class="lab" id="blab">
+  <div class="lab-row"><span class="lab-k">Scheduler</span><span class="seg" role="group" aria-label="Scheduler">
+    <button data-m="static" aria-pressed="true">Static</button><button data-m="dynamic" aria-pressed="false">Dynamic</button><button data-m="inflight" aria-pressed="false">In-flight</button></span></div>
+  <div class="lab-row"><span class="lab-k">Traffic</span><span class="seg" role="group" aria-label="Traffic">
+    <button data-t="steady" aria-pressed="true">Steady</button><button data-t="bursty" aria-pressed="false">Bursty</button></span>
+    <span class="lab-k">Answer lengths</span><span class="seg" role="group" aria-label="Answer lengths">
+    <button data-l="mixed" aria-pressed="true">Mixed (LLM chat)</button><button data-l="similar" aria-pressed="false">Similar (fixed-size work)</button></span></div>
+  <div class="lab-row"><label for="b-wait">Dynamic batching wait <input type="range" id="b-wait" min="0" max="8" step="1" value="2"><output id="b-wait-o"></output></label></div>
+  <div class="fig" style="margin:0"><svg id="b-svg" class="dg" viewBox="0 0 722 250" role="img" aria-label="Timeline of four batch slots"></svg></div>
+  <div class="table" style="margin:12px 0 0"><table id="b-table"><thead><tr><th>Scheduler</th><th>Slot time doing work</th><th>Average wait to start</th><th>Average time to finish</th><th>Slowest request</th></tr></thead><tbody></tbody></table></div>
+  <p class="lab-out" id="b-out" aria-live="polite"></p>
+</div>
+<p>What the numbers show:</p>
+<ul class="plain">
+<li><strong>Mixed lengths (LLM chat):</strong> only in-flight batching keeps every reserved slot working, and it cuts the average time to finish by more than half. Dynamic batching can even do worse than static here, because it starts small batches early and a long answer then blocks them.</li>
+<li><strong>Similar lengths (fixed-size work):</strong> no slot is held idle in any scheduler, so the difference is only the wait to start. Dynamic batching with a short wait comes close to in-flight and is simpler, which is why servers use it for embedders and rerankers.</li>
+<li><strong>Static</strong> always makes early arrivals wait for a full batch. It only makes sense when there is no user waiting.</li>
+</ul></section>
+
+<section id="static"><h2>Static batching</h2>
+<p>The server collects a fixed number of requests, runs them together and returns all results when the last one finishes.</p>
+<ul class="plain">
+<li><strong>Good for:</strong> offline jobs where everything is available up front, such as scoring a million documents overnight or generating evaluation outputs.</li>
+<li><strong>Bad for:</strong> live traffic. The first request waits for the batch to fill, and short requests wait for the longest one to finish.</li>
+<li><strong>Cost:</strong> wasted slots grow with the spread of lengths in a batch. Sorting a job by length before batching reduces the waste.</li>
+</ul>
+<div class="note"><p>Don't confuse this with a provider's batch API, which charges about half price for jobs that can wait up to a day. That is a job queue: the provider still schedules the GPUs however it likes.</p></div></section>
+
+<section id="dynamic"><h2>Dynamic batching</h2>
+<p>The server waits a short, set time after the first request arrives, gathering any others, then runs whatever it has as one batch. It runs early if the batch fills first.</p>
+<ul class="plain">
+<li><strong>The knob:</strong> the maximum wait, usually a few milliseconds or less. A longer wait forms bigger batches and more throughput, and adds up to that wait to every request.</li>
+<li><strong>Good for:</strong> models where each request costs about the same and finishes in one pass: embedding a query, reranking 50 passages, classifying a message, an image model.</li>
+<li><strong>Bad for:</strong> LLM generation. Requests finish at different steps, so the batch still waits for its longest answer, just as in static batching.</li>
+</ul>
+<p>Servers expose the wait and the preferred batch sizes as settings; here is <a href="nvidia-architecture.html#triton">a real configuration</a>.</p></section>
+
+<section id="inflight"><h2>In-flight batching</h2>
+<p>Also called continuous batching. The scheduler works one generation step at a time instead of one request at a time. After every step, finished requests leave and queued requests take their slots straight away.</p>
+<ul class="plain">
+<li><strong>Good for:</strong> LLM serving with live traffic, where one answer is 10 tokens and the next is 2,000.</li>
+<li><strong>Needs:</strong> a KV cache that can grow and free per request without fragmenting memory, which is what a paged KV cache provides.</li>
+<li><strong>Prefill and decode:</strong> a new request first processes its whole prompt (prefill), which is heavy, then generates one token per step (decode). Servers split long prompts into chunks (chunked prefill) so one big prompt doesn't stall everyone else's next token.</li>
+</ul></section>
+
+<section id="choose"><h2>Which one to use</h2>
+<figure class="fig"><svg viewBox="0 0 722 200" class="dg" role="img" aria-label="Decision: offline job, static; fixed cost per request, dynamic; generated output of varying length, in-flight"><rect x="10" y="78" width="170" height="48" rx="10" class="box"/><text x="95" y="99" class="small b" text-anchor="middle">What is the work?</text><text x="95" y="115" class="sm" text-anchor="middle">ask this first</text>
+<path d="M180 92 L300 34" class="wire" marker-end="url(#ah)"/><path d="M180 102 L300 102" class="wire" marker-end="url(#ah)"/><path d="M180 112 L300 170" class="wire" marker-end="url(#ah)"/>
+<text x="196" y="52" class="sm">all input known, no user waiting</text><text x="196" y="96" class="sm">same cost per request</text><text x="196" y="160" class="sm">generated text, any length</text>
+<rect x="302" y="12" width="410" height="44" rx="10" class="k-kb"/><text x="318" y="31" class="small b">Static</text><text x="318" y="47" class="sm">Offline scoring, evals, nightly jobs. Sort by length first.</text>
+<rect x="302" y="80" width="410" height="44" rx="10" class="k-serve"/><text x="318" y="99" class="small b">Dynamic</text><text x="318" y="115" class="sm">Embedders, rerankers, classifiers. Tune the max wait to the latency budget.</text>
+<rect x="302" y="148" width="410" height="44" rx="10" class="k-ingest"/><text x="318" y="167" class="small b">In-flight (continuous)</text><text x="318" y="183" class="sm">Chat and agents. Pair with a paged KV cache and chunked prefill.</text></svg><figcaption>One system often uses two: a RAG agent's embedder and reranker use dynamic batching, and its LLM uses in-flight batching.</figcaption></figure>
+<div class="table"><table><thead><tr><th>Question</th><th>Static</th><th>Dynamic</th><th>In-flight</th></tr></thead><tbody>
+<tr><td>Who decides when a batch runs?</td><td>A fixed size</td><td>Full, or a timer</td><td>Every generation step</td></tr>
+<tr><td>Can a request join mid-batch?</td><td>No</td><td>No</td><td>Yes</td></tr>
+<tr><td>Does a short request wait for a long one?</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+<tr><td>Main knob</td><td>Batch size</td><td>Max wait and preferred sizes</td><td>Max batch size and KV cache memory</td></tr>
+<tr><td>Best for</td><td>Offline jobs</td><td>Fixed-size models</td><td>LLM generation</td></tr>
+</tbody></table></div></section>
+
+<section id="limits"><h2>What limits the batch</h2>
+<ul class="plain">
+<li><strong>KV cache memory.</strong> Every active request holds its context in the KV cache, so memory, not compute, usually caps the batch. <a href="quantization.html">Quantizing</a> the weights or the KV cache frees room for more requests.</li>
+<li><strong>Latency targets.</strong> Bigger batches make each step slower. Servers cap the batch size or the tokens per step to keep time per token within budget.</li>
+<li><strong>Prompt length.</strong> Long prompts make prefill heavy, so a few long-context requests can slow every user's next token unless prefill is chunked.</li>
+</ul></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="note"><p>"Decoding is memory-bound, so batching gets many requests' tokens out of one read of the weights. For the LLM I'd use in-flight batching: requests join and leave every step, so short answers don't wait for long ones, with a paged KV cache so memory follows the real sequence lengths, and chunked prefill so long prompts don't stall others. For the embedder and reranker I'd use dynamic batching with a wait of a few milliseconds. Static batching is only for offline jobs."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Kind</th><th>Real options</th></tr></thead><tbody>
+<tr><td>Dynamic batching</td><td>NVIDIA Triton dynamic batcher, TorchServe, TensorFlow Serving, Hugging Face Text Embeddings Inference</td></tr>
+<tr><td>In-flight (continuous) batching</td><td>vLLM, SGLang, Hugging Face TGI, NVIDIA TensorRT-LLM</td></tr>
+<tr><td>Offline jobs</td><td>vLLM offline inference, Ray Data, provider batch APIs (a job queue, not GPU batching)</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="quantization.html">Quantization</a></li><li><a href="nvidia-architecture.html#triton">NVIDIA: Triton</a></li><li><a href="glossary.html#in-flight-batching">Glossary: in-flight batching</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script>
+(() => {
+  const root = document.getElementById('blab');
+  if (!root) return;
+  const SLOTS = 4, NS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('b-svg'), tbody = document.querySelector('#b-table tbody'), out = document.getElementById('b-out');
+  const wait = document.getElementById('b-wait'), waitO = document.getElementById('b-wait-o');
+  const state = { mode: 'static', traffic: 'steady', lengths: 'mixed' };
+  const ARRIVALS = { steady: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22], bursty: [0, 0, 0, 0, 9, 9, 9, 9, 9, 20, 20, 20] };
+  const LENGTHS = { mixed: [3, 14, 4, 18, 2, 9, 3, 16, 5, 2, 12, 4], similar: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3] };
+  const COLORS = ['k-kb', 'k-ingest', 'k-serve', 'k-model', 'k-gov', 'k-cross'];
+  const LABEL = { static: 'Static', dynamic: 'Dynamic', inflight: 'In-flight' };
+  const el = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; return n; };
+
+  function simulate(mode, traffic, lengths, maxWait) {
+    const reqs = ARRIVALS[traffic].map((a, i) => ({ id: i + 1, arrive: a, len: LENGTHS[lengths][i], start: null, end: null, slot: null, held: null }));
+    const queue = [], slots = new Array(SLOTS).fill(null);
+    let batchEnd = -1, t = 0, next = 0;
+    while (reqs.some(r => r.end === null) && t < 400) {
+      while (next < reqs.length && reqs[next].arrive <= t) queue.push(reqs[next++]);
+      if (mode === 'inflight') {
+        for (let s = 0; s < SLOTS; s++) {
+          if (slots[s] && slots[s].end <= t) slots[s] = null;
+          if (!slots[s] && queue.length) { const r = queue.shift(); r.start = t; r.end = t + r.len; r.slot = s; r.held = r.end; slots[s] = r; }
+        }
+      } else if (t >= batchEnd && queue.length) {
+        const allArrived = next >= reqs.length;
+        const ready = queue.length >= SLOTS || allArrived || (mode === 'dynamic' && t - queue[0].arrive >= maxWait);
+        if (ready) {
+          const batch = queue.splice(0, SLOTS);
+          batchEnd = t + Math.max(...batch.map(r => r.len));
+          batch.forEach((r, s) => { r.start = t; r.end = t + r.len; r.slot = s; r.held = batchEnd; });
+        }
+      }
+      t++;
+    }
+    const span = Math.max(...reqs.map(r => r.held));
+    const tokens = reqs.reduce((a, r) => a + r.len, 0);
+    const waits = reqs.map(r => r.start - r.arrive), lat = reqs.map(r => r.end - r.arrive);
+    const reserved = reqs.reduce((a, r) => a + (r.held - r.start), 0);
+    return { reqs, span, util: tokens / reserved, wait: waits.reduce((a, b) => a + b, 0) / reqs.length,
+      lat: lat.reduce((a, b) => a + b, 0) / reqs.length, worst: Math.max(...lat) };
+  }
+
+  function draw(res, scaleSpan) {
+    svg.textContent = '';
+    const X0 = 70, X1 = 712, x = v => X0 + v / scaleSpan * (X1 - X0), ROW = 34, Y0 = 70;
+    svg.appendChild(el('text', { x: 10, y: 18, class: 'cap' }, 'Arrivals'));
+    res.reqs.forEach(r => {
+      const same = res.reqs.filter(o => o.arrive === r.arrive && o.id < r.id).length;
+      svg.appendChild(el('line', { x1: x(r.arrive), y1: 26, x2: x(r.arrive), y2: 46, class: 'axis' }));
+      svg.appendChild(el('text', { x: x(r.arrive) + 3 + same * 13, y: 40, class: 'sm' }, r.id));
+    });
+    for (let s = 0; s < SLOTS; s++) {
+      const y = Y0 + s * ROW;
+      svg.appendChild(el('text', { x: 10, y: y + 20, class: 'small' }, 'Slot ' + (s + 1)));
+      svg.appendChild(el('rect', { x: X0, y, width: X1 - X0, height: 26, rx: 4, class: 'zone' }));
+    }
+    res.reqs.forEach(r => {
+      const y = Y0 + r.slot * ROW;
+      if (r.held > r.end) svg.appendChild(el('rect', { x: x(r.end), y: y + 3, width: x(r.held) - x(r.end), height: 20, rx: 3, class: 'track' }));
+      svg.appendChild(el('rect', { x: x(r.start), y: y + 3, width: Math.max(2, x(r.end) - x(r.start) - 1), height: 20, rx: 3, class: COLORS[(r.id - 1) % COLORS.length] }));
+      if (x(r.end) - x(r.start) > 16) svg.appendChild(el('text', { x: x(r.start) + 5, y: y + 17, class: 'sm' }, r.id));
+    });
+    const yA = Y0 + SLOTS * ROW + 8;
+    svg.appendChild(el('line', { x1: X0, y1: yA, x2: X1, y2: yA, class: 'axis' }));
+    for (let v = 0; v <= scaleSpan; v += 10) {
+      svg.appendChild(el('line', { x1: x(v), y1: yA, x2: x(v), y2: yA + 5, class: 'axis' }));
+      svg.appendChild(el('text', { x: x(v), y: yA + 18, class: 'sm', 'text-anchor': 'middle' }, v));
+    }
+    svg.appendChild(el('text', { x: X1, y: yA + 34, class: 'sm', 'text-anchor': 'end' }, 'generation steps →  all done at step ' + res.span));
+  }
+
+  function render() {
+    waitO.textContent = wait.value + ' steps';
+    const all = {};
+    ['static', 'dynamic', 'inflight'].forEach(m => { all[m] = simulate(m, state.traffic, state.lengths, +wait.value); });
+    const scaleSpan = Math.ceil(Math.max(...Object.values(all).map(r => r.span)) / 10) * 10;
+    draw(all[state.mode], scaleSpan);
+    tbody.textContent = '';
+    ['static', 'dynamic', 'inflight'].forEach(m => {
+      const r = all[m], tr = document.createElement('tr');
+      if (m === state.mode) tr.style.background = 'var(--t-kb)';
+      [LABEL[m], Math.round(r.util * 100) + '%', r.wait.toFixed(1) + ' steps', r.lat.toFixed(1) + ' steps', r.worst + ' steps'].forEach((v, i) => {
+        const td = document.createElement('td'); td.textContent = v; if (i) td.className = 'num'; tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    const r = all[state.mode], held = r.reqs.reduce((a, q) => a + (q.held - q.end), 0);
+    const why = {
+      static: 'Static waits for four requests, then holds every slot until the longest answer ends.',
+      dynamic: 'Dynamic starts after ' + wait.value + ' steps or a full batch, but still holds slots until the batch\'s longest answer ends.',
+      inflight: 'In-flight refills each slot the step it frees up, so no slot is held by a finished request.'
+    };
+    out.textContent = why[state.mode] + ' Slot-steps held by finished requests: ' + held + '.';
+  }
+  const bind = (attr, key) => root.querySelectorAll('[data-' + attr + ']').forEach(b => b.addEventListener('click', () => {
+    state[key] = b.dataset[attr]; root.querySelectorAll('[data-' + attr + ']').forEach(o => o.setAttribute('aria-pressed', o === b)); render();
+  }));
+  bind('m', 'mode'); bind('t', 'traffic'); bind('l', 'lengths');
+  wait.addEventListener('input', render);
+  render();
+})();
+</script>
+<script src="progress.js"></script>
+</body>
+</html>

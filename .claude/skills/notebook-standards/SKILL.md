@@ -18,6 +18,7 @@ Sort every concept with these rules, in order. Stop at the first rule that match
 3. **Vendor-neutral concept with no topic yet:** create a separate topic page for that subject. Don't put it in a page about something else.
 4. **Interview phrasing of a concept already covered:** add a `details.qa` to `system-design/fluency.html`, with a deep-dive link to the topic page.
 5. **Every new term:** add it to `system-design/glossary.html` and link it to the topic page that explains it.
+6. **A concept that outgrows its section:** when the owner asks for a concept on its own page, or it needs an interactive lab or more than one screen of explanation, give it its own vendor-neutral topic (as `quantization.html` and `batching.html` were split from `llm-serving.html`). Leave a two or three sentence summary in the parent section that ends with a link to the new page, so the idea is explained in one place only.
 
 Never put new concepts in these pages:
 
@@ -41,6 +42,8 @@ Product names go in the page's "In the real world" table.
 ## 2. Match the section's style
 
 - **`system-design/` and `classic-system-design/` (the default):** dense and exact. Use `.note`, `.formula`, `.table`, `.related` and `svg.dg` with the fixed layer colours. No handwriting fonts or stickies.
+- **Explain before you list.** Open each topic with the intuition: one picture, analogy or worked example a newcomer can follow. Then explain how it works, then give numbers, tables and trade-offs. Define every term the first time it appears. A reader who knows software but not this topic should understand the first section without reading anything else.
+- **Make it interactive when the idea is a trade-off.** If the concept is about a knob and its effect, such as bits against error or batching mode against latency, add a `.lab` that lets the reader turn the knob. Build it in plain JavaScript inside the page, with `.lab`, `.lab-row`, `.seg` buttons and a `.lab-out` result line, copied from an existing lab such as `chunking.html`.
 - Copy markup from a neighbouring element on the same page rather than writing new CSS.
 - Give any section you link to an `id`.
 

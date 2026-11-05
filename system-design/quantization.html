@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quantization · Agentic System Designs</title>
+<meta name="description" content="Quantization explained: rounding model weights to 8 or 4 bits, scales and groups, why it speeds up decoding, FP8, INT8 and INT4 formats, GPTQ, AWQ and SmoothQuant, and an interactive lab.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  /* labs */
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · serving</p><h1>Quantization</h1><p class="lead">Storing a model's numbers with fewer bits, so it fits on fewer GPUs and answers faster, at a quality cost you measure.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#idea">The idea in one picture</a></li><li><a href="#lab">Try it: squeeze the weights</a></li><li><a href="#how">How a weight becomes an integer</a></li><li><a href="#why">Why it makes models faster</a></li><li><a href="#formats">Formats</a></li><li><a href="#what">What gets quantized</a></li><li><a href="#methods">Methods</a></li><li><a href="#quality">Checking quality</a></li><li><a href="#when">When to use which</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="idea"><h2>The idea in one picture</h2>
+<p class="lead">A model is billions of numbers called weights. Quantization rounds each weight to the nearest mark on a coarser ruler, so each one takes fewer bits.</p>
+<figure class="fig"><svg viewBox="0 0 722 210" class="dg" role="img" aria-label="The same weight 0.4371 stored at 16, 8 and 4 bits: fewer marks on the ruler, smaller file, bigger rounding error"><text x="10" y="20" class="cap">One weight, 0.4371, on three rulers from −1 to 1</text>
+<text x="10" y="58" class="small b">16-bit</text><line x1="90" y1="54" x2="560" y2="54" class="axis"/><rect x="90" y="48" width="470" height="12" class="k-kb" rx="2"/><text x="325" y="80" class="sm" text-anchor="middle">65,536 marks: too fine to draw</text><circle cx="427.7" cy="54" r="5" class="f-model"/><text x="576" y="52" class="small b">stored 0.4371</text><text x="576" y="68" class="sm">2 bytes, error ≈ 0</text>
+<text x="10" y="118" class="small b">8-bit</text><line x1="90" y1="114" x2="560" y2="114" class="axis"/><g class="f-kb"><rect x="90" y="108" width="470" height="12" rx="2" opacity=".35"/></g><text x="325" y="140" class="sm" text-anchor="middle">255 marks, 0.0079 apart</text><circle cx="428.6" cy="114" r="5" class="f-model"/><text x="576" y="112" class="small b">stored 0.4409</text><text x="576" y="128" class="sm">1 byte, error 0.004</text>
+<text x="10" y="178" class="small b">4-bit</text><line x1="90" y1="174" x2="560" y2="174" class="axis"/>
+<g class="axis"><line x1="90" y1="166" x2="90" y2="182"/><line x1="123.6" y1="166" x2="123.6" y2="182"/><line x1="157.1" y1="166" x2="157.1" y2="182"/><line x1="190.7" y1="166" x2="190.7" y2="182"/><line x1="224.3" y1="166" x2="224.3" y2="182"/><line x1="257.9" y1="166" x2="257.9" y2="182"/><line x1="291.4" y1="166" x2="291.4" y2="182"/><line x1="325" y1="166" x2="325" y2="182"/><line x1="358.6" y1="166" x2="358.6" y2="182"/><line x1="392.1" y1="166" x2="392.1" y2="182"/><line x1="425.7" y1="166" x2="425.7" y2="182"/><line x1="459.3" y1="166" x2="459.3" y2="182"/><line x1="492.9" y1="166" x2="492.9" y2="182"/><line x1="526.4" y1="166" x2="526.4" y2="182"/><line x1="560" y1="166" x2="560" y2="182"/></g>
+<circle cx="427.7" cy="174" r="4" class="ghost"/><circle cx="425.7" cy="174" r="5" class="f-model"/><text x="325" y="200" class="sm" text-anchor="middle">15 marks, 0.143 apart</text><text x="576" y="172" class="small b">stored 0.4286</text><text x="576" y="188" class="sm">half a byte, error 0.009</text></svg><figcaption>Fewer marks means a smaller model and a bigger rounding error. Most weights sit close to zero, which is why 8-bit and even 4-bit usually work.</figcaption></figure>
+<p>Two things make this work. Neural networks tolerate small errors in individual weights, because each output adds up thousands of them and the errors partly cancel. And most weights are small, so a well-chosen ruler covers nearly all of them finely.</p></section>
+
+<section id="lab"><h2>Try it: squeeze the weights</h2>
+<p>Below are 16 real-looking weights from one row of a layer, split into four groups of four. Pick how many bits to store each one in, and watch where each weight lands. Then add an outlier, one unusually large weight, and switch the scaling.</p>
+<div class="lab" id="qlab">
+  <div class="lab-row"><span class="lab-k">Bits per weight</span><span class="seg" role="group" aria-label="Bits per weight">
+    <button data-b="16" aria-pressed="false">16-bit (BF16)</button><button data-b="8" aria-pressed="false">8-bit</button><button data-b="4" aria-pressed="true">4-bit</button><button data-b="2" aria-pressed="false">2-bit</button></span></div>
+  <div class="lab-row"><span class="lab-k">Scale</span><span class="seg" role="group" aria-label="Scale">
+    <button data-s="row" aria-pressed="true">One scale for the whole row</button><button data-s="group" aria-pressed="false">One scale per group of 4</button></span>
+    <label for="q-out"><input type="checkbox" id="q-out"> Add an outlier weight (2.4)</label></div>
+  <div class="fig" style="margin:0"><svg id="q-svg" class="dg" viewBox="0 0 722 300" role="img" aria-label="Weights on number lines with the marks each format can store"></svg></div>
+  <p class="lab-out" id="q-out-text" aria-live="polite"></p>
+</div>
+<p>Three lessons usually jump out:</p>
+<ul class="plain">
+<li><strong>8-bit is nearly free:</strong> the error is a fraction of a percent.</li>
+<li><strong>4-bit is where care starts:</strong> the error is visible, so how you choose the scale matters.</li>
+<li><strong>One outlier ruins a shared scale:</strong> it stretches the ruler, so every small weight in the row lands on zero. A separate scale per small group keeps the damage inside one group, which is why real 4-bit methods scale in groups of 64 to 128 weights.</li>
+</ul></section>
+
+<section id="how"><h2>How a weight becomes an integer</h2>
+<p>The common recipe, called symmetric round-to-nearest, takes three steps for each group of weights:</p>
+<ol class="plain">
+<li><strong>Find the scale.</strong> Take the largest absolute weight in the group and divide it by the largest integer the format holds: 127 for 8-bit, 7 for 4-bit.</li>
+<li><strong>Divide and round.</strong> Each weight ÷ scale, rounded to the nearest integer, is what gets stored.</li>
+<li><strong>Multiply back when used.</strong> At run time, integer × scale gives an approximate weight.</li>
+</ol>
+<div class="formula">scale = max|w| / 127 &nbsp;·&nbsp; q = round(w / scale) &nbsp;·&nbsp; w′ = q × scale</div>
+<p>Worked example in 8-bit: the group's largest weight is 0.98, so the scale is 0.98 / 127 = 0.00772. A weight of 0.4371 becomes round(56.6) = 57, stored in one byte, and comes back as 57 × 0.00772 = 0.440. The error is 0.003.</p>
+<p>The scale itself is stored once per group, usually in 16 bits. With groups of 128, that adds about 0.13 bits per weight, so a "4-bit" model really uses about 4.1 to 4.5 bits per weight.</p></section>
+
+<section id="why"><h2>Why it makes models faster</h2>
+<p>When an LLM writes an answer, it produces one token at a time, and for each token the GPU reads every weight from memory. Reading memory, not doing arithmetic, is the slow part.</p>
+<div class="table"><table><thead><tr><th>An 8B model in</th><th>Weights to read per token</th><th>Fits on</th></tr></thead><tbody>
+<tr><td>16-bit</td><td class="num">16 GB</td><td>A 24 GB GPU, with little room left for users</td></tr>
+<tr><td>8-bit</td><td class="num">8 GB</td><td>A 24 GB GPU, with room for the KV cache</td></tr>
+<tr><td>4-bit</td><td class="num">≈ 4.5 GB</td><td>A laptop GPU or a 16 GB card</td></tr>
+</tbody></table></div>
+<p>Halve the bytes and each token needs half the reading, so single-user generation gets close to twice as fast. The memory you save also holds more KV cache, which lets the server <a href="batching.html">batch</a> more requests at once.</p></section>
+
+<section id="formats"><h2>Formats</h2>
+<div class="table"><table><thead><tr><th>Format</th><th>Bits</th><th>What it is</th><th>Typical use</th></tr></thead><tbody>
+<tr><td>FP32</td><td class="num">32</td><td>Full precision floating point</td><td>Training maths, rarely serving</td></tr>
+<tr><td>BF16 / FP16</td><td class="num">16</td><td>Half precision; BF16 keeps FP32's range</td><td>The default serving format</td></tr>
+<tr><td>FP8 (E4M3)</td><td class="num">8</td><td>A tiny floating point number: 4 exponent bits, 3 mantissa bits</td><td>Fast serving on GPUs with FP8 support; weights, activations and KV cache</td></tr>
+<tr><td>INT8</td><td class="num">8</td><td>An integer plus a scale</td><td>Weights, and activations with SmoothQuant</td></tr>
+<tr><td>INT4</td><td class="num">4</td><td>An integer from −8 to 7 plus a group scale</td><td>Weight-only, with GPTQ or AWQ; laptops and single GPUs</td></tr>
+<tr><td>FP4</td><td class="num">4</td><td>A 4-bit floating point with block scales</td><td>Newest GPUs only</td></tr>
+</tbody></table></div>
+<p>Floating-point formats like FP8 spend some bits on an exponent, so their marks are dense near zero and sparse far out, which suits weights that cluster near zero. Integer formats space marks evenly and rely on the scale. Which formats run fast depends on the GPU; see <a href="nvidia-architecture.html#gpus">GPU generations</a>.</p></section>
+
+<section id="what"><h2>What gets quantized</h2>
+<div class="table"><table><thead><tr><th>Choice</th><th>Saves</th><th>Risk</th></tr></thead><tbody>
+<tr><td><strong>Weights only</strong> (W4A16, W8A16)</td><td>Model memory and memory reads</td><td>Lowest; the maths still runs in 16-bit</td></tr>
+<tr><td><strong>Weights and activations</strong> (W8A8, FP8)</td><td>Memory and compute, using low-precision tensor cores</td><td>Activations have outliers, so it needs careful scaling</td></tr>
+<tr><td><strong>KV cache</strong> (FP8 or INT8 KV)</td><td>Memory per token of context, so more users or longer contexts fit</td><td>Small; check long-context tasks</td></tr>
+</tbody></table></div>
+<p>The shorthand W4A16 means 4-bit weights, 16-bit activations.</p></section>
+
+<section id="methods"><h2>Methods</h2>
+<div class="table"><table><thead><tr><th>Method</th><th>How it works</th><th>When</th></tr></thead><tbody>
+<tr><td>Round-to-nearest (RTN)</td><td>The recipe above, with no data needed</td><td>8-bit, where it's usually enough</td></tr>
+<tr><td>GPTQ</td><td>Quantizes weights one at a time and adjusts the rest to cancel the error, using a small calibration set</td><td>4-bit weight-only</td></tr>
+<tr><td>AWQ</td><td>Finds the weights that matter most, from activations on calibration data, and protects them with per-channel scaling</td><td>4-bit weight-only; robust across tasks</td></tr>
+<tr><td>SmoothQuant</td><td>Moves outliers from activations into weights so both fit 8-bit</td><td>W8A8</td></tr>
+<tr><td>Quantization-aware training (QAT)</td><td>Simulates rounding during training or fine-tuning so the model learns to cope</td><td>When post-training methods lose too much quality</td></tr>
+</tbody></table></div>
+<p>Everything except QAT is post-training quantization (PTQ): it runs on a finished model in minutes to hours, with a few hundred calibration examples at most.</p></section>
+
+<section id="quality"><h2>Checking quality</h2>
+<ul class="plain">
+<li><strong>Measure on your own tasks.</strong> Run the same eval set on the 16-bit and the quantized model. Leaderboard averages hide task-specific drops.</li>
+<li><strong>Watch the fragile cases:</strong> maths and multi-step reasoning, long contexts, code, non-English text and strict output formats break first.</li>
+<li><strong>Check perplexity too.</strong> A jump in perplexity on held-out text is a quick early warning, though not proof that quality held.</li>
+<li><strong>Roll out like any model change:</strong> shadow traffic, then a canary, with a rollback ready.</li>
+</ul>
+<div class="note"><p><strong>Rule of thumb:</strong> 8-bit (FP8 or INT8) is close to lossless for most tasks. 4-bit with GPTQ or AWQ loses a little, more on small models. Below 4 bits, quality drops quickly.</p></div></section>
+
+<section id="when"><h2>When to use which</h2>
+<div class="table"><table><thead><tr><th>Situation</th><th>Choose</th></tr></thead><tbody>
+<tr><td>Production serving on GPUs with FP8 support</td><td>FP8 weights and activations, plus FP8 KV cache</td></tr>
+<tr><td>Production on older GPUs</td><td>INT8 weights (W8A16), or AWQ 4-bit if memory is tight</td></tr>
+<tr><td>A large model on one GPU, or a laptop</td><td>4-bit weights (AWQ, GPTQ or GGUF Q4)</td></tr>
+<tr><td>Many users with long contexts</td><td>Quantize the KV cache first</td></tr>
+<tr><td>Quality must not move at all</td><td>Stay at 16-bit, and add GPUs or use a smaller model</td></tr>
+</tbody></table></div></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="note"><p>"Decoding is memory-bound: every token reads all the weights. Quantizing a 70B model from BF16 to FP8 halves that from 140 GB to 70 GB, so it fits on fewer GPUs, generates faster and leaves room for KV cache. I'd use FP8 on hardware that supports it, or 4-bit AWQ with group scaling when memory is tight, quantize the KV cache for long contexts, and only roll out after the eval set shows no regression on the tasks we care about."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th></tr></thead><tbody>
+<tr><td>Quantize a model</td><td>llm-compressor, AutoAWQ, GPTQModel, NVIDIA TensorRT Model Optimizer, bitsandbytes</td></tr>
+<tr><td>Serve quantized models</td><td>vLLM, SGLang, TensorRT-LLM, Hugging Face TGI</td></tr>
+<tr><td>Run on a laptop</td><td>llama.cpp and Ollama with GGUF (Q8_0, Q5_K_M, Q4_K_M), MLX on Apple Silicon</td></tr>
+<tr><td>Ready-made checkpoints</td><td>FP8, AWQ and GPTQ versions on the Hugging Face Hub</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="batching.html">Batching</a></li><li><a href="open-weight-models.html">Open-weight models</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="glossary.html#quantization">Glossary: quantization</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script>
+(() => {
+  const root = document.getElementById('qlab');
+  if (!root) return;
+  const svg = document.getElementById('q-svg'), out = document.getElementById('q-out-text'), outlier = document.getElementById('q-out');
+  // one row of 16 weights, four groups of four; most weights are small, as in real layers
+  const BASE = [0.12, -0.31, 0.05, 0.44, -0.08, 0.27, -0.52, 0.19, 0.36, -0.14, 0.02, -0.41, 0.23, -0.06, 0.49, -0.29];
+  const state = { bits: 4, scale: 'row' };
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; return n; };
+
+  function bf16(x) {
+    if (x === 0) return 0;
+    const e = Math.floor(Math.log2(Math.abs(x))) + 1, s = Math.pow(2, 8 - e);
+    return Math.round(x * s) / s;
+  }
+  function quantize(ws, bits) {
+    if (bits === 16) return { q: ws.map(bf16), step: null };
+    const qmax = Math.pow(2, bits - 1) - 1, scale = Math.max(...ws.map(Math.abs)) / qmax || 1;
+    return { q: ws.map(w => Math.round(w / scale) * scale), step: scale, qmax };
+  }
+  function render() {
+    const ws = BASE.slice();
+    if (outlier.checked) ws[2] = 2.4;
+    const groups = [0, 1, 2, 3].map(g => ws.slice(g * 4, g * 4 + 4));
+    const rowQ = quantize(ws, state.bits);
+    const res = groups.map((g, i) => state.scale === 'group' ? quantize(g, state.bits) : { q: rowQ.q.slice(i * 4, i * 4 + 4), step: rowQ.step, qmax: rowQ.qmax });
+    const lim = Math.max(1, ...ws.map(Math.abs)) * 1.05;
+    const X0 = 120, X1 = 700, x = v => X0 + (v + lim) / (2 * lim) * (X1 - X0);
+    svg.textContent = '';
+    svg.appendChild(el('text', { x: 10, y: 18, class: 'cap' }, 'Each line is one group of 4 weights. Ticks are the values that group can store.'));
+    let errSum = 0, absSum = 0, zeroed = 0;
+    res.forEach((r, i) => {
+      const y = 60 + i * 58;
+      svg.appendChild(el('text', { x: 10, y: y + 4, class: 'small b' }, 'Group ' + (i + 1)));
+      svg.appendChild(el('line', { x1: X0, y1: y, x2: X1, y2: y, class: 'axis' }));
+      if (r.step) {
+        const n = 2 * r.qmax + 1;
+        if (n <= 63) {
+          for (let k = -r.qmax; k <= r.qmax; k++) { const v = k * r.step; if (Math.abs(v) <= lim) svg.appendChild(el('line', { x1: x(v), y1: y - 7, x2: x(v), y2: y + 7, class: 'axis' })); }
+        } else svg.appendChild(el('rect', { x: Math.max(X0, x(-r.qmax * r.step)), y: y - 5, width: Math.min(X1, x(r.qmax * r.step)) - Math.max(X0, x(-r.qmax * r.step)), height: 10, rx: 2, class: 'k-kb' }));
+        svg.appendChild(el('text', { x: X1, y: y + 24, class: 'sm', 'text-anchor': 'end' }, n + ' values, ' + r.step.toFixed(r.step < 0.01 ? 4 : 3) + ' apart'));
+      } else svg.appendChild(el('rect', { x: X0, y: y - 5, width: X1 - X0, height: 10, rx: 2, class: 'k-kb' }));
+      groups[i].forEach((w, j) => {
+        const q = r.q[j];
+        errSum += Math.abs(w - q); absSum += Math.abs(w);
+        if (q === 0 && w !== 0) zeroed++;
+        svg.appendChild(el('line', { x1: x(w), y1: y - 16, x2: x(q), y2: y - 3, class: 'wire' }));
+        svg.appendChild(el('circle', { cx: x(w), cy: y - 18, r: 3.5, class: Math.abs(w) > 1 ? 'f-dlq' : 'f-cross' }));
+        svg.appendChild(el('circle', { cx: x(q), cy: y, r: 4.5, class: q === 0 && w !== 0 ? 'f-dlq' : 'f-model' }));
+      });
+    });
+    svg.appendChild(el('text', { x: X0, y: 292, class: 'sm' }, 'Grey: original weight. Orange: what gets stored. Red: a weight rounded to 0, or the outlier.'));
+    const err = absSum ? errSum / absSum * 100 : 0;
+    const bitsEff = state.bits === 16 ? 16 : state.bits + 16 / 128;
+    const gb = p => (p * bitsEff / 8).toFixed(p * bitsEff / 8 < 10 ? 1 : 0);
+    out.textContent = 'Average error ' + err.toFixed(err < 1 ? 2 : 1) + '% of a typical weight' + (zeroed ? ', ' + zeroed + ' of 16 weights rounded to zero' : '') +
+      '. At this precision an 8B model is about ' + gb(8) + ' GB and a 70B model about ' + gb(70) + ' GB (with group scales of 128).';
+  }
+  root.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => { state.bits = +b.dataset.b; root.querySelectorAll('[data-b]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  root.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', () => { state.scale = b.dataset.s; root.querySelectorAll('[data-s]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  outlier.addEventListener('change', render);
+  render();
+})();
+</script>
+<script src="progress.js"></script>
+</body>
+</html>
