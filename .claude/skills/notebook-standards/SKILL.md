@@ -17,7 +17,7 @@ Find the home before writing:
 grep -ril "<subject words>" --include=*.html .
 ```
 
-Design content goes in `system-design/`, in the field-manual style of the [live System Design home](https://devlcodes.github.io/agentic-ai-notebook/system-design/index.html). Use the beginner notebooks at the repo root only when the owner asks for beginner material.
+Design content goes in `system-design/`, in the field-manual style of the [live System Design home](https://devlcodes.github.io/agentic-ai-notebook/system-design/index.html). Beginner material does not go here: it lives in DevLCodes/agentic-ai-beginner, and the root `*.html` files are only redirect stubs to it.
 
 | Content | Usually goes in |
 |---|---|
@@ -33,7 +33,6 @@ If nothing fits, ask the owner before you create a page. When a page is agreed, 
 ## 2. Match the section's style
 
 - **`system-design/` and `classic-system-design/` (the default):** dense and exact. Use `.note`, `.formula`, `.table`, `.related` and `svg.dg` with the fixed layer colours. No handwriting fonts or stickies.
-- **Root notebooks (only when asked):** friendly and step by step. Use `table.hand`, `.sticky` (`.pink`, `.blue`, `.mint`), `.box` and `<span class="hl">`. No web fonts, and no long tables of numbers; put that depth in `system-design/` and link to it.
 - Copy markup from a neighbouring element on the same page rather than writing new CSS.
 - Give any section you link to an `id`.
 
@@ -44,7 +43,6 @@ When you add or remove a term, a page or a quiz question, update every place tha
 - The glossary lead ("N terms used…") and the home card ("Browse N terms")
 - `STAGES` in `system-design/roadmap.html` and in the home page script, plus "/ N pages done"
 - The cards in `system-design/topics.html` or `designs.html`
-- The roadmap in the root `index.html`, for notebook pages
 
 ## 4. Run the check
 

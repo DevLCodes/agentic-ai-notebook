@@ -289,12 +289,12 @@
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
-<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a><a href="../index.html">Beginner notebook</a></nav></div></header>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
 <div class="wrap">
   <div class="page-head"><p class="crumbs"><a href="index.html">Home</a> / Topics</p><h1>Topics</h1>
   <p class="lead">Deep dives on the building blocks the designs use, grouped in the order a system is built.</p></div>
-  <ul class="jump" aria-label="Topic groups"><li><a href="#data-loading">Data loading<small>3</small></a></li><li><a href="#retrieval">Retrieval<small>6</small></a></li><li><a href="#architecture">Architecture<small>2</small></a></li><li><a href="#quality">Quality<small>3</small></a></li><li><a href="#governance">Governance<small>1</small></a></li><li><a href="#revision">Revision<small>4</small></a></li><li><a href="#concepts">Concept notebooks<small>13</small></a></li></ul>
+  <ul class="jump" aria-label="Topic groups"><li><a href="#data-loading">Data loading<small>3</small></a></li><li><a href="#retrieval">Retrieval<small>6</small></a></li><li><a href="#architecture">Architecture<small>2</small></a></li><li><a href="#quality">Quality<small>3</small></a></li><li><a href="#governance">Governance<small>1</small></a></li><li><a href="#revision">Revision<small>4</small></a></li></ul>
   <div class="page-body">
   <div class="group" id="data-loading"><h2 class="home-h">Data loading</h2>
   <ul class="grid"><li><a class="card" href="knowledge-base.html"><h3>Knowledge base</h3><p>Layers, parsing, chunking strategies, metadata and freshness.</p></a></li><li><a class="card" href="chunking.html"><h3>Chunking</h3><p>Strategies, size and overlap, keeping context. Hands-on lab and a 3D view.</p></a></li><li><a class="card" href="backfills.html"><h3>Backfills and re-indexing</h3><p>Loading 10M existing docs without starving live updates; re-embedding safely.</p></a></li></ul></div>
@@ -308,24 +308,6 @@
   <ul class="grid"><li><a class="card" href="access-control.html"><h3>Access control (ACL)</h3><p>Principals, mapping source permissions, where to enforce, freshness.</p></a></li></ul></div>
   <div class="group" id="revision"><h2 class="home-h">Revision</h2>
   <ul class="grid"><li><a class="card" href="fluency.html"><h3>AI fluency Q&amp;A</h3><p>Interview questions by topic with strong answers: retrieval, models, agents, evals, rollout, safety, cost and reliability.</p></a></li><li><a class="card" href="ml-basics.html"><h3>ML basics</h3><p>Supervised and unsupervised learning, scores and thresholds, trees, clustering, evaluation, cold start and drift.</p></a></li><li><a class="card" href="metrics.html"><h3>Metrics cheat sheet</h3><p>Every metric by stage, from ingestion to rollout and production, with example targets.</p></a></li><li><a class="card" href="numbers.html"><h3>Numbers cheat sheet</h3><p>Tokens per page, file and prompt, input and output prices, monthly cost estimates, classifier vs LLM cost, latency.</p></a></li></ul></div>
-  <div class="group" id="concepts"><h2 class="home-h">Concept notebooks</h2>
-  <p class="sub">Thirteen interactive notebooks, in learning order. <a href="../index.html">Open the roadmap</a> to see how they connect.</p>
-  <ul class="grid concepts">
-    <li><a class="card concept" href="../agentic-loop.html"><span class="num">01</span><h3>The Agentic Loop</h3><p>The engine everything runs on: perceive, reason, act, observe.</p></a></li>
-    <li><a class="card concept" href="../agent-patterns.html"><span class="num">02</span><h3>Agent Patterns</h3><p>RAG, ReAct, planner–executor, DAG, multi-agent, self-critique.</p></a></li>
-    <li><a class="card concept" href="../agentic-architecture.html"><span class="num">03</span><h3>Agentic Architecture</h3><p>Orchestration, subagents, gates, hooks and sessions.</p></a></li>
-    <li><a class="card concept" href="../tool-design-mcp.html"><span class="num">04</span><h3>Tool Design &amp; MCP</h3><p>Tool interfaces, structured errors, tool_choice and MCP servers.</p></a></li>
-    <li><a class="card concept" href="../frameworks.html"><span class="num">05</span><h3>Framework Utilisation</h3><p>CrewAI, Google ADK, LangGraph, LlamaIndex, Semantic Kernel, AutoGen.</p></a></li>
-    <li><a class="card concept" href="../testing-and-evals.html"><span class="num">06</span><h3>Testing &amp; Evals</h3><p>Unit and trajectory tests, LLM-as-judge, RAG metrics, DeepEval, RAGAS.</p></a></li>
-    <li><a class="card concept" href="../llm-observability.html"><span class="num">07</span><h3>LLM Observability</h3><p>Traces, cost and latency, production signals.</p></a></li>
-    <li><a class="card concept" href="../ai-governance.html"><span class="num">08</span><h3>AI Governance</h3><p>Prompt injection, OWASP LLM Top 10, EU AI Act, NIST, guardrails.</p></a></li>
-    <li><a class="card concept" href="../retrieval-weights.html"><span class="num">09</span><h3>Weights in Retrieval</h3><p>Hybrid fusion weights, RRF, field and recency boosts, tuning on labels.</p></a></li>
-    <li><a class="card concept" href="../reranking-cross-encoders.html"><span class="num">10</span><h3>Reranking with Cross-Encoders</h3><p>Bi- vs cross-encoders, retrieve-then-rerank, latency budgets.</p></a></li>
-    <li><a class="card concept" href="../citations.html"><span class="num">11</span><h3>Citations</h3><p>Cite every claim, verify it in code, citation precision and recall.</p></a></li>
-    <li><a class="card concept" href="../confidence-scoring.html"><span class="num">12</span><h3>Confidence Scoring</h3><p>Signals, calibration, and thresholds to answer, hedge or escalate.</p></a></li>
-    <li><a class="card concept" href="../open-weight-models.html"><span class="num">13</span><h3>Open-Weight Models</h3><p>Licences, VRAM math, quantization and self-hosting.</p></a></li>
-  </ul>
-  </div>
   </div>
 </div>
 </main>
@@ -334,7 +316,7 @@
     <div><a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="5" height="5" rx="1" fill="#fff"/><rect x="10" y="1" width="5" height="5" rx="1" fill="#fff" opacity=".6"/><rect x="5.5" y="10" width="5" height="5" rx="1" fill="#fff" opacity=".8"/><path d="M3.5 6v2.5h9V6M8 8.5V10" stroke="#fff" stroke-width="1.2" fill="none"/></svg></span>System Design</a><p class="about">Free, interactive system design notes for engineers building AI products: worked designs, deep dives and a roadmap. Part of the Agentic AI notebook.</p></div>
     <div><h4>Learn</h4><ul><li><a href="roadmap.html">Roadmap</a></li><li><a href="topics.html">Topics</a></li><li><a href="designs.html">Designs</a></li><li><a href="glossary.html">Glossary</a></li></ul></div>
     <div><h4>Foundations</h4><ul><li><a href="../classic-system-design/index.html">Classic system design</a></li><li><a href="../classic-system-design/numbers.html">Numbers to know</a></li><li><a href="numbers.html">AI numbers cheat sheet</a></li></ul></div>
-    <div><h4>Revise</h4><ul><li><a href="fluency.html">AI fluency Q&amp;A</a></li><li><a href="metrics.html">Metrics cheat sheet</a></li><li><a href="../index.html">Beginner notebook</a></li></ul></div>
+    <div><h4>Revise</h4><ul><li><a href="fluency.html">AI fluency Q&amp;A</a></li><li><a href="metrics.html">Metrics cheat sheet</a></li></ul></div>
   </div>
   <p class="foot-note">Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</p>
 </div></footer>
