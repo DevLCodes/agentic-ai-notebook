@@ -140,12 +140,39 @@ def check_system_design() -> None:
             fail(page, "not in the STAGES list of the home page progress card (index.html)")
         if f'href="{slug}.html"' not in hubs and slug != "glossary":
             fail(page, "no card on topics.html or designs.html")
+        if slug.endswith("-architecture") and "Topic · " not in text:
+            fail(page, "vendor architecture pages use the eyebrow 'Topic · <Vendor>'")
+    topics = (SD / "topics.html").read_text(encoding="utf-8")
+    for gid, label, n in re.findall(r'<a href="#([\w-]+)">([^<]+)<small>(\d+)</small></a>', topics):
+        m = re.search(rf'id="{gid}">.*?<ul class="grid">(.*?)</ul>', topics, re.S)
+        if m and len(re.findall(r'class="card"', m.group(1))) != int(n):
+            fail(SD / "topics.html", f"group chip '{label}' says {n}, the group has {len(re.findall('class=.card.', m.group(1)))} cards")
     total = len(on_roadmap)
     m = re.search(r"/ (\d+) pages done", home)
     if m and int(m.group(1)) != total:
         fail(SD / "index.html", f"progress card says {m.group(1)} pages, roadmap has {total}")
     if sorted(on_roadmap) != sorted(on_home):
         fail(SD / "index.html", "home STAGES and roadmap STAGES list different pages")
+
+
+NVIDIA_TERMS = re.compile(r"\b(NVIDIA|NIM|Triton|TensorRT(?:-LLM)?|CUDA|NeMo|H100|H200|A100|L40S|B200)\b")
+
+
+def check_vendor_placement() -> None:
+    """NVIDIA products belong on nvidia-architecture.html; neutral topics name them only in
+    their "In the real world" and "Related" sections."""
+    topics = re.findall(r'href="([\w-]+)\.html"', (SD / "topics.html").read_text(encoding="utf-8"))
+    for slug in set(topics):
+        page = SD / f"{slug}.html"
+        if slug.endswith("-architecture") or slug in SD_HUBS | {"glossary", "fluency", "numbers"} or not page.exists():
+            continue
+        text = page.read_text(encoding="utf-8")
+        body = text[text.find("<main>"):]
+        body = re.sub(r'<section id="(real-world|related)">.*?</section>', "", body, flags=re.S)
+        body = re.sub(r"<[^>]+>", " ", body)
+        found = sorted(set(NVIDIA_TERMS.findall(body)))
+        if found:
+            fail(page, f"NVIDIA terms outside 'In the real world': {', '.join(found)}; move them to nvidia-architecture.html")
 
 
 def check_glossary() -> None:
@@ -190,7 +217,8 @@ def check_new_pages(base: str, allow: bool) -> None:
         return
     new = sorted({f for f in out.split() if f.endswith(".html")})
     for f in new:
-        message = f"{f} is a new page. Extend an existing page instead, unless the owner agreed to a new one"
+        message = (f"{f} is a new page. Allowed only for a new <vendor>-architecture topic or a new vendor-neutral "
+                   "topic (SKILL.md section 1); rerun with --allow-new-page once it follows those rules")
         if allow:
             warnings.append(message)
         else:
@@ -225,6 +253,7 @@ def main() -> int:
         if path.parent == ROOT:
             check_beginner(path, text)
     check_system_design()
+    check_vendor_placement()
     check_glossary()
     check_new_pages(args.base, args.allow_new_page)
 
