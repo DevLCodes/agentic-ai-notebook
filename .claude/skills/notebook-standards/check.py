@@ -19,7 +19,7 @@ from urllib.parse import unquote, urlparse
 ROOT = Path(__file__).resolve().parents[3]
 SD = ROOT / "system-design"
 CLASSIC = ROOT / "classic-system-design"
-NAV = ["Home", "Designs", "Topics", "Roadmap", "Classic", "Glossary", "Beginner notebook"]
+NAV = ["Home", "Designs", "Topics", "Roadmap", "Classic", "Glossary"]
 ADVANCED_TOKENS = ["--bg: #e9ecef", "--paper: #f7f8f9", "--ink: #1c2530", "--accent: #4255d4",
                    "--c-serve: #d7932a", "--c-model: #e2674f", "--c-kb: #4d5fd8", "--c-ingest: #2a9d8f"]
 BEGINNER_TOKENS = ["--paper: #fdfbf3", "--ink: #1f3a93", "--hl: #ffe066"]
@@ -75,7 +75,8 @@ def parse(path: Path) -> Links:
 
 
 def pages() -> list[Path]:
-    return sorted(ROOT.glob("*.html")) + sorted(SD.glob("*.html")) + sorted(CLASSIC.glob("*.html"))
+    # Root *.html files are redirect stubs to the beginner repo (DevLCodes/agentic-ai-beginner); not checked.
+    return sorted(SD.glob("*.html")) + sorted(CLASSIC.glob("*.html"))
 
 
 def check_style(path: Path, text: str) -> None:
