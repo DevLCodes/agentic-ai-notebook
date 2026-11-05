@@ -288,13 +288,13 @@
   <div class="table"><table id="v-fit"></table></div>
   <p class="lab-out" id="v-out" aria-live="polite"></p>
 </div>
-<p class="muted" style="font-size:13.5px;color:var(--muted)">Estimates from published configs. Real usage varies with the runtime, paged-cache block size, activations and CUDA graphs; vLLM pre-allocates most free memory for the cache by default.</p></section>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Estimates from published configs. Real usage varies with the runtime, paged-cache block size, activations and graph capture; vLLM pre-allocates most free memory for the cache by default.</p></section>
 <section id="serving"><h2>Quantization and serving</h2>
 <p>Quantization stores each weight in fewer bits: a model 2–4× smaller and usually faster, for a small quality loss. Measure that loss on your own eval set, not a leaderboard; the drop tends to show first on long reasoning, maths and non-English text. See <a href="evals.html">evals</a>.</p>
 <div class="table"><table><thead><tr><th>Format</th><th>Runs on</th><th>Typical runtime</th></tr></thead><tbody>
 <tr><td>GGUF (Q8_0, Q5_K_M, Q4_K_M…)</td><td>CPU, Apple Silicon, consumer GPUs</td><td>llama.cpp, Ollama, LM Studio</td></tr>
-<tr><td>AWQ, GPTQ</td><td>NVIDIA and AMD GPUs</td><td>vLLM, SGLang, TGI</td></tr>
-<tr><td>FP8</td><td>Hopper and Blackwell (H100, B200)</td><td>vLLM, SGLang, TensorRT-LLM</td></tr>
+<tr><td>AWQ, GPTQ</td><td>Data-centre and consumer GPUs</td><td>vLLM, SGLang, TGI</td></tr>
+<tr><td>FP8</td><td>Recent data-centre GPUs with FP8 support</td><td>vLLM, SGLang, vendor runtimes</td></tr>
 <tr><td>MLX (4/8-bit)</td><td>Apple Silicon</td><td>mlx-lm, LM Studio</td></tr>
 </tbody></table></div>
 <h3>What a production server does</h3>
@@ -302,10 +302,10 @@
 <li><strong>Continuous batching</strong>: new requests join the running batch every step instead of waiting for it to finish, so the GPU stays busy.</li>
 <li><strong>Paged KV cache</strong> (PagedAttention): the cache lives in fixed-size blocks, so memory isn’t reserved for the longest possible answer.</li>
 <li><strong>Prefix caching</strong>: a shared system prompt is computed once and reused across requests.</li>
-<li><strong>Tensor parallelism</strong>: a model too big for one GPU is split across several in one node, with fast links (NVLink) between them.</li>
+<li><strong>Tensor parallelism</strong>: a model too big for one GPU is split across several in one node, with fast GPU-to-GPU links between them.</li>
 <li><strong>Speculative decoding</strong>: a small draft model proposes tokens that the big model verifies in one pass.</li>
 </ul>
-<p>Ollama or llama.cpp suit one developer. To serve many users, use vLLM or SGLang behind an OpenAI-compatible endpoint, so application code doesn’t change when you swap the model. Scale on queue depth and time to first token, not CPU.</p></section>
+<p>Ollama or llama.cpp suit one developer. To serve many users, use vLLM or SGLang behind an OpenAI-compatible endpoint, so application code doesn’t change when you swap the model. Scale on queue depth and time to first token, not CPU. For the serving internals in depth, see <a href="llm-serving.html">LLM serving</a> and <a href="nvidia-architecture.html">a vendor inference stack</a>.</p></section>
 <section id="route"><h2>API, hosted open-weight or your own GPUs</h2>
 <p>There are three routes, not two. Bedrock, Vertex AI Model Garden, Azure AI Foundry, Together, Fireworks and Groq run open-weight models for you and charge per token.</p>
 <div class="table"><table><thead><tr><th>Requirement</th><th>Closed API</th><th>Hosted open-weight</th><th>Self-hosted</th></tr></thead><tbody>
@@ -317,7 +317,7 @@
 <tr><td>Pinned version, no surprise deprecations</td><td>Until the model retires</td><td>Usually</td><td>Forever</td></tr>
 <tr><td>No GPU team or on-call</td><td>Yes</td><td>Yes</td><td>No</td></tr>
 </tbody></table></div>
-<div class="formula">break-even tokens/month ≈ GPU cost per month ÷ API price per token<br>e.g. one H100 at ~$2/h ≈ $1,460/month · at $0.60 per 1M tokens → ≈ 2.4B tokens/month</div>
+<div class="formula">break-even tokens/month ≈ GPU cost per month ÷ API price per token<br>e.g. one 80 GB data-centre GPU at ~$2/h ≈ $1,460/month · at $0.60 per 1M tokens → ≈ 2.4B tokens/month</div>
 <p>Below that volume, or with GPUs idle overnight, per-token pricing usually wins. Add the engineer time to run the fleet before you call self-hosting cheaper. Many teams mix routes: a closed model for hard reasoning, open models for the high-volume easy work, chosen per request by a <a href="routing.html">router</a>.</p></section>
 <section id="retrieval"><h2>Where open weights already win</h2>
 <p>The most common production use isn’t a chat model. It is the small models in the retrieval pipeline that every document passes through:</p>
@@ -356,7 +356,7 @@
 <tr><td>Retrieval models</td><td>BAAI bge and bge-reranker, intfloat e5, Nomic Embed, mixedbread mxbai, served with sentence-transformers, FastEmbed or TEI</td></tr>
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="routing.html">Routing</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="evals.html">Evals</a></li><li><a href="../classic-system-design/numbers.html">Numbers to know</a></li></ul></section></article>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="routing.html">Routing</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="evals.html">Evals</a></li><li><a href="../classic-system-design/numbers.html">Numbers to know</a></li></ul></section></article>
 </div>
 
 </main>
@@ -424,7 +424,7 @@ boot(D);
     { n: 'gpt-oss-120b (MoE)', p: 117, L: 36, kvh: 8, hd: 64, note: 'Fast like a ~5B model, sized like a 117B one. Native MXFP4 is about 63 GB.' }
   ];
   const CTX = [512, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
-  const HW = [['Laptop, 16 GB unified (~12 usable)', 12], ['RTX 4090, 24 GB', 24], ['H100, 80 GB', 80], ['Mac, 128 GB unified (~96 usable)', 96], ['2× H100, 160 GB', 160], ['8× H100, 640 GB', 640]];
+  const HW = [['Laptop, 16 GB unified (~12 usable)', 12], ['RTX 4090, 24 GB', 24], ['One 80 GB data-centre GPU', 80], ['Mac, 128 GB unified (~96 usable)', 96], ['2× 80 GB GPUs', 160], ['8× 80 GB GPUs (one server)', 640]];
   let mi = 2, bpp = 2;
   $('v-m').innerHTML = M.map((m, i) => `<button type="button" data-i="${i}" aria-pressed="${i === mi}">${m.n}</button>`).join('');
   const gb = (x) => x < 1 ? x.toFixed(2) + ' GB' : x < 10 ? x.toFixed(1) + ' GB' : Math.round(x) + ' GB';
