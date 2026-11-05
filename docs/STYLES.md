@@ -53,3 +53,4 @@ This site has two audiences, and each gets its own look. Keep them apart: a page
 2. Copy the `:root` tokens and base CSS from an existing page in that section (`agentic-loop.html` or `system-design/chunking.html`), not from memory.
 3. Beginner: end with a sticky-note quiz and add the page to the roadmap in `index.html`. Advanced: add `<script src="progress.js"></script>` before `</body>`, a card on `system-design/designs.html` or `topics.html`, and a node in the `STAGES` lists of `roadmap.html` and the home page progress card. Keep the shared site header (Home, Designs, Topics, Roadmap, Classic, Glossary, Beginner notebook) identical on every page.
 4. Check it at 390px wide: no horizontal scroll, 16px side gutter.
+5. Run `python3 .claude/skills/notebook-standards/check.py` and fix every failure. Before adding a page at all, see `.claude/skills/notebook-standards/SKILL.md`: new content extends an existing page by default.
