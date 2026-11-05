@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Open-Weight Models · Agentic System Designs</title>
+<meta name="description" content="Open-weight models for AI systems: weights vs open source, licences, VRAM and KV-cache sizing, quantization, serving with vLLM, and when to self-host.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+</style><style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+<link rel="stylesheet" href="../assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Open-Weight Models</h1><p class="lead">A model you can download is a file of numbers. Whoever holds it can run it inside their own network for as long as they like. You gain control over data, cost and versions, and you take on the serving, safety and evals an API provider used to do.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#weights">What the weights are</a></li><li><a href="#open">Open-weight is not open source</a></li><li><a href="#variants">Base, instruct, fine-tuned, distilled</a></li><li><a href="#memory">Will it fit? The memory maths</a></li><li><a href="#lab">Try it: size the GPU</a></li><li><a href="#serving">Quantization and serving</a></li><li><a href="#route">API, hosted open-weight or your own GPUs</a></li><li><a href="#retrieval">Where open weights already win</a></li><li><a href="#safety">Safety and supply chain</a></li><li><a href="#failures">Failure modes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="weights"><h2>What the weights are</h2>
+<p>Training adjusts billions of numbers until the model predicts text well. Those numbers are the <strong>weights</strong> (parameters). “Llama 3.1 8B” has about 8 billion of them; at 2 bytes each that is a 16 GB file.</p>
+<p>The file does nothing alone. A runtime (vLLM, SGLang, llama.cpp) loads it with the architecture config (layers, hidden size, attention heads) and the tokenizer, and does the maths. Those three pieces together are “the model” you deploy, and all three must match.</p>
+<figure class="fig3d" id="weights3d">
+    <div class="stage3d" role="img" aria-label="Weight files download from the Hugging Face Hub into the company network, are quantized from 16 GB to about 5 GB, and load onto a GPU server; the app sends a prompt with private context to that server and gets an answer without data leaving the network; by contrast, a call to a hosted API sends the prompt and data outside the fence"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The sections below cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. White slabs are weight files (bigger slab, bigger file), yellow spheres are prompts, the red sphere is a prompt that leaves your network.</figcaption>
+  </figure></section>
+<section id="open"><h2>Open-weight is not open source</h2>
+<p>“Open” covers three different things. The difference matters the day legal or security asks what you may do with the model.</p>
+<div class="table"><table><thead><tr><th></th><th>Closed / API-only</th><th>Open-weight</th><th>Open source (OSI)</th></tr></thead><tbody>
+<tr><td>Download the weights</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Training code and data details</td><td>No</td><td>Rarely</td><td>Yes</td></tr>
+<tr><td>Use terms</td><td>The provider’s API terms</td><td>A licence: Apache-2.0, MIT, or a custom one with conditions</td><td>An OSI-approved licence</td></tr>
+<tr><td>Examples</td><td>Claude, GPT-5, Gemini</td><td>Llama, Qwen, Mistral, Gemma, DeepSeek, gpt-oss, Phi</td><td>AI2 OLMo (data, code and checkpoints)</td></tr>
+</tbody></table></div>
+<p>The OSI Open Source AI Definition (v1.0, 2024) requires the parameters, the training code and enough information about the data to rebuild the model. By that bar most “open” models are open-weight.</p>
+<div class="note"><p><strong>Read the licence on the exact checkpoint.</strong> One vendor can ship different sizes under different terms. Custom licences can cap monthly active users, restrict using outputs to train other models, or require attribution. Record the licence next to the model version in your model registry, the same way you record a dependency’s licence.</p></div></section>
+<section id="variants"><h2>Base, instruct, fine-tuned, distilled</h2>
+<div class="table"><table><thead><tr><th>Variant</th><th>What it is</th><th>Use it for</th></tr></thead><tbody>
+<tr><td>Base</td><td>Pre-trained only: continues text, doesn’t follow instructions</td><td>A starting point for your own fine-tuning</td></tr>
+<tr><td>Instruct / chat</td><td>Base plus instruction tuning and preference training</td><td>Almost every app; the default download</td></tr>
+<tr><td>Fine-tuned (often LoRA)</td><td>Further trained on your task; a LoRA adapter is a small add-on file, often under 1% of the model</td><td>A narrow, repeated task: extraction, classification, a house style</td></tr>
+<tr><td>Distilled</td><td>A small model trained to imitate a large one (the DeepSeek-R1 distills into Qwen and Llama)</td><td>Most of the behaviour at a fraction of the memory</td></tr>
+</tbody></table></div>
+<p>Serving runtimes such as vLLM can load many LoRA adapters on one base model and pick one per request, so ten fine-tuned tasks cost one GPU, not ten.</p></section>
+<section id="memory"><h2>Will it fit? The memory maths</h2>
+<p>Three things share GPU memory: the <strong>weights</strong>, the <strong>KV cache</strong> (attention keys and values for every token of every active request), and runtime <strong>overhead</strong>.</p>
+<div class="formula">weights_GB ≈ params_B × bytes_per_param      BF16 2 · FP8/INT8 1 · 4-bit ≈ 0.55<br>kv_GB ≈ 2 × layers × kv_heads × head_dim × 2 bytes × context × batch / 1e9<br>total ≈ weights × 1.1 + kv + ~1 GB</div>
+<p>Teams size for the weights and forget the cache. Llama 3.1 8B keeps about 128 KB per token, so 32 users at 32k context need about 137 GB of cache, eight times the 16 GB of weights. Context length and concurrency are capacity decisions, not just product settings.</p>
+<div class="note"><p><strong>Mixture of experts: memory follows the total, speed follows the active.</strong> gpt-oss-120b has about 117B parameters but routes each token through about 5B. It runs at the speed of a ~5B model and needs the memory of a 117B one, because every expert must be loaded. It ships natively in 4-bit (MXFP4), about 63 GB, which is why it fits on one 80 GB GPU.</p></div></section>
+<section id="lab"><h2>Try it: size the GPU</h2>
+<p>Pick a model, a precision, a context length and how many requests run at once. The bar splits the memory, and the table shows which hardware holds it with 10% headroom.</p>
+<div class="lab" id="vlab">
+  <div class="lab-row"><span class="lab-k">Model</span><span class="seg" id="v-m" role="group" aria-label="Model"></span></div>
+  <div class="lab-row"><span class="lab-k">Precision</span><span class="seg" id="v-p" role="group" aria-label="Weight precision"><button type="button" data-v="2" aria-pressed="true">BF16</button><button type="button" data-v="1" aria-pressed="false">FP8 / INT8</button><button type="button" data-v="0.55" aria-pressed="false">4-bit</button></span></div>
+  <div class="lab-row"><label for="v-c">Context per request <input type="range" id="v-c" min="0" max="7" step="1" value="3"><output id="v-c-o"></output></label><label for="v-b">Concurrent requests <input type="range" id="v-b" min="1" max="64" step="1" value="8"><output id="v-b-o"></output></label></div>
+  <div class="bars" id="v-bars"></div>
+  <div class="metrics" id="v-mt"></div>
+  <div class="table"><table id="v-fit"></table></div>
+  <p class="lab-out" id="v-out" aria-live="polite"></p>
+</div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Estimates from published configs. Real usage varies with the runtime, paged-cache block size, activations and CUDA graphs; vLLM pre-allocates most free memory for the cache by default.</p></section>
+<section id="serving"><h2>Quantization and serving</h2>
+<p>Quantization stores each weight in fewer bits: a model 2–4× smaller and usually faster, for a small quality loss. Measure that loss on your own eval set, not a leaderboard; the drop tends to show first on long reasoning, maths and non-English text. See <a href="evals.html">evals</a>.</p>
+<div class="table"><table><thead><tr><th>Format</th><th>Runs on</th><th>Typical runtime</th></tr></thead><tbody>
+<tr><td>GGUF (Q8_0, Q5_K_M, Q4_K_M…)</td><td>CPU, Apple Silicon, consumer GPUs</td><td>llama.cpp, Ollama, LM Studio</td></tr>
+<tr><td>AWQ, GPTQ</td><td>NVIDIA and AMD GPUs</td><td>vLLM, SGLang, TGI</td></tr>
+<tr><td>FP8</td><td>Hopper and Blackwell (H100, B200)</td><td>vLLM, SGLang, TensorRT-LLM</td></tr>
+<tr><td>MLX (4/8-bit)</td><td>Apple Silicon</td><td>mlx-lm, LM Studio</td></tr>
+</tbody></table></div>
+<h3>What a production server does</h3>
+<ul class="plain">
+<li><strong>Continuous batching</strong>: new requests join the running batch every step instead of waiting for it to finish, so the GPU stays busy.</li>
+<li><strong>Paged KV cache</strong> (PagedAttention): the cache lives in fixed-size blocks, so memory isn’t reserved for the longest possible answer.</li>
+<li><strong>Prefix caching</strong>: a shared system prompt is computed once and reused across requests.</li>
+<li><strong>Tensor parallelism</strong>: a model too big for one GPU is split across several in one node, with fast links (NVLink) between them.</li>
+<li><strong>Speculative decoding</strong>: a small draft model proposes tokens that the big model verifies in one pass.</li>
+</ul>
+<p>Ollama or llama.cpp suit one developer. To serve many users, use vLLM or SGLang behind an OpenAI-compatible endpoint, so application code doesn’t change when you swap the model. Scale on queue depth and time to first token, not CPU.</p></section>
+<section id="route"><h2>API, hosted open-weight or your own GPUs</h2>
+<p>There are three routes, not two. Bedrock, Vertex AI Model Garden, Azure AI Foundry, Together, Fireworks and Groq run open-weight models for you and charge per token.</p>
+<div class="table"><table><thead><tr><th>Requirement</th><th>Closed API</th><th>Hosted open-weight</th><th>Self-hosted</th></tr></thead><tbody>
+<tr><td>Best reasoning on the hardest tasks</td><td>Best</td><td>Behind</td><td>Behind</td></tr>
+<tr><td>Low or spiky volume</td><td>Good</td><td>Good</td><td>Poor: idle GPUs still cost</td></tr>
+<tr><td>Data must stay in our VPC or on-prem</td><td>Only with private deployments</td><td>Depends on the region and contract</td><td>Yes</td></tr>
+<tr><td>Air-gapped, no internet at run time</td><td>No</td><td>No</td><td>Only option</td></tr>
+<tr><td>Fine-tune on our data</td><td>Provider fine-tuning APIs</td><td>Often LoRA uploads</td><td>Full control</td></tr>
+<tr><td>Pinned version, no surprise deprecations</td><td>Until the model retires</td><td>Usually</td><td>Forever</td></tr>
+<tr><td>No GPU team or on-call</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+</tbody></table></div>
+<div class="formula">break-even tokens/month ≈ GPU cost per month ÷ API price per token<br>e.g. one H100 at ~$2/h ≈ $1,460/month · at $0.60 per 1M tokens → ≈ 2.4B tokens/month</div>
+<p>Below that volume, or with GPUs idle overnight, per-token pricing usually wins. Add the engineer time to run the fleet before you call self-hosting cheaper. Many teams mix routes: a closed model for hard reasoning, open models for the high-volume easy work, chosen per request by a <a href="routing.html">router</a>.</p></section>
+<section id="retrieval"><h2>Where open weights already win</h2>
+<p>The most common production use isn’t a chat model. It is the small models in the retrieval pipeline that every document passes through:</p>
+<ul class="plain">
+<li><strong>Embedding models</strong> such as bge, e5, nomic-embed: a few hundred MB, fast on a CPU. See <a href="embeddings.html">embeddings</a>.</li>
+<li><strong>Cross-encoder rerankers</strong> such as bge-reranker. See <a href="reranking.html">reranking</a>.</li>
+<li><strong>Small classifiers and routers</strong>. See <a href="routing.html">routing</a>.</li>
+</ul>
+<p>At that volume per-token pricing adds up, and owning the embedding model has one more benefit: the vectors in your index never change underneath you because a provider retired a version. <a href="finsight.html">FinSight</a> embeds 50,000 10-K chunks with bge-small-en-v1.5 (33M parameters, 384 dimensions) on a laptop CPU.</p></section>
+<section id="safety"><h2>Safety and supply chain</h2>
+<p>Released weights can’t be recalled or patched. If a jailbreak is found, the fix is your guardrails, not a provider update.</p>
+<ul class="plain">
+<li>Read the model card: intended use, known limits, the safety evals the vendor ran.</li>
+<li>Load <code>.safetensors</code>, not pickled <code>.bin</code> or <code>.pt</code> files from strangers; unpickling can run arbitrary code. Never set <code>trust_remote_code</code> on a repo you haven’t reviewed.</li>
+<li>Pin the exact revision (commit hash) you evaluated, mirror it into your own artifact store, and checksum it.</li>
+<li>Add input and output guardrails and log usage exactly as you would for an API.</li>
+</ul></section>
+<section id="failures"><h2>Failure modes</h2>
+<div class="table"><table><thead><tr><th>Failure</th><th>What happens</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Sized for weights only</td><td>Out-of-memory or requests queued once context and users grow</td><td>Budget the KV cache: context × concurrency</td></tr>
+<tr><td>MoE sized by active params</td><td>The model won’t load</td><td>Memory follows total parameters</td></tr>
+<tr><td>“Apache on one size, so all sizes”</td><td>A licence breach found in a legal review</td><td>Check each checkpoint; record it in the registry</td></tr>
+<tr><td>Quantized without evals</td><td>Quiet quality drop on the hard tail</td><td>Run your eval set per precision</td></tr>
+<tr><td>Wrong chat template</td><td>Rambling, role confusion, ignored system prompt</td><td>Use the tokenizer’s own template</td></tr>
+<tr><td>Idle GPUs</td><td>Self-hosting costs more than the API it replaced</td><td>Autoscale, share across tasks, or use hosted open-weight</td></tr>
+</tbody></table></div></section>
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>“I’d start on a closed API to prove the product, and move a workload to open weights only for a reason: data that can’t leave the VPC, volume past the break-even, or a narrow task where a fine-tuned 8B model matches the big one on my evals. For sizing, weights are params times bytes, and the KV cache is 2 × layers × KV heads × head dim × 2 bytes per token, times context and concurrency, which often dominates. I’d serve with vLLM behind an OpenAI-compatible endpoint, pin and checksum the exact revision, check the licence per checkpoint, and gate every model or quantization change on the same eval set.”</p></div></section>
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th></tr></thead><tbody>
+<tr><td>Finding models</td><td>Hugging Face Hub (model cards, licences, GGUF and AWQ conversions), Ollama library, Kaggle Models</td></tr>
+<tr><td>Model families</td><td>Meta Llama, Alibaba Qwen, Mistral and Mixtral, Google Gemma, DeepSeek, OpenAI gpt-oss, Microsoft Phi, AI2 OLMo</td></tr>
+<tr><td>Serving</td><td>Ollama, llama.cpp, LM Studio and mlx-lm locally; vLLM, SGLang, Hugging Face TGI, NVIDIA TensorRT-LLM / NIM in production</td></tr>
+<tr><td>Hosted open-weight</td><td>Amazon Bedrock, Vertex AI Model Garden, Azure AI Foundry, Together AI, Fireworks AI, Groq</td></tr>
+<tr><td>Fine-tuning</td><td>Hugging Face PEFT (LoRA, QLoRA), Unsloth, Axolotl, TRL, provider fine-tuning APIs</td></tr>
+<tr><td>Retrieval models</td><td>BAAI bge and bge-reranker, intfloat e5, Nomic Embed, mixedbread mxbai, served with sentence-transformers, FastEmbed or TEI</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="routing.html">Routing</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="evals.html">Evals</a></li><li><a href="../classic-system-design/numbers.html">Numbers to know</a></li></ul></section></article>
+</div>
+
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from '../assets/scene3d.js';
+const D = {};
+D.weights3d = {
+  loop: 13.5,
+  view: { target: [0, 0, 0.2], w: 24, d: 15, el: 52 },
+  steps: [
+    { t: 0.0, text: 'The Hugging Face Hub hosts the weight files: Llama 3.1 8B Instruct in BF16 is four safetensors shards, about 16 GB. You download them once, into your own network.' },
+    { t: 2.2, text: 'Quantize to 4-bit (GGUF Q4_K_M or AWQ). The file shrinks to about 5 GB, small enough for one consumer GPU, with a small quality loss your evals should measure.' },
+    { t: 4.0, text: 'A FinSight question arrives. The app retrieves 10-K chunks from your private store and builds the prompt.' },
+    { t: 5.0, text: 'The prompt and the private context go to your own GPU server (vLLM or Ollama), and the answer comes back. Nothing crossed the fence.' },
+    { t: 8.0, text: 'The contrast: with a hosted closed API, the same prompt and the same private chunks leave your network, under the provider’s terms and retention.' },
+    { t: 11.0, text: 'The trade-off: inside the fence you own the GPUs, upgrades, guardrails and evals. Outside it, the provider does, and you get the strongest models with no servers.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, rb } = c;
+    const fx0 = -5.4, fx1 = 6.2, fz0 = -5.2, fz1 = 5.2, fc = 0xc9a86a;
+    for (const [x, z, w, d] of [[(fx0 + fx1) / 2, fz0, fx1 - fx0, 0.14], [(fx0 + fx1) / 2, fz1, fx1 - fx0, 0.14], [fx0, 0, 0.14, fz1 - fz0], [fx1, 0, 0.14, fz1 - fz0]]) {
+      const m = rb(w, 0.45, d, fc, { r: 0.04, cast: false }); m.position.set(x, 0.225, z); c.scene.add(m);
+    }
+    c.note('<b>Your network</b> · on-prem or your VPC', 0.4, fz1 + 0.8);
+    const hub = c.obj(c.SHAPES.database(0xffc94d, { r: 1.1 }), -9.6, -2.4, 'Hugging Face Hub', 'safetensors · GGUF · model cards');
+    const q = c.obj(c.SHAPES.server({ color: 0x4a3f6b, emi: C.model }), -2.6, -2.4, 'Quantize', 'BF16 16 GB → 4-bit ~5 GB');
+    const gpu = c.obj(c.SHAPES.server({ w: 1.6, h: 2.1, color: 0x2f3b48, emi: C.ok }), 3.0, -2.4, 'Your GPU server', 'vLLM · Ollama · llama.cpp');
+    const data = c.obj(c.SHAPES.database(C.kb, { r: 1.0 }), -2.6, 2.8, 'Private data', '10-K chunks · contracts');
+    const app = c.obj('browser', 3.0, 2.8, 'Your app', 'FinSight agent');
+    const api = c.obj('modelGem', 9.8, 0.4, 'Hosted closed API', 'outside your network');
+    c.lane([V(-9.6, -2.4), V(-2.6, -2.4), V(3.0, -2.4)]);
+    c.lane([V(-2.6, 2.8), V(3.0, 2.8), V(3.0, -2.4)]);
+    c.lane([V(3.0, 2.8), V(5.0, 2.8), V(5.0, 0.4), V(9.8, 0.4)]);
+    c.packet({ pts: arc(c.top(hub, 0), c.top(q, 0), 2.6), t0: 0.3, t1: 1.9, kind: 'doc', s: 2.4, from: hub, to: q, label: 'Llama 3.1 8B · BF16 · 16 GB' });
+    c.packet({ pts: [V(-2.6, -2.4, 1.2), V(3.0, -2.4, 1.2)], t0: 2.4, t1: 3.5, kind: 'doc', s: 1.0, from: q, to: gpu, label: '4-bit · ~5 GB' });
+    c.packet({ pts: [V(-2.6, 2.8), V(3.0, 2.8)], t0: 4.1, t1: 4.8, kind: 'chunk', n: 3, to: app, label: 'retrieved chunks' });
+    c.packet({ pts: [V(3.0, 2.8), V(3.0, -2.4)], t0: 5.0, t1: 5.9, kind: 'ask', from: app, to: gpu, label: 'prompt + private context' });
+    c.packet({ pts: [V(3.0, -2.4), V(3.0, 2.8)], t0: 6.3, t1: 7.2, kind: 'doc', color: P.ans, from: gpu, to: app, label: 'answer · stayed inside' });
+    c.packet({ pts: [V(3.0, 2.8), V(5.0, 2.8), V(5.0, 0.4), V(9.8, 0.4)], t0: 8.2, t1: 9.6, kind: 'ask', color: P.bad, from: app, to: api, label: 'prompt + data leave the network' });
+    c.packet({ pts: [V(9.8, 0.4), V(5.0, 0.4), V(5.0, 2.8), V(3.0, 2.8)], t0: 9.9, t1: 10.9, kind: 'doc', color: P.ans, to: app, label: 'answer' });
+    c.pulse(gpu, 11.2); c.pulse(api, 11.2);
+  },
+};
+boot(D);
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const M = [
+    { n: 'bge-small (embed)', p: 0.033, L: 0, kvh: 0, hd: 0, note: 'An encoder: no generation, so no KV cache. It runs comfortably on a CPU.' },
+    { n: 'gpt-oss-20b (MoE)', p: 21, L: 24, kvh: 8, hd: 64, note: 'MoE: memory counts all ~21B parameters, though only ~3.6B are active per token. It ships natively in about 4-bit (MXFP4).' },
+    { n: 'Llama 3.1 8B', p: 8, L: 32, kvh: 8, hd: 128, note: 'Grouped-query attention (8 KV heads, not 32) keeps the cache at about 128 KB per token.' },
+    { n: 'Phi-4 14B', p: 14.7, L: 40, kvh: 10, hd: 128, note: 'A strong small model under the MIT licence.' },
+    { n: 'Qwen3 32B', p: 32.8, L: 64, kvh: 8, hd: 128, note: 'A common “largest that fits one GPU” choice at 4-bit.' },
+    { n: 'Llama 3.3 70B', p: 70.6, L: 80, kvh: 8, hd: 128, note: 'At BF16 it needs two 80 GB GPUs with tensor parallelism; at 4-bit it fits one.' },
+    { n: 'gpt-oss-120b (MoE)', p: 117, L: 36, kvh: 8, hd: 64, note: 'Fast like a ~5B model, sized like a 117B one. Native MXFP4 is about 63 GB.' }
+  ];
+  const CTX = [512, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
+  const HW = [['Laptop, 16 GB unified (~12 usable)', 12], ['RTX 4090, 24 GB', 24], ['H100, 80 GB', 80], ['Mac, 128 GB unified (~96 usable)', 96], ['2× H100, 160 GB', 160], ['8× H100, 640 GB', 640]];
+  let mi = 2, bpp = 2;
+  $('v-m').innerHTML = M.map((m, i) => `<button type="button" data-i="${i}" aria-pressed="${i === mi}">${m.n}</button>`).join('');
+  const gb = (x) => x < 1 ? x.toFixed(2) + ' GB' : x < 10 ? x.toFixed(1) + ' GB' : Math.round(x) + ' GB';
+  function render() {
+    const m = M[mi], ctx = CTX[+$('v-c').value], batch = +$('v-b').value;
+    const w = m.p * bpp, kv = 2 * m.L * m.kvh * m.hd * 2 * ctx * batch / 1e9, o = w * 0.1 + (m.p < 1 ? 0.2 : 1), t = w + kv + o;
+    $('v-c-o').textContent = ctx.toLocaleString('en-US') + ' tokens';
+    $('v-b-o').textContent = batch;
+    const row = (l, v, c) => `<div class="bar-row"><span>${l}</span><span class="bar" aria-hidden="true"><i style="width:${Math.max(1, v / t * 100).toFixed(1)}%;background:${c}"></i></span><span class="v">${Math.round(v / t * 100)}%</span></div>`;
+    $('v-bars').innerHTML = row('weights', w, 'var(--c-kb)') + row('KV cache', kv, 'var(--c-serve)') + row('overhead', o, 'var(--c-cross)');
+    const perTok = m.L ? Math.round(2 * m.L * m.kvh * m.hd * 2 / 1024) : 0;
+    $('v-mt').innerHTML = `<div class="metric"><span class="n">≈ ${gb(t)}</span><span class="l">total memory</span></div><div class="metric"><span class="n">${gb(w)}</span><span class="l">weights</span></div><div class="metric"><span class="n">${gb(kv)}</span><span class="l">KV cache</span>${m.L ? `<small>${perTok} KB per token</small>` : ''}</div>`;
+    const fits = HW.map(([h, cap]) => { const r = t / cap; return [h, r <= 0.9 ? 'fits' : r <= 1 ? 'tight' : 'too big']; });
+    $('v-fit').innerHTML = '<thead><tr><th>Hardware</th><th>Fits?</th></tr></thead><tbody>' + fits.map(([h, f]) => `<tr><td>${h}</td><td style="color:${f === 'fits' ? 'var(--c-ok)' : f === 'tight' ? 'var(--c-serve)' : 'var(--c-dlq)'};font-weight:600;white-space:nowrap">${f === 'fits' ? '✓ fits' : f === 'tight' ? '~ tight' : '✗ too big'}</td></tr>`).join('') + '</tbody>';
+    const first = fits.find((f) => f[1] === 'fits');
+    let msg = m.note + ' ';
+    msg += first ? `Smallest option with headroom: ${first[0]}.` : 'Nothing on this list holds it: quantize, cut context or concurrency, or shard across more GPUs.';
+    if (kv > w) msg += ` The KV cache (${gb(kv)}) is bigger than the weights: context × concurrency is now the sizing problem, not the model.`;
+    $('v-out').textContent = msg;
+  }
+  $('v-m').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; mi = +b.dataset.i; $('v-m').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); render(); });
+  $('v-p').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; bpp = +b.dataset.v; $('v-p').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); render(); });
+  ['v-c', 'v-b'].forEach((id) => $(id).addEventListener('input', render));
+  render();
+})();
+
+</script>
+<script src="progress.js"></script>
+</body>
+</html>
