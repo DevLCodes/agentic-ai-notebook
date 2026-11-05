@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weights in Retrieval · Agentic System Designs</title>
+<meta name="description" content="Hybrid retrieval weights: weighted sums, normalisation, reciprocal rank fusion, boosts, recency decay, filters and tuning on a labelled set.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+</style><style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+<link rel="stylesheet" href="../assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · retrieval</p><h1>Weights in Retrieval</h1><p class="lead">Every retriever turns a query into one number per document and sorts. That number is a weighted sum of signals, and the weights decide what “relevant” means.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#sum">A score is a weighted sum</a></li><li><a href="#scales">Scales and normalisation</a></li><li><a href="#rrf">Fuse ranks: RRF</a></li><li><a href="#lab">Try it: fuse two retrievers</a></li><li><a href="#boosts">Boosts, decay and filters</a></li><li><a href="#tuning">Choosing the weights</a></li><li><a href="#failures">Failure modes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="sum"><h2>A score is a weighted sum</h2>
+<p class="lead">Keyword match, meaning match, freshness, field and business rules each give one number per document. You tune only the weights.</p>
+<div class="formula">score(d) = w₁·bm25(d) + w₂·dense(d) + w₃·recency(d) + w₄·field(d) + w₅·business(d)</div>
+<p>In hybrid search the first two terms are usually one knob: <code>alpha·dense + (1 − alpha)·bm25</code>. With alpha = 1 the search is pure vector search, and with alpha = 0 it is pure keyword search.</p>
+<div class="table"><table><thead><tr><th>Signal</th><th>Range</th><th>Good at</th></tr></thead><tbody>
+<tr><td>BM25 (keyword)</td><td>0 to unbounded; depends on query length and corpus</td><td>Exact IDs, tickers, accession numbers, rare terms (<a href="search-types.html">search types</a>)</td></tr>
+<tr><td>Dense cosine</td><td>−1 to 1, in practice a narrow band such as 0.6–0.9</td><td>Paraphrase: “how profitable” finds “operating income” (<a href="embeddings.html">embeddings</a>)</td></tr>
+<tr><td>Recency</td><td>0–1 after a decay function</td><td>“Latest guidance”, policies, prices</td></tr>
+<tr><td>Field / metadata</td><td>A multiplier or an additive bonus</td><td>Title or section-header matches, the right form type</td></tr>
+<tr><td>Business</td><td>A small named bonus</td><td>“Prefer the help-centre article over the forum post”</td></tr>
+</tbody></table></div>
+<figure class="fig3d" id="weights3d">
+    <div class="stage3d" role="img" aria-label="A question about Apple's FY2023 operating margin goes to a BM25 keyword index and a vector index; each returns a ranked list; a fusion scale weighs them with alpha, adds a recency boost, and sends one fused top-k list on to the reranker"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The figures and lab on this page cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Yellow is the query, teal cubes are BM25 hits, purple shapes are vector hits, white sheets are the fused list.</figcaption>
+  </figure></section>
+<section id="scales"><h2>Scales and normalisation</h2>
+<p>You can’t add numbers on different scales. A BM25 score of 18 next to a cosine of 0.84 means BM25 wins every sum unless you normalise first.</p>
+<figure class="fig"><svg viewBox="0 0 722 200" class="dg" role="img" aria-label="Raw BM25 scores span 0 to 24 while cosine spans 0.58 to 0.86; after min-max both lists span 0 to 1"><text x="10" y="18" class="b">Raw</text><text x="380" y="18" class="b">After min-max, per list</text>
+<text x="10" y="48" class="small">BM25</text><line x1="70" y1="44" x2="340" y2="44" class="wire"/><circle cx="70" cy="44" r="5" class="f-serve"/><circle cx="129" cy="44" r="5" class="f-serve"/><circle cx="160" cy="44" r="5" class="f-serve"/><circle cx="270" cy="44" r="5" class="f-serve"/><circle cx="324" cy="44" r="5" class="f-serve"/><text x="70" y="66" class="sm">0</text><text x="316" y="66" class="sm">24</text>
+<text x="10" y="108" class="small">cosine</text><line x1="70" y1="104" x2="340" y2="104" class="wire"/><circle cx="85" cy="104" r="5" class="f-kb"/><circle cx="88" cy="104" r="5" class="f-kb"/><circle cx="91" cy="104" r="5" class="f-kb"/><circle cx="93" cy="104" r="5" class="f-kb"/><circle cx="94" cy="104" r="5" class="f-kb"/><text x="70" y="126" class="sm">0</text><text x="76" y="140" class="sm">all of it squeezed into 0.58–0.86</text>
+<text x="380" y="48" class="small">BM25</text><line x1="440" y1="44" x2="710" y2="44" class="wire"/><circle cx="440" cy="44" r="5" class="f-serve"/><circle cx="508" cy="44" r="5" class="f-serve"/><circle cx="545" cy="44" r="5" class="f-serve"/><circle cx="672" cy="44" r="5" class="f-serve"/><circle cx="710" cy="44" r="5" class="f-serve"/>
+<text x="380" y="108" class="small">cosine</text><line x1="440" y1="104" x2="710" y2="104" class="wire"/><circle cx="440" cy="104" r="5" class="f-kb"/><circle cx="530" cy="104" r="5" class="f-kb"/><circle cx="604" cy="104" r="5" class="f-kb"/><circle cx="672" cy="104" r="5" class="f-kb"/><circle cx="710" cy="104" r="5" class="f-kb"/><text x="440" y="126" class="sm">0</text><text x="702" y="126" class="sm">1</text>
+<text x="10" y="180" class="sm">Illustrative. Min-max spreads each list over 0–1, so a weight of 0.5 now means half and half.</text></svg></figure>
+<div class="table"><table><thead><tr><th>Method</th><th>How</th><th>Watch out for</th></tr></thead><tbody>
+<tr><td>Min-max</td><td>(s − min) / (max − min), per query, per list</td><td>One outlier squashes the rest; a list of near-ties gets stretched to 0–1</td></tr>
+<tr><td>Z-score</td><td>(s − mean) / std, per query, per list</td><td>Unbounded; needs enough results for a stable mean</td></tr>
+<tr><td>Distribution-based (DBSF)</td><td>Clip at mean ± 3 std, then rescale</td><td>Same idea as z-score with fixed bounds; Qdrant ships it</td></tr>
+<tr><td>Rank fusion (RRF)</td><td>Ignore scores and use ranks</td><td>Loses how much better #1 is than #2</td></tr>
+</tbody></table></div></section>
+<section id="rrf"><h2>Fuse ranks: RRF</h2>
+<p>Reciprocal Rank Fusion ignores raw scores and uses only each document’s rank in each list. No normalisation is needed, which is why most engines ship it as the default hybrid mode.</p>
+<div class="formula">RRF(d) = Σᵢ wᵢ / (k + rankᵢ(d))      k = 60 by default (Cormack et al., 2009)</div>
+<div class="table"><table><thead><tr><th>Rank</th><th class="num">k = 1</th><th class="num">k = 60</th><th class="num">Ratio to rank 1 (k = 60)</th></tr></thead><tbody>
+<tr><td>1</td><td class="num">0.500</td><td class="num">0.0164</td><td class="num">100%</td></tr>
+<tr><td>2</td><td class="num">0.333</td><td class="num">0.0161</td><td class="num">98%</td></tr>
+<tr><td>5</td><td class="num">0.167</td><td class="num">0.0154</td><td class="num">94%</td></tr>
+<tr><td>20</td><td class="num">0.048</td><td class="num">0.0125</td><td class="num">76%</td></tr>
+</tbody></table></div>
+<p>A small k makes the #1 slot in either list dominate. A large k flattens the curve, so documents that do well in both lists win. Weighted RRF adds a weight per list: the same idea as alpha, applied to ranks.</p></section>
+<section id="lab"><h2>Try it: fuse two retrievers</h2>
+<p>Query: <code>Apple operating income 0000320193-23-000106</code>. The last part is the accession number of Apple’s FY2023 10-K, an exact ID that embeddings handle poorly. Six candidates, graded 3 (answers it) to 0 (lookalike). The metric is NDCG@3.</p>
+<div class="lab" id="wlab">
+  <div class="lab-row"><span class="lab-k">Fusion</span><span class="seg" id="w-mode" role="group" aria-label="Fusion method"><button type="button" data-v="raw" aria-pressed="false">Raw sum</button><button type="button" data-v="minmax" aria-pressed="true">Min-max</button><button type="button" data-v="z" aria-pressed="false">Z-score</button><button type="button" data-v="rrf" aria-pressed="false">RRF</button></span></div>
+  <div class="lab-row"><label for="w-a">alpha (dense weight) <input type="range" id="w-a" min="0" max="1" step="0.05" value="0.5"><output id="w-a-o"></output></label><label for="w-k">RRF k <input type="range" id="w-k" min="1" max="100" step="1" value="60"><output id="w-k-o"></output></label></div>
+  <div class="bars" id="w-bars"></div>
+  <div class="metrics" id="w-m"></div>
+  <p class="lab-out" id="w-out" aria-live="polite"></p>
+</div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Scores are illustrative; the filing figures are real. In RRF mode alpha weights the dense list and 1 − alpha the BM25 list.</p></section>
+<section id="boosts"><h2>Boosts, decay and filters</h2>
+<h3>Field boosts</h3>
+<p>A match in the title or a section header says more than a match in a footnote. Keyword engines let you weight fields, as in <code>title^3 section^2 body</code>. For a 10-K, a hit in “Item 7. Management’s Discussion and Analysis” is worth more than one in the exhibit index.</p>
+<h3>Recency decay</h3>
+<div class="formula">recency = 0.5^(age / half_life)      score = (1 − w)·relevance + w·recency</div>
+<p>With a 90-day half-life, a 90-day-old filing gets 0.5 and a 180-day-old one gets 0.25. Pick the half-life per content type: prices decay in days, policies in months, filings in a year.</p>
+<h3>Business boosts</h3>
+<p>“Promote our own research notes” is legitimate, but it quietly overrules relevance. Keep business boosts small and named, log them on every result, and measure them with the same eval as everything else. Otherwise nobody can explain why result #1 is #1.</p>
+<h3>Filter or boost?</h3>
+<div class="note"><p><strong>Filters remove, boosts reorder.</strong> Use a filter when the question pins a value (<code>WHERE fiscal_year = 2023</code>, ticker, tenant). Use a boost for a preference (“newer is usually better”). Permissions are always filters, never boosts: see <a href="access-control.html">access control</a>.</p></div></section>
+<section id="tuning"><h2>Choosing the weights</h2>
+<p>Weights are hyperparameters. Picking alpha by trying three queries and eyeballing the results ships a search that is great on the demo and worse everywhere else. The repeatable way is a grid search on a labelled set.</p>
+<ol class="plain">
+<li><strong>Label</strong> 100–300 real queries with graded relevance (2 answers it, 1 related, 0 not), covering each query type: exact IDs, paraphrases, mixed.</li>
+<li><strong>Sweep</strong> alpha from 0 to 1 in steps of 0.1 (or k and the list weights for RRF), and compute NDCG@10 or recall@k for each value. See <a href="evals.html">evals</a>.</li>
+<li><strong>Hold out</strong> a test split. Tune on one half and report on the other, or the score flatters you.</li>
+<li><strong>Re-tune after any signal changes.</strong> A new embedding model, chunker or BM25 analyser moves score distributions, and yesterday’s best alpha may now be wrong.</li>
+<li><strong>Split by query type</strong> if the best values differ. ID lookups want low alpha, open questions want high alpha, and a <a href="routing.html">router</a> can pick the profile.</li>
+</ol>
+<p>Past a handful of signals, hand-tuned weights stop scaling. <strong>Learning to rank</strong> (LTR) trains a model, often LambdaMART gradient-boosted trees, on the same labelled pairs to learn the weights and their interactions. A cross-encoder <a href="reranking.html">reranker</a> goes one step further and reads the query and document together.</p></section>
+<section id="failures"><h2>Failure modes</h2>
+<ul class="plain">
+<li><strong>Raw BM25 plus cosine.</strong> BM25 silently wins every query because its scale is larger.</li>
+<li><strong>Alpha tuned on five demo queries.</strong> It overfits the demo; measure on a labelled set with a held-out split.</li>
+<li><strong>Recency as a filter.</strong> Last year’s 10-K vanishes exactly when it is the only answer.</li>
+<li><strong>Unlogged business boosts.</strong> Nobody can explain the ranking, and evals don’t see them.</li>
+<li><strong>The same weights after swapping the embedding model.</strong> The new cosine distribution needs a new alpha.</li>
+</ul></section>
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>“I’d run BM25 and dense retrieval in parallel and fuse them with RRF at k = 60 as the default, because it needs no score calibration. If we need finer control I’d switch to linear fusion with per-list min-max normalisation and tune alpha on a labelled set of a few hundred queries, split by query type, using NDCG@10 on a held-out half. Recency is a soft decay with a half-life per content type, permissions are hard filters, and every boost is named and logged. Any change to the embedder or analyser triggers a re-tune.”</p></div></section>
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Hybrid with RRF or linear fusion</td><td>Elasticsearch <code>rrf</code> and <code>linear</code> retrievers; OpenSearch hybrid query with a normalization processor (min_max or l2) or RRF</td><td>Linear modes normalise per list first</td></tr>
+<tr><td>One alpha knob</td><td>Weaviate hybrid <code>alpha</code> with relativeScoreFusion or rankedFusion; Pinecone sparse-dense vectors scaled by alpha</td><td>0 = keyword, 1 = vector</td></tr>
+<tr><td>Fusion in a vector DB</td><td>Qdrant Query API prefetch with <code>rrf</code> or <code>dbsf</code></td><td>DBSF is distribution-based score fusion</td></tr>
+<tr><td>Rank expressions</td><td>Vespa rank profiles (bm25, closeness, freshness, two-phase ranking); Azure AI Search scoring profiles and per-query vector weight</td><td>Full control, more to maintain</td></tr>
+<tr><td>By hand in Postgres</td><td>pgvector <code>&lt;=&gt;</code> plus tsvector/ts_rank, fused with RRF in SQL</td><td>Two CTEs, 1.0/(60 + rank), summed</td></tr>
+<tr><td>Learning to rank</td><td>Elasticsearch LTR, OpenSearch LTR plugin, Solr LTR, LambdaMART in LightGBM or XGBoost</td><td>Needs a labelled set and feature logging</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="search-types.html">Search types</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#rrf">Glossary: RRF</a></li></ul></section></article>
+</div>
+
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from '../assets/scene3d.js';
+const D = {};
+D.weights3d = {
+  loop: 13,
+  view: { target: [0.6, 0, 0.4], w: 25, d: 15, el: 50 },
+  steps: [
+    { t: 0.0, text: 'A question arrives: “What was Apple’s FY2023 operating margin? (10-K 0000320193-23-000106)”. It is sent to two retrievers at once.' },
+    { t: 1.2, text: 'BM25 scores keyword overlap. It nails the accession number but gives scores from 0 to about 18, with no fixed ceiling.' },
+    { t: 2.4, text: 'The vector index scores meaning. It finds the income-statement table even though it never says “margin”, with cosines in a narrow 0.6–0.9 band.' },
+    { t: 4.0, text: 'Fusion: normalise both lists (or use ranks with RRF, k = 60), then weigh them. Here alpha = 0.3 for dense and 0.7 for BM25, tuned on a labelled set.' },
+    { t: 6.4, text: 'Soft boosts are added on top: a title or section-header match and a recency decay. Hard filters (ticker = AAPL, fiscal_year = 2023, permissions) were applied before scoring.' },
+    { t: 8.4, text: 'One fused top-k list goes out to the cross-encoder reranker (next page). Every weight is logged with the result, so the ranking can be explained and re-tuned.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, THREE, rb, mesh } = c;
+    const usr = c.obj('person', -10.2, 0, 'Question', 'Apple FY2023 op. margin');
+    const bm = c.obj(c.SHAPES.server({ color: 0x3f6b55, emi: C.ingest }), -4.6, -3.4, 'BM25 index', 'scores 0 → ~18');
+    const vec = c.obj(c.SHAPES.database(C.kb), -4.6, 3.4, 'Vector index', 'cosine 0.6 → 0.9');
+
+    const sc = new THREE.Group(); sc.userData.glow = []; sc.userData.h = 2.6;
+    const base = mesh(new THREE.CylinderGeometry(0.8, 0.95, 0.18, 32), C.steel); base.position.y = 0.09; sc.add(base);
+    const post = mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.0, 12), C.steel); post.position.y = 1.1; sc.add(post);
+    const beam = new THREE.Group(); beam.position.y = 2.15; sc.add(beam);
+    const bar = rb(0.3, 0.22, 4.2, C.serve, { r: 0.05 }); beam.add(bar); sc.userData.glow.push(bar);
+    for (const z of [-1.95, 1.95]) {
+      const pan = mesh(new THREE.CylinderGeometry(0.62, 0.45, 0.14, 28), z < 0 ? C.ingest : C.kb); pan.position.set(0, -0.55, z); beam.add(pan); sc.userData.glow.push(pan);
+      const str = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 6), 0x6b7684); str.position.set(0, -0.28, z); beam.add(str);
+    }
+    const fuse = c.obj(sc, 1.6, 0, 'Fusion', 'normalise · weigh · boost', { lift: 0.9 });
+    c.note('<b>0.7 × bm25</b>', 3.4, -2.2, 1.6);
+    c.note('<b>0.3 × dense</b>', 3.4, 2.4, 1.6);
+    const out = c.obj('cards', 7.0, 0, 'Fused top-k', 'ranked list');
+    const rr = c.obj('signpost', 10.6, 0, 'To reranker', '⑩ cross-encoder', { rot: 0 });
+
+    c.lane([V(-10.2, 0), V(-7.6, 0), V(-7.6, -3.4), V(-4.6, -3.4)]);
+    c.lane([V(-7.6, 0), V(-7.6, 3.4), V(-4.6, 3.4)]);
+    c.lane([V(-4.6, -3.4), V(-1.4, -3.4), V(-1.4, 0), V(1.6, 0)]);
+    c.lane([V(-4.6, 3.4), V(-1.4, 3.4), V(-1.4, 0)]);
+    c.lane([V(1.6, 0), V(7.0, 0), V(10.6, 0)]);
+
+    c.packet({ pts: [V(-10.2, 0), V(-7.6, 0), V(-7.6, -3.4), V(-4.6, -3.4)], t0: 0.2, t1: 1.2, kind: 'ask', from: usr, to: bm, label: 'query' });
+    c.packet({ pts: [V(-10.2, 0), V(-7.6, 0), V(-7.6, 3.4), V(-4.6, 3.4)], t0: 0.2, t1: 1.2, kind: 'ask', to: vec });
+    c.packet({ pts: [V(-4.6, -3.4), V(-1.4, -3.4), V(-1.4, 0), V(1.6, 0)], t0: 1.6, t1: 3.6, kind: 'chunk', n: 4, st: 0.18, to: fuse, label: 'bm25 list' });
+    c.packet({ pts: [V(-4.6, 3.4), V(-1.4, 3.4), V(-1.4, 0), V(1.6, 0)], t0: 2.6, t1: 4.2, kind: 'vec', n: 4, st: 0.18, to: fuse, label: 'dense list' });
+    c.packet({ pts: [V(1.6, 0), V(7.0, 0)], t0: 6.9, t1: 7.9, kind: 'doc', n: 5, st: 0.16, to: out, label: 'fused, ranked' });
+    c.packet({ pts: [V(7.0, 0), V(10.6, 0)], t0: 8.8, t1: 9.8, kind: 'doc', color: P.ans, to: rr, label: 'top 50' });
+
+    c.tick((t) => {
+      const a = t < 4.0 ? 0 : Math.min(1, (t - 4.0) / 0.8);
+      beam.rotation.x = -0.16 * a + (t > 4.8 && t < 6.4 ? 0.025 * Math.sin((t - 4.8) * 6) : 0);
+    });
+  },
+};
+boot(D);
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const DOCS = [
+    { t: 'FY2023 income statement', bm: 9.8, cos: 0.86, g: 3 },
+    { t: 'MD&A FY2023: op. income', bm: 7.2, cos: 0.83, g: 2 },
+    { t: '10-K cover (accession no.)', bm: 22.5, cos: 0.58, g: 1 },
+    { t: 'FY2022 income statement', bm: 9.1, cos: 0.85, g: 1 },
+    { t: 'Exhibit index (accession)', bm: 18.0, cos: 0.41, g: 0 },
+    { t: 'Microsoft FY2023 op. income', bm: 6.5, cos: 0.80, g: 0 },
+  ];
+  let mode = 'minmax';
+  const mm = (xs) => { const lo = Math.min(...xs), hi = Math.max(...xs); return xs.map((x) => (hi === lo ? 0 : (x - lo) / (hi - lo))); };
+  const zs = (xs) => { const m = xs.reduce((a, b) => a + b, 0) / xs.length; const sd = Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length) || 1; return xs.map((x) => (x - m) / sd); };
+  const ranks = (xs) => { const o = xs.map((x, i) => [x, i]).sort((a, b) => b[0] - a[0]); const r = []; o.forEach(([, i], k) => (r[i] = k + 1)); return r; };
+  const dcg = (gs) => gs.reduce((a, g, i) => a + (2 ** g - 1) / Math.log2(i + 2), 0);
+  const IDEAL = dcg(DOCS.map((d) => d.g).sort((a, b) => b - a).slice(0, 3));
+  function render() {
+    const a = +$('w-a').value, k = +$('w-k').value;
+    $('w-a-o').textContent = a.toFixed(2); $('w-k-o').textContent = k;
+    $('w-k').disabled = mode !== 'rrf';
+    const bm = DOCS.map((d) => d.bm), cs = DOCS.map((d) => d.cos);
+    let sc;
+    if (mode === 'raw') sc = DOCS.map((d) => a * d.cos + (1 - a) * d.bm);
+    else if (mode === 'minmax') { const b = mm(bm), c = mm(cs); sc = DOCS.map((d, i) => a * c[i] + (1 - a) * b[i]); }
+    else if (mode === 'z') { const b = zs(bm), c = zs(cs); sc = DOCS.map((d, i) => a * c[i] + (1 - a) * b[i]); }
+    else { const rb = ranks(bm), rc = ranks(cs); sc = DOCS.map((d, i) => a / (k + rc[i]) + (1 - a) / (k + rb[i])); }
+    const order = DOCS.map((d, i) => i).sort((x, y) => sc[y] - sc[x]);
+    const lo = Math.min(...sc), hi = Math.max(...sc);
+    const GC = ['#b8c0c9', '#d7932a', '#4d5fd8', '#2f8f5b'];
+    $('w-bars').innerHTML = order.map((i, r) => `<div class="bar-row" style="grid-template-columns:minmax(0,200px) minmax(0,1fr) 30px"><span>${r + 1}. ${DOCS[i].t}</span><span class="bar" aria-hidden="true"><i style="width:${hi === lo ? 100 : Math.max(4, ((sc[i] - lo) / (hi - lo)) * 100).toFixed(0)}%;background:${GC[DOCS[i].g]}"></i></span><span class="v">g${DOCS[i].g}</span></div>`).join('');
+    const top3 = order.slice(0, 3).map((i) => DOCS[i].g);
+    const ndcg = dcg(top3) / IDEAL;
+    const pos = order.indexOf(0) + 1;
+    $('w-m').innerHTML = `<div class="metric"><span class="n">${ndcg.toFixed(2)}</span><span class="l">NDCG@3</span></div><div class="metric"><span class="n">#${pos}</span><span class="l">answer chunk</span></div><div class="metric"><span class="n">${top3.filter((g) => g === 0).length}</span><span class="l">lookalikes in top 3</span></div>`;
+    let msg;
+    if (mode === 'raw' && a < 0.99) msg = 'Raw sum: BM25 scores run to 22 while cosine tops out at 0.86, so BM25 decides the order until alpha is almost 1. The cover page and the exhibit index win on the accession number alone.';
+    else if (pos === 1 && ndcg > 0.95) msg = `The FY2023 income statement is #1 and the top 3 are all useful. ${mode === 'rrf' ? 'RRF got there without any score normalisation.' : 'Normalised scores let both retrievers contribute.'}`;
+    else if (a <= 0.15) msg = 'Mostly keyword: the exact accession number pulls the cover page and exhibit index up, but neither states operating income.';
+    else if (a >= 0.9) msg = 'Mostly dense: paraphrase matching ranks well, but the FY2022 statement and Microsoft’s income look as similar as the right answer.';
+    else msg = 'Close. Move alpha to find the band where both the exact ID and the meaning match count.';
+    $('w-out').textContent = msg;
+  }
+  document.querySelectorAll('#w-mode button').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.v; document.querySelectorAll('#w-mode button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); render(); }));
+  ['w-a', 'w-k'].forEach((id) => $(id).addEventListener('input', render));
+  render();
+})();
+
+</script>
+<script src="progress.js"></script>
+</body>
+</html>

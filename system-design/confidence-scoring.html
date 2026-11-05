@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Confidence Scoring · Agentic System Designs</title>
+<meta name="description" content="Confidence scoring for AI answers: signals, combining them, self-consistency and semantic entropy, calibration and ECE, and thresholds as a cost decision.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+</style><style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+<link rel="stylesheet" href="../assets/scene3d.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · quality</p><h1>Confidence Scoring</h1><p class="lead">A confidence score is a decision input: answer, hedge, hand off to a human, or try a bigger model. It is only useful if the number is calibrated and something happens because of it.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#decide">Confidence drives a decision</a></li><li><a href="#signals">Signals</a></li><li><a href="#combine">Combining signals</a></li><li><a href="#consistency">Self-consistency</a></li><li><a href="#calibration">Calibration</a></li><li><a href="#threshold">The threshold is a cost decision</a></li><li><a href="#lab">Try it: pick the threshold</a></li><li><a href="#production">In production</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="decide"><h2>Confidence drives a decision</h2>
+<div class="table"><table><thead><tr><th>The score says</th><th>The system does</th><th>Example</th></tr></thead><tbody>
+<tr><td>High</td><td>Answer, with citations</td><td>“Apple’s FY2023 operating margin was 29.8% (10-K, Item 8).”</td></tr>
+<tr><td>Middle</td><td>Hedge: answer with the caveat, or ask a clarifying question</td><td>“Did you mean gross (44.1%), operating (29.8%) or net (25.3%) margin?”</td></tr>
+<tr><td>Low</td><td>Abstain and escalate to a person</td><td>Sent to the analyst queue with the evidence attached</td></tr>
+<tr><td>Low, but cheap to retry</td><td>Route to a bigger model or a deeper search, then score again</td><td>See <a href="routing.html">routing</a> (cascades)</td></tr>
+</tbody></table></div>
+<figure class="fig3d" id="conf3d">
+    <div class="stage3d" role="img" aria-label="Four signals (retrieval, self-consistency, groundedness and a tool check) feed a confidence scorer, which sends a calibrated probability to a policy gate. The first question is answered, the second gets a hedged answer, and the third goes to an analyst queue, whose labels flow back to retrain the scorer"><p class="hint3">3D · drag to turn</p><button class="reset3 ghost" type="button" hidden>Reset view</button><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN. The figures and lab on this page cover the same idea.</p></div>
+    <div class="ctl3"><button class="pp" type="button">Pause</button><span class="k">Step</span><div class="steps3"></div><span class="meta3"></span></div>
+    <div class="track3"><div class="fill3"></div></div>
+    <p class="out3" aria-live="polite"></p>
+    <figcaption>Illustrative. Grey spheres are signal values, purple shapes are the scorer’s probability, flat cards are what the user or analyst receives.</figcaption>
+  </figure></section>
+<section id="signals"><h2>Signals</h2>
+<p>No single signal is enough. Each measures something different, and each can be fooled.</p>
+<div class="table"><table><thead><tr><th>Signal</th><th>Measures</th><th>What fools it</th></tr></thead><tbody>
+<tr><td>Top reranker score</td><td>How well the best chunk matches the question</td><td>A confident match to the wrong year’s filing</td></tr>
+<tr><td>Margin #1 − #2</td><td>Whether one chunk clearly wins</td><td>Two copies of the same table look like a tie</td></tr>
+<tr><td>Chunks above a threshold</td><td>How much evidence there is</td><td>Boilerplate repeated in every filing</td></tr>
+<tr><td>Source agreement</td><td>Whether the text and structured data (XBRL) agree</td><td>Both copied from one wrong source</td></tr>
+<tr><td>Token logprobs</td><td>How likely the model finds its own wording</td><td>Fluent wording of a wrong fact: logprobs score text, not truth</td></tr>
+<tr><td>Self-consistency</td><td>Whether N sampled answers agree</td><td>A model that is consistently wrong</td></tr>
+<tr><td>Verbalised confidence</td><td>The model saying “I’m 90% sure”</td><td>Known overconfidence; weak evidence on its own</td></tr>
+<tr><td>Groundedness</td><td>Share of claims supported by cited chunks (see <a href="citations.html">citations</a>)</td><td>A judge lenient with paraphrase</td></tr>
+<tr><td>Tool outcome</td><td>The calculator matches the XBRL value</td><td>Hard to fool; use it as a hard rule</td></tr>
+<tr><td>Query signals</td><td>Out of scope or ambiguous (“margin”)</td><td>A router never tested on rephrasings</td></tr>
+</tbody></table></div></section>
+<section id="combine"><h2>Combining signals</h2>
+<div class="formula">p(correct) = σ(b₀ + b₁·rerank + b₂·margin + b₃·agreement + b₄·groundedness + …)</div>
+<p>A hand-weighted average is the usual first version. It’s fine as a start, but its output is not a probability and the weights are guesses. Once you have a few hundred labelled outcomes, fit a <strong>logistic regression</strong>: a handful of coefficients, trained in milliseconds, whose sizes show which signals actually predict correctness. Hard rules run first: a calculator mismatch or a failed guardrail escalates whatever the model says.</p></section>
+<section id="consistency"><h2>Self-consistency</h2>
+<p>Sample the same question N times (often 5) at a temperature above zero. If the model knows the answer, the samples agree; if it is guessing, they scatter.</p>
+<div class="formula">semantic entropy = −Σ p(cluster) · log₂ p(cluster)      0 = all agree · log₂ 5 ≈ 2.32 = all differ</div>
+<p>Group the samples by meaning, not by string: “29.8%” and “about 30% (29.8%)” are the same answer. Entropy over those meaning clusters is <strong>semantic entropy</strong> (Farquhar et al., Nature, 2024). The cost is N model calls per question, so keep it for expensive mistakes or a sample.</p></section>
+<section id="calibration"><h2>Calibration</h2>
+<p>A cosine of 0.83 or a rerank logit of 7.2 orders results; neither means “83% likely to be right”. <strong>Calibrated</strong> means that of all answers scored 0.7, about 70% are correct.</p>
+<div class="formula">ECE = Σᵢ (nᵢ / N) · |accuracyᵢ − confidenceᵢ|      over score bins i</div>
+<figure class="fig"><svg viewBox="0 0 722 250" class="dg" role="img" aria-label="Reliability diagram: an overconfident scorer sits below the diagonal; after Platt scaling the points sit near it"><text x="10" y="18" class="b">Reliability diagram (illustrative, 200 answers, 5 bins)</text>
+<line x1="60" y1="220" x2="320" y2="220" class="wire"/><line x1="60" y1="220" x2="60" y2="40" class="wire"/><line x1="60" y1="220" x2="320" y2="40" class="wire dash"/><text x="60" y="238" class="sm">0</text><text x="300" y="238" class="sm">score 1</text><text x="20" y="44" class="sm">acc 1</text>
+<text x="110" y="34" class="small b">Raw score</text>
+<circle cx="86" cy="214" r="5" class="f-dlq"/><circle cx="138" cy="196" r="5" class="f-dlq"/><circle cx="190" cy="172" r="5" class="f-dlq"/><circle cx="242" cy="140" r="5" class="f-dlq"/><circle cx="294" cy="100" r="5" class="f-dlq"/>
+<line x1="242" y1="140" x2="242" y2="94" style="stroke:var(--c-dlq);stroke-width:1.5"/><line x1="294" y1="100" x2="294" y2="58" style="stroke:var(--c-dlq);stroke-width:1.5"/><text x="150" y="120" class="sm">ECE ≈ 0.17: overconfident</text>
+<line x1="400" y1="220" x2="660" y2="220" class="wire"/><line x1="400" y1="220" x2="400" y2="40" class="wire"/><line x1="400" y1="220" x2="660" y2="40" class="wire dash"/><text x="400" y="238" class="sm">0</text><text x="640" y="238" class="sm">score 1</text>
+<text x="450" y="34" class="small b">After Platt scaling</text>
+<circle cx="426" cy="205" r="5" class="f-ok"/><circle cx="478" cy="168" r="5" class="f-ok"/><circle cx="530" cy="138" r="5" class="f-ok"/><circle cx="582" cy="94" r="5" class="f-ok"/><circle cx="634" cy="62" r="5" class="f-ok"/><text x="490" y="120" class="sm">ECE ≈ 0.03</text></svg></figure>
+<div class="table"><table><thead><tr><th>Method</th><th>How</th><th>When</th></tr></thead><tbody>
+<tr><td>Temperature scaling</td><td>Divide the logit by one number T</td><td>Keeps ranking; can only squeeze or stretch around 50%</td></tr>
+<tr><td>Platt scaling</td><td>p = σ(a·logit(s) + b), a one-feature logistic regression</td><td>The bias b can shift scores down, which overconfident systems need</td></tr>
+<tr><td>Isotonic regression</td><td>A monotone step function</td><td>Most flexible; needs roughly a thousand labels or more, overfits small sets</td></tr>
+</tbody></table></div>
+<p>Fit all three on a held-out labelled set, never on the data you report, and re-fit after any model or index change.</p></section>
+<section id="threshold"><h2>The threshold is a cost decision</h2>
+<p>This is <strong>selective prediction</strong>: you trade coverage for accuracy. The right point depends on what a wrong answer costs compared with a person’s time. A wrong revenue figure in an analyst’s model costs far more than a wrong page number.</p>
+<div class="formula">best threshold = argmin over t of  cost_wrong × wrong_answered(t) + cost_escalation × escalated(t)</div>
+<ul class="plain">
+<li><strong>A hedge band</strong> between “answer” and “escalate”, where the answer ships with its caveat and sources.</li>
+<li><strong>Per-segment thresholds:</strong> numeric questions, summaries and out-of-scope requests each get their own, chosen on their own labelled slice.</li>
+<li><strong>Hard rules beat scores:</strong> a calculator mismatch escalates whatever the blend says.</li>
+</ul></section>
+<section id="lab"><h2>Try it: pick the threshold</h2>
+<p>Twenty labelled answers with calibrated confidence. Answer when the score is at or above the threshold; otherwise send the question to an analyst.</p>
+<div class="lab" id="tlab">
+  <div class="lab-row"><label for="t-th">Answer if confidence ≥ <input type="range" id="t-th" min="0" max="1" step="0.01" value="0.5"><output id="t-th-o"></output></label></div>
+  <div class="lab-row"><label for="t-w">Cost of a wrong answer <input type="range" id="t-w" min="5" max="500" step="5" value="100"><output id="t-w-o"></output></label><label for="t-e">Cost of an escalation <input type="range" id="t-e" min="1" max="100" step="1" value="15"><output id="t-e-o"></output></label></div>
+  <div class="lab-row"><span class="chips"><button type="button" id="t-best">Jump to the cheapest threshold</button></span></div>
+  <div class="metrics" id="t-m"></div>
+  <p class="lab-out" id="t-out" aria-live="polite"></p>
+</div></section>
+<section id="production"><h2>In production</h2>
+<p>Track the escalation rate per day and per segment. A sudden drop after a new embedding model, reranker or index usually means the score distribution moved, not that the system got better. Re-fit calibration on the labelled set after every model or index change, and feed analyst decisions from the queue back in as new labels (see <a href="evals.html">evals</a> and <a href="testing.html">testing and rollout</a>).</p>
+<ul class="plain">
+<li><strong>Don’t</strong> show a cosine score as a percentage: it is not a probability.</li>
+<li><strong>Don’t</strong> trust logprobs as truth: they score the wording.</li>
+<li><strong>Don’t</strong> use “how sure are you?” on its own.</li>
+<li><strong>Don’t</strong> set one global threshold once and never revisit it.</li>
+</ul></section>
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="say"><p>“Confidence exists to route each answer: answer, hedge, escalate or retry with a bigger model. I’d combine retrieval signals (top rerank score, margin, source agreement) with groundedness from the citation checks in a logistic regression fitted on a few hundred labelled outcomes, calibrate it with Platt scaling on a held-out set and report ECE. Thresholds come from the cost of a wrong answer versus an escalation, per segment, with hard rules like a calculator mismatch overriding the score. In production I watch escalation rate per segment and re-fit after any model change.”</p></div></section>
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Token logprobs</td><td>OpenAI logprobs and top_logprobs; Gemini responseLogprobs</td><td>At the time of writing the Anthropic Messages API does not return logprobs; use sampling- or judge-based signals with Claude</td></tr>
+<tr><td>Trust scores as a service</td><td>Cleanlab TLM; Vectara HHEM (open weights)</td><td>A score per answer without building your own</td></tr>
+<tr><td>Groundedness metrics</td><td>RAGAS faithfulness, DeepEval faithfulness and hallucination, NLI cross-encoders</td><td>Good features for the combiner</td></tr>
+<tr><td>Sampling-based</td><td>SelfCheckGPT; semantic entropy</td><td>N calls per question</td></tr>
+<tr><td>Calibration</td><td>scikit-learn CalibratedClassifierCV (sigmoid, isotonic) and calibration_curve; temperature scaling</td><td>Fit on held-out labels</td></tr>
+<tr><td>Human-in-the-loop queues</td><td>LangSmith and Langfuse annotation queues, Argilla, Label Studio</td><td>Escalations become new labels</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="citations.html">Citations</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="glossary.html#calibration">Glossary: calibration</a></li></ul></section></article>
+</div>
+
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { boot } from '../assets/scene3d.js';
+const D = {};
+D.conf3d = {
+  loop: 13.5,
+  view: { target: [0, 0, 0], w: 24, d: 17, el: 54 },
+  steps: [
+    { t: 0.0, text: 'Question 1: “What was Apple’s FY2023 operating margin?” Four signals report: top rerank score 0.94 with a clear lead, 5 of 5 samples agree, every claim is supported by a cited chunk, and the calculator matches the XBRL fact.' },
+    { t: 1.5, text: 'The scorer, a logistic regression fitted on labelled answers, turns them into p = 0.99. Because it is calibrated, about 99 in 100 answers at this score are right.' },
+    { t: 2.3, text: 'p is at least 0.80, so the gate answers: 29.8%, with citations to the 10-K.' },
+    { t: 4.2, text: 'Question 2: “What was Apple’s margin in 2023?” Retrieval is weaker (0.78), and only 2 of 5 samples agree: they split between gross, operating and net margin.' },
+    { t: 5.8, text: 'p = 0.53 lands in the hedge band: show all three margins with sources and ask which one was meant.' },
+    { t: 8.4, text: 'Question 3: the calculator’s result does not match the XBRL value. A hard rule sends it to the analyst queue, whatever the blended score says.' },
+    { t: 10.6, text: 'The analyst’s decision becomes a new label. Labels flow back to re-fit the scorer and its calibration, especially after a model or index change.' },
+  ],
+  build(c) {
+    const { V, arc, P, C, SHAPES } = c;
+    const SIG = [
+      [SHAPES.database(C.kb), -5.4, 'Retrieval', 'rerank score · margin'],
+      ['cards', -1.8, 'Self-consistency', 'N samples agree?'],
+      [SHAPES.shield(C.gov), 1.8, 'Groundedness', 'claims supported'],
+      [SHAPES.server({ color: 0x3f6b55, emi: C.ok }), 5.4, 'Tool check', 'calculator = XBRL'],
+    ].map(([s, z, n, sub]) => [c.obj(s, -9.4, z, n, sub), z]);
+    const sc = c.obj('monitor', -2.6, 0, 'Confidence scorer', 'calibrated p');
+    const gate = c.obj('signpost', 2.6, 0, 'Policy gate', '≥ 0.80 · 0.50–0.80 · < 0.50');
+    const OUT = [
+      [c.obj('person', 8.8, -4.8, 'Answer', 'with citations'), -4.8],
+      [c.obj('browser', 8.8, 0, 'Hedged answer', 'caveat + sources'), 0],
+      [c.obj('tray', 8.8, 4.8, 'Analyst queue', 'human review'), 4.8],
+    ];
+    SIG.forEach(([, z]) => c.lane([V(-9.4, z), V(-6.2, z), V(-6.2, 0), V(-2.6, 0)]));
+    c.lane([V(-2.6, 0), V(2.6, 0)]);
+    OUT.forEach(([, z]) => c.lane([V(2.6, 0), V(5.8, 0), V(5.8, z), V(8.8, z)]));
+    const round = (t0, p, color, out, label) => {
+      SIG.forEach(([o, z], i) => c.packet({ pts: [V(-9.4, z), V(-6.2, z), V(-6.2, 0), V(-2.6, 0)], t0: t0 + i * 0.12, t1: t0 + 1.2 + i * 0.12, kind: 'span', s: 1.5, from: o, to: sc }));
+      c.packet({ pts: arc(c.top(sc, 0), c.top(gate, 0), 1.6), t0: t0 + 1.6, t1: t0 + 2.3, kind: 'vec', to: gate, label: p });
+      const [o, z] = OUT[out];
+      c.packet({ pts: [V(2.6, 0), V(5.8, 0), V(5.8, z), V(8.8, z)], t0: t0 + 2.4, t1: t0 + 3.4, kind: 'doc', color, to: o, label });
+    };
+    round(0, 'p = 0.99', P.ship, 0, '29.8% + citations');
+    round(4.2, 'p = 0.53', P.env, 1, 'which margin?');
+    round(8.4, 'tool mismatch', P.bad, 2, 'needs review');
+    c.packet({ pts: arc(c.top(OUT[2][0], 0), c.top(sc, 0), 3.2), t0: 11.3, t1: 12.6, kind: 'span', s: 1.6, color: P.ask, to: sc, label: 'labels → re-fit' });
+  },
+};
+boot(D);
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const A = [[0.98,1],[0.96,1],[0.95,1],[0.93,1],[0.91,1],[0.89,1],[0.88,0],[0.85,1],[0.82,1],[0.80,1],[0.76,0],[0.72,1],[0.70,1],[0.66,0],[0.61,1],[0.55,0],[0.50,1],[0.42,0],[0.35,0],[0.22,0]];
+  function stats(t, cw, ce) {
+    const ans = A.filter((a) => a[0] >= t), esc = A.length - ans.length, wrong = ans.filter((a) => !a[1]).length;
+    return { n: ans.length, esc, wrong, acc: ans.length ? (ans.length - wrong) / ans.length : 1, cost: wrong * cw + esc * ce };
+  }
+  function best(cw, ce) { let b = null; for (const t of [0, ...A.map((a) => a[0]), 1.01]) { const s = stats(t, cw, ce); if (!b || s.cost < b.s.cost) b = { t, s }; } return b; }
+  function render() {
+    const t = +$('t-th').value, cw = +$('t-w').value, ce = +$('t-e').value;
+    $('t-th-o').textContent = t.toFixed(2); $('t-w-o').textContent = '$' + cw; $('t-e-o').textContent = '$' + ce;
+    const s = stats(t, cw, ce), b = best(cw, ce);
+    $('t-m').innerHTML = `<div class="metric"><span class="n">${s.n}/20</span><span class="l">answered</span></div><div class="metric"><span class="n">${Math.round(s.acc * 100)}%</span><span class="l">accuracy when answered</span></div><div class="metric"><span class="n">${s.esc}</span><span class="l">escalated</span></div><div class="metric"><span class="n">$${s.cost}</span><span class="l">cost for these 20</span><small>cheapest: $${b.s.cost} at ≥ ${Math.min(1, b.t).toFixed(2)}</small></div>`;
+    let msg;
+    if (s.cost === b.s.cost) msg = `This is the cheapest threshold for these costs: ${s.wrong} wrong answer${s.wrong === 1 ? '' : 's'} slip through and ${s.esc} question${s.esc === 1 ? '' : 's'} go to an analyst.`;
+    else if (t < b.t) msg = `Too eager: ${s.wrong} wrong answers at $${cw} each cost more than escalating them would. Raise the threshold toward ${b.t.toFixed(2)}.`;
+    else msg = `Too cautious: ${s.esc} escalations at $${ce} each cost more than the few wrong answers you avoid. Lower the threshold toward ${Math.min(1, b.t).toFixed(2)}.`;
+    if (cw / ce >= 15) msg += ' With wrong answers this expensive relative to an analyst, the system should answer only when it is very sure.';
+    $('t-out').textContent = msg;
+  }
+  $('t-best').addEventListener('click', () => { const b = best(+$('t-w').value, +$('t-e').value); $('t-th').value = Math.min(1, b.t); render(); });
+  ['t-th', 't-w', 't-e'].forEach((id) => $(id).addEventListener('input', render));
+  render();
+})();
+
+</script>
+<script src="progress.js"></script>
+</body>
+</html>
