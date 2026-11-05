@@ -302,7 +302,7 @@
     </div>
     <a class="progress-card" href="roadmap.html" id="pc" style="text-decoration:none;color:inherit">
       <span class="k">Your progress</span>
-      <span class="pc-num" id="pc-num">0<small> / 30 pages done</small></span>
+      <span class="pc-num" id="pc-num">0<small> / 29 pages done</small></span>
       <span class="pc-stages" id="pc-stages" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></span>
       <p id="pc-next">Six stages, from loading data to interview revision. Your progress is saved in this browser.</p>
       <span class="btn primary" id="pc-cta" style="justify-self:start">Open the roadmap →</span>
@@ -351,8 +351,8 @@
 <script>
 (function () {
   var P = window.ASDProgress; if (!P) return;
-  var STAGES = [['knowledge-base','chunking','backfills'],['embeddings','vector-databases','vector-search','search-types','reranking','after-retrieval'],['routing','agent-memory','model-serving'],['evals','eval-rubrics','testing','access-control'],['enterprise-search','knowledge-freshness','finsight','support-agent','oncall-assistant','ask-your-data','ads-assistant','review-insights','coding-agent'],['fluency','ml-basics','metrics','numbers','glossary']];
-  var NAMES = {'knowledge-base':'Knowledge base','chunking':'Chunking','backfills':'Backfills and re-indexing','embeddings':'Embeddings','vector-databases':'Vector databases','vector-search':'Vector search','search-types':'Search types','reranking':'Reranking','after-retrieval':'After retrieval','routing':'Routing','agent-memory':'Agent memory','model-serving':'Model serving on GPUs','evals':'Evals','eval-rubrics':'Evals in practice','testing':'Testing and rollout','access-control':'Access control (ACL)','enterprise-search':'Enterprise Search','knowledge-freshness':'Fresh Knowledge Base','finsight':'FinSight','support-agent':'Support Agent','oncall-assistant':'On-Call Assistant','ask-your-data':'Ask Your Data','ads-assistant':'Ads Assistant','review-insights':'App Review Insights','coding-agent':'Coding Agent','fluency':'AI fluency Q&A','ml-basics':'ML basics','metrics':'Metrics cheat sheet','numbers':'Numbers cheat sheet','glossary':'Glossary'};
+  var STAGES = [['knowledge-base','chunking','backfills'],['embeddings','vector-databases','vector-search','search-types','reranking','after-retrieval'],['routing','agent-memory'],['evals','eval-rubrics','testing','access-control'],['enterprise-search','knowledge-freshness','finsight','support-agent','oncall-assistant','ask-your-data','ads-assistant','review-insights','coding-agent'],['fluency','ml-basics','metrics','numbers','glossary']];
+  var NAMES = {'knowledge-base':'Knowledge base','chunking':'Chunking','backfills':'Backfills and re-indexing','embeddings':'Embeddings','vector-databases':'Vector databases','vector-search':'Vector search','search-types':'Search types','reranking':'Reranking','after-retrieval':'After retrieval','routing':'Routing','agent-memory':'Agent memory','evals':'Evals','eval-rubrics':'Evals in practice','testing':'Testing and rollout','access-control':'Access control (ACL)','enterprise-search':'Enterprise Search','knowledge-freshness':'Fresh Knowledge Base','finsight':'FinSight','support-agent':'Support Agent','oncall-assistant':'On-Call Assistant','ask-your-data':'Ask Your Data','ads-assistant':'Ads Assistant','review-insights':'App Review Insights','coding-agent':'Coding Agent','fluency':'AI fluency Q&A','ml-basics':'ML basics','metrics':'Metrics cheat sheet','numbers':'Numbers cheat sheet','glossary':'Glossary'};
   function render() {
     var st = P.all(), done = 0, total = 0, next = null, bars = document.querySelectorAll('#pc-stages span'), any = Object.keys(st).length;
     STAGES.forEach(function (s, i) {
