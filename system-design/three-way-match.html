@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Three-Way Match Agent · Agentic System Designs</title>
+<meta name="description" content="System design for a three-way match agent: purchase orders, goods receipts and invoices read from PDFs with Nemotron Parse and an LLM, a rule-based matcher, a Postgres state machine with pgmq, an exceptions-only resolution agent, human approval bound to an action hash, and a scale-to-zero deployment on Cloud Run and Supabase, with links to the code and low-level design.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html" aria-current="page">Designs</a><a href="topics.html">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Design · workflow + agent for exceptions · being built</p><h1>Three-Way Match Agent</h1><p class="lead">Matches each invoice against its purchase order and goods receipt, holds anything that doesn't line up, and lets an agent investigate only the exceptions. Rules decide money, a person approves every outcome, and every component below links to its code and its low-level design.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#problem">The problem</a></li><li><a href="#links">Repo, report and low-level design</a></li><li><a href="#status">What is built today</a></li><li><a href="#architecture">Architecture</a></li><li><a href="#lifecycle">Case lifecycle</a></li><li><a href="#reading">Reading documents</a></li><li><a href="#matching">Matching rules</a></li><li><a href="#agent">The resolution agent</a></li><li><a href="#queue">Queue, retries and scale to zero</a></li><li><a href="#approval">Approval and execution</a></li><li><a href="#deploy">Deployment</a></li><li><a href="#observe">Observability and evals</a></li><li><a href="#risks">Risks</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="problem"><h2>The problem</h2>
+<p class="lead">Accounts payable pays an invoice only when three documents agree: what was ordered (purchase order), what arrived (goods receipt) and what was billed (invoice). Design a system that reads all three from PDFs, matches them, catches duplicates, fraud and prompt injection, and asks a person before anything is posted.</p>
+<p><strong>Functional:</strong> read POs, receipts and invoices from a document source; extract line items; match quantity, price and totals; flag duplicates and fake invoices; investigate exceptions with evidence; let a person approve, reject or escalate; record the outcome in the ERP.</p>
+<p><strong>NFRs:</strong> no LLM output can approve a payment; documents are untrusted data; every step is safe to run twice; every state change is logged and append-only; vendors (source, parser, LLM) are swappable; runs at close to $0 on free tiers.</p>
+<p><strong>Out of scope for v1:</strong> releasing payments, multi-currency, tax rules, credit notes, approval without a person.</p></section>
+
+<section id="links"><h2>Repo, report and low-level design</h2>
+<p>This page is the high-level design. The code, the project report and the low-level design (modules, function signatures, tables, queue semantics, API contracts) live in the agent's own repo, which is built in small observable steps.</p>
+<div class="table"><table><thead><tr><th>What</th><th>Where</th></tr></thead><tbody>
+<tr><td>Code repo</td><td><a href="https://github.com/DevLCodes/three-way-match">DevLCodes/three-way-match</a></td></tr>
+<tr><td>Project report</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md">docs/DESIGN.md</a></td></tr>
+<tr><td>Low-level design</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md">docs/LLD.md</a></td></tr>
+<tr><td>Build plan</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/superpowers/specs/2026-11-05-three-way-match-rebuild-design.md">every step, in order</a></td></tr>
+<tr><td>Step records</td><td><a href="https://github.com/DevLCodes/three-way-match/tree/main/docs/steps">docs/steps/</a>: command, real output and explanation for each step</td></tr>
+</tbody></table></div></section>
+
+<section id="status"><h2>What is built today</h2>
+<p>Phases 1 and 2 are complete: three PDFs in, three validated documents out with a read-error check, then a rule-based match with nine exception codes. Phases 2 to 11 follow the <a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/superpowers/specs/2026-11-05-three-way-match-rebuild-design.md#the-steps">build plan</a>.</p>
+<div class="table"><table><thead><tr><th>Phase</th><th>Covers</th><th>State</th></tr></thead><tbody>
+<tr><td class="num">1</td><td>Reading: fetch, render, parse, clean, extract, cross-check</td><td>Built</td></tr>
+<tr><td class="num">2</td><td>Rule matcher</td><td>Built</td></tr>
+<tr><td class="num">3–5</td><td>State machine, queue and worker, API, ingestion</td><td>Next: phase 3</td></tr>
+<tr><td class="num">6–8</td><td>Duplicate, fraud and injection checks; resolution agent; approval and executor</td><td>Planned</td></tr>
+<tr><td class="num">9–11</td><td>Observability, end-to-end run, deployment and production tests</td><td>Planned</td></tr>
+</tbody></table></div>
+<h3 id="steps">Build steps</h3>
+<p>Each step links to its record: the command, the real output and what happened.</p>
+<div class="table"><table><thead><tr><th>Step</th><th>What</th><th>Shows</th></tr></thead><tbody>
+<tr><td class="num">00.1</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/00.1-create-repo.md">Create the repo</a></td><td>uv project, pytest, build plan</td></tr><tr><td class="num">01.1</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.1-fetch-pdf.md">Fetch one PDF</a></td><td>Hugging Face download, disk cache, 404 is <code>None</code></td></tr><tr><td class="num">01.2</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.2-render-pages.md">Render pages to images</a></td><td>pdfium at scale 2.59 to 1583 × 2048 px; fixed a 1 px overshoot</td></tr><tr><td class="num">01.3</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.3-parse-page.md">Parse one page</a></td><td>Nemotron Parse returns text, box tags and a LaTeX table</td></tr><tr><td class="num">01.4</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.4-clean-text.md">Clean the parsed text</a></td><td>Strip 30 tags, 783 to 470 characters</td></tr><tr><td class="num">01.5</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.5-data-models.md">Define the data models</a></td><td>Pydantic <code>Document</code>, exact <code>Decimal</code> money, extra fields refused</td></tr><tr><td class="num">01.6</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.6-llm-extraction.md">Extract with the LLM</a></td><td>Temperature 0, one retry fed the validation error</td></tr><tr><td class="num">01.7</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.7-read-order.md">Read a whole order</a></td><td>Three documents in 72 s cold, 0.15 s cached</td></tr><tr><td class="num">01.8</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.8-crosscheck.md">Cross-check the text layer</a></td><td>Catches the $1374.60 total Nemotron dropped on invoice 11077</td></tr><tr><td class="num">01.9</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.9-extraction-completeness.md">Extraction completeness</a></td><td>Counts table rows in code; PO 11077 back to all 25 lines after a retry</td></tr><tr><td class="num">02.1</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/02.1-match-clean.md">Match a clean order</a></td><td>Order 10250 compared line by line and approved, no LLM</td></tr><tr><td class="num">02.2</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/02.2-exception-codes.md">Every exception code</a></td><td>All 9 codes firing; real order 11077 exposes an extraction gap</td></tr>
+</tbody></table></div></section>
+
+<section id="architecture"><h2>Architecture</h2>
+<figure class="fig"><svg viewBox="0 0 722 372" class="dg" role="img" aria-label="Events enter through the ingest API into a Postgres queue; the workflow worker runs screening, parsing, extraction, duplicate checks and the rule matcher; clean cases go to human approval, exceptions go to the resolution agent first; approved actions go to the executor, which writes erp_postings"><text x="10" y="18" class="cap">Solid outline: built · dashed outline: planned</text>
+<rect x="10" y="30" width="126" height="50" rx="8" class="k-src" stroke-dasharray="5 4"/><text x="73" y="51" class="small b" text-anchor="middle">Event sources</text><text x="73" y="67" class="sm" text-anchor="middle">replay · reconcile</text>
+<path d="M136 55 L152 55" class="wire" marker-end="url(#ah)"/>
+<rect x="154" y="30" width="126" height="50" rx="8" class="k-gov" stroke-dasharray="5 4"/><text x="217" y="51" class="small b" text-anchor="middle">Ingest API</text><text x="217" y="67" class="sm" text-anchor="middle">FastAPI · token</text>
+<path d="M280 55 L296 55" class="wire" marker-end="url(#ah)"/>
+<rect x="298" y="30" width="126" height="50" rx="8" class="k-cross" stroke-dasharray="5 4"/><text x="361" y="51" class="small b" text-anchor="middle">Job queue</text><text x="361" y="67" class="sm" text-anchor="middle">pgmq · DLQ</text>
+<path d="M424 55 L440 55" class="wire" marker-end="url(#ah)"/>
+<rect x="442" y="30" width="126" height="50" rx="8" class="k-serve" stroke-dasharray="5 4"/><text x="505" y="51" class="small b" text-anchor="middle">Workflow worker</text><text x="505" y="67" class="sm" text-anchor="middle">state machine</text>
+<path d="M570 55 L584 55" class="wire" marker-start="url(#ah)" marker-end="url(#ah)"/>
+<rect x="586" y="30" width="126" height="50" rx="8" class="k-kb" stroke-dasharray="5 4"/><text x="649" y="51" class="small b" text-anchor="middle">Postgres</text><text x="649" y="67" class="sm" text-anchor="middle">Supabase · audit</text>
+<path d="M505 80 L505 104 L73 104 L73 128" class="wire" marker-end="url(#ah)"/>
+<rect x="10" y="130" width="126" height="50" rx="8" class="k-gov" stroke-dasharray="5 4"/><text x="73" y="151" class="small b" text-anchor="middle">Screening</text><text x="73" y="167" class="sm" text-anchor="middle">injection · tamper</text>
+<path d="M136 155 L152 155" class="wire" marker-end="url(#ah)"/>
+<rect x="154" y="130" width="126" height="50" rx="8" class="k-model"/><text x="217" y="151" class="small b" text-anchor="middle">Nemotron Parse</text><text x="217" y="167" class="sm" text-anchor="middle">page image → text</text>
+<path d="M280 155 L296 155" class="wire" marker-end="url(#ah)"/>
+<rect x="298" y="130" width="126" height="50" rx="8" class="k-model"/><text x="361" y="151" class="small b" text-anchor="middle">LLM extraction</text><text x="361" y="167" class="sm" text-anchor="middle">JSON · Pydantic</text>
+<path d="M424 155 L440 155" class="wire" marker-end="url(#ah)"/>
+<rect x="442" y="130" width="126" height="50" rx="8" class="k-gov" stroke-dasharray="5 4"/><text x="505" y="151" class="small b" text-anchor="middle">Duplicate · fraud</text><text x="505" y="167" class="sm" text-anchor="middle">rules with evidence</text>
+<path d="M568 155 L584 155" class="wire" marker-end="url(#ah)"/>
+<rect x="586" y="130" width="126" height="50" rx="8" class="k-serve"/><text x="649" y="151" class="small b" text-anchor="middle">Rule matcher</text><text x="649" y="167" class="sm" text-anchor="middle">no LLM decides</text>
+<path d="M649 180 L649 228" class="wire" marker-end="url(#ah)"/><text x="657" y="208" class="sm">exception</text>
+<path d="M610 180 L545 228" class="wire" marker-end="url(#ah)"/><text x="566" y="200" class="sm" text-anchor="end">clean</text>
+<rect x="586" y="230" width="126" height="50" rx="8" class="k-model" stroke-dasharray="5 4"/><text x="649" y="251" class="small b" text-anchor="middle">Resolution agent</text><text x="649" y="267" class="sm" text-anchor="middle">read-only tools</text>
+<path d="M586 255 L570 255" class="wire" marker-end="url(#ah)"/>
+<rect x="442" y="230" width="126" height="50" rx="8" class="k-user" stroke-dasharray="5 4"/><text x="505" y="251" class="small b" text-anchor="middle">Human approval</text><text x="505" y="267" class="sm" text-anchor="middle">action hash</text>
+<path d="M442 255 L426 255" class="wire" marker-end="url(#ah)"/>
+<rect x="298" y="230" width="126" height="50" rx="8" class="k-gov" stroke-dasharray="5 4"/><text x="361" y="251" class="small b" text-anchor="middle">Executor</text><text x="361" y="267" class="sm" text-anchor="middle">outbox · write tools</text>
+<path d="M298 255 L282 255" class="wire" marker-end="url(#ah)"/>
+<rect x="154" y="230" width="126" height="50" rx="8" class="k-kb" stroke-dasharray="5 4"/><text x="217" y="251" class="small b" text-anchor="middle">erp_postings</text><text x="217" y="267" class="sm" text-anchor="middle">mock ERP writes</text>
+<rect x="10" y="310" width="702" height="40" rx="8" class="k-cross" stroke-dasharray="5 4"/><text x="361" y="334" class="small" text-anchor="middle">Cross-cutting: OpenTelemetry trace per case (trace id = case id) to Langfuse · JSON logs · case_events audit</text>
+</svg><figcaption>Two loops: the workflow is a fixed state machine in code, and the agent is a bounded loop that runs inside one state, only for exceptions.</figcaption></figure>
+<p>Each component links to its code, its section of the low-level design and the project report. Components not built yet name the phase that builds them.</p>
+<div class="table"><table><thead><tr><th>Component</th><th>Job</th><th>Code</th><th>LLD</th><th>Report</th></tr></thead><tbody>
+<tr><td>Document source</td><td>Fetch PO, receipt and invoice PDFs from Hugging Face (the mock ERP), cached on disk</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/fetch.py">fetch.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Rendering</td><td>PDF pages to PNG within the parser’s 1664 × 2048 limit</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/render.py">render.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Nemotron Parse</td><td>Read each page image once; text, layout boxes and LaTeX tables</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/parse.py">parse.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Text cleanup</td><td>Strip layout tags and picture blocks</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/clean.py">clean.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>LLM extraction</td><td>Map text to a <code>Document</code>; feed validation errors back for one retry</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/extract.py">extract.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Data models</td><td><code>DocType</code>, <code>LineItem</code>, <code>Document</code></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/schemas.py">schemas.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#data-model">Data model</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Reading pipeline</td><td>Fetch to extract for one document or a whole order, final result cached</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/read.py">read.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Text-layer cross-check</td><td>Amounts in the PDF text layer that the parsed text lacks</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/crosscheck.py">crosscheck.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Extraction completeness</td><td>Item rows counted in the parsed tables; a short extraction is sent back once, then held</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/completeness.py">completeness.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#document-reading-pipeline">Reading pipeline</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Rule matcher</td><td>Compare invoice lines with PO and receipt; nine exception codes</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/src/three_way_match/match.py">match.py</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#matching-rules">Matching rules</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Workflow state machine</td><td>14 states; a move, its audit row and its next job in one transaction</td><td>Phase 3</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#workflow-state-machine">State machine</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Job queue and worker</td><td>pgmq jobs, idempotent handling, retries, dead letters, timers</td><td>Phase 3</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#job-queue-and-worker">Queue and worker</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Postgres (Supabase)</td><td>Cases, append-only events, documents, signals, approvals, outbox, memory</td><td>Phase 3</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#data-model">Data model</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Ingest API</td><td>Token-protected routes and signed webhooks</td><td>Phases 4–5</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#http-api">HTTP API</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Duplicate, fraud and injection checks</td><td>Deterministic signals with evidence; quarantine</td><td>Phase 6</td><td>Phase 6</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Resolution agent</td><td>LangGraph loop, read-only tools, evidence-checked proposal</td><td>Phase 7</td><td>Phase 7</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Approval UI and executor</td><td>Action hash, outbox, idempotent ERP write</td><td>Phase 8</td><td>Phase 8</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Telemetry</td><td>One trace per case; JSON logs</td><td>Phase 9</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#telemetry">Telemetry</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr><tr><td>Deployment</td><td>Cloud Run, Supabase, secrets, drain cron</td><td>Phase 11</td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/LLD.md#deployment">Deployment</a></td><td><a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/DESIGN.md#components">Report</a></td></tr>
+</tbody></table></div></section>
+
+<section id="lifecycle"><h2>Case lifecycle</h2>
+<p class="lead">One invoice is one case. Its state is a row in Postgres, and every move is a transaction that also writes an audit event and queues the next job, so a crash never loses or doubles a step.</p>
+<figure class="fig"><svg viewBox="0 0 722 360" class="dg" role="img" aria-label="Case state machine: RECEIVED to SCREENING to EXTRACTING to CHECKING; holds go to QUARANTINED, INVESTIGATING or BLOCKED_DUPLICATE; everything reaches AWAITING_APPROVAL, then EXECUTING or REJECTED or ESCALATED, and finally CLOSED">
+<rect x="10" y="40" width="150" height="40" rx="8" class="k-ingest"/><text x="85" y="64" class="mono sm" text-anchor="middle">RECEIVED</text>
+<rect x="186" y="40" width="150" height="40" rx="8" class="k-ingest"/><text x="261" y="64" class="mono sm" text-anchor="middle">WAITING_DOCS</text>
+<rect x="10" y="104" width="150" height="40" rx="8" class="k-ingest"/><text x="85" y="128" class="mono sm" text-anchor="middle">SCREENING</text>
+<rect x="186" y="104" width="150" height="40" rx="8" class="k-gov"/><text x="261" y="128" class="mono sm" text-anchor="middle">QUARANTINED</text>
+<rect x="10" y="168" width="150" height="40" rx="8" class="k-ingest"/><text x="85" y="192" class="mono sm" text-anchor="middle">EXTRACTING</text>
+<rect x="186" y="168" width="150" height="40" rx="8" class="k-model"/><text x="261" y="192" class="mono sm" text-anchor="middle">INVESTIGATING</text>
+<rect x="10" y="232" width="150" height="40" rx="8" class="k-ingest"/><text x="85" y="256" class="mono sm" text-anchor="middle">CHECKING</text>
+<rect x="186" y="232" width="150" height="40" rx="8" class="k-gov"/><text x="261" y="256" class="mono sm" text-anchor="middle">BLOCKED_DUPLICATE</text>
+<rect x="362" y="168" width="150" height="40" rx="8" class="k-user"/><text x="437" y="192" class="mono sm b" text-anchor="middle">AWAITING_APPROVAL</text>
+<rect x="362" y="40" width="150" height="40" rx="8" class="k-cross"/><text x="437" y="64" class="mono sm" text-anchor="middle">REJECTED</text>
+<rect x="362" y="296" width="150" height="40" rx="8" class="k-cross"/><text x="437" y="320" class="mono sm" text-anchor="middle">ESCALATED</text>
+<rect x="538" y="40" width="150" height="40" rx="8" class="k-cross"/><text x="613" y="64" class="mono sm b" text-anchor="middle">CLOSED</text>
+<rect x="538" y="168" width="150" height="40" rx="8" class="k-serve"/><text x="613" y="192" class="mono sm" text-anchor="middle">EXECUTING</text>
+<rect x="538" y="232" width="150" height="40" rx="8" class="k-dlq"/><text x="613" y="256" class="mono sm" text-anchor="middle">FAILED</text>
+<path d="M160 60 L184 60" class="wire" marker-end="url(#ah)"/>
+<path d="M85 80 L85 102" class="wire" marker-end="url(#ah)"/>
+<path d="M230 80 L132 102" class="wire" marker-end="url(#ah)"/>
+<path d="M160 124 L184 124" class="wire" marker-end="url(#ah)"/>
+<path d="M85 144 L85 166" class="wire" marker-end="url(#ah)"/>
+<path d="M160 188 L184 188" class="wire" marker-end="url(#ah)"/>
+<path d="M85 208 L85 230" class="wire" marker-end="url(#ah)"/>
+<path d="M160 252 L184 252" class="wire" marker-end="url(#ah)"/>
+<path d="M140 232 L200 210" class="wire" marker-end="url(#ah)"/>
+<path d="M336 132 L384 166" class="wire" marker-end="url(#ah)"/>
+<path d="M336 188 L360 188" class="wire" marker-end="url(#ah)"/>
+<path d="M336 244 L384 210" class="wire" marker-end="url(#ah)"/>
+<path d="M85 272 L85 284 L407 284 L407 210" class="wire hot" marker-end="url(#ah)"/>
+<path d="M437 166 L437 82" class="wire" marker-end="url(#ah)"/>
+<path d="M512 60 L536 60" class="wire" marker-end="url(#ah)"/>
+<path d="M512 188 L536 188" class="wire hot" marker-end="url(#ah)"/>
+<path d="M613 166 L613 82" class="wire hot" marker-end="url(#ah)"/>
+<path d="M613 208 L613 230" class="wire red" marker-end="url(#ah)"/>
+<path d="M538 244 L506 210" class="wire dash" marker-end="url(#ah)"/>
+<path d="M447 208 L447 294" class="wire" marker-end="url(#ah)"/>
+<path d="M477 294 L477 210" class="wire dash" marker-end="url(#ah)"/>
+<path d="M688 252 L704 252 L704 60 L690 60" class="wire" marker-end="url(#ah)"/>
+<path d="M512 316 L704 316 L704 252" class="wire"/>
+<text x="10" y="24" class="cap">Blue: the clean path · dashed: back to a person for a new approval</text>
+</svg><figcaption>No state is a dead end. ESCALATED and FAILED wait for a person, who sends the case back for approval or closes it with a recorded reason.</figcaption></figure>
+<div class="table"><table><thead><tr><th>From</th><th>To</th><th>When</th></tr></thead><tbody>
+<tr><td><code>RECEIVED</code></td><td><code>WAITING_DOCS</code></td><td>PO or receipt not in yet; a wait limit sets <code>due_at</code></td></tr>
+<tr><td><code>SCREENING</code></td><td><code>QUARANTINED</code></td><td>Injection or tampering signal; goes to a person, never the agent</td></tr>
+<tr><td><code>EXTRACTING</code></td><td><code>INVESTIGATING</code></td><td>Extraction failed validation after the retry</td></tr>
+<tr><td><code>CHECKING</code></td><td><code>BLOCKED_DUPLICATE</code></td><td>Exact duplicate (file hash or vendor + invoice number)</td></tr>
+<tr><td><code>CHECKING</code></td><td><code>INVESTIGATING</code></td><td>Any matcher exception or risk signal</td></tr>
+<tr><td><code>CHECKING</code></td><td><code>AWAITING_APPROVAL</code></td><td>Clean match</td></tr>
+<tr><td><code>AWAITING_APPROVAL</code></td><td><code>EXECUTING</code> · <code>REJECTED</code> · <code>ESCALATED</code></td><td>Approved · rejected · approval timed out</td></tr>
+<tr><td><code>EXECUTING</code></td><td><code>CLOSED</code> · <code>FAILED</code></td><td>Read-back confirmed · retries used up</td></tr>
+</tbody></table></div>
+<p>Phase 3 builds this as a transition map in code, with a test that checks it against this diagram.</p></section>
+
+<section id="reading"><h2>Reading documents</h2>
+<p class="lead">PDF to typed data in four steps, each cached so a page is paid for once.</p>
+<ol>
+<li><strong>Fetch:</strong> download the PO, receipt and invoice PDFs for an order from the Hugging Face Northwind datasets. A missing PO or receipt is <code>None</code>, not an error.</li>
+<li><strong>Render:</strong> each page becomes a PNG inside 1664 × 2048, the parser's recommended size.</li>
+<li><strong>Parse:</strong> Nemotron 3.5 Parse reads one page image per request and returns text with LaTeX tables. Picture blocks and layout tags are stripped.</li>
+<li><strong>Extract:</strong> an LLM maps the text to a <code>Document</code> (order id, date, party, lines, total) at temperature 0. Pydantic validates it, and code checks it has as many lines as the parsed tables have rows. On either failure the problem goes back once, then the case goes to investigation.</li>
+</ol>
+<div class="note"><p><strong>Why two models:</strong> the parser has no structured output, so a second call does the mapping. The prompt says never calculate or guess a value, because a guessed total would hide the exact mismatch the matcher exists to catch. See <a href="chunking.html">chunking</a> for parsing trade-offs.</p></div>
+<p><strong>Cross-check:</strong> every amount in the PDF's own text layer must also appear in the parsed text. On invoice 11077 Nemotron dropped the $1,374.60 total; the check reports it, and extraction correctly leaves the total empty rather than inventing it (<a href="https://github.com/DevLCodes/three-way-match/blob/main/docs/steps/01.8-crosscheck.md">step 01.8</a>).</p></section>
+
+<section id="matching"><h2>Matching rules</h2>
+<p class="lead">The matcher is plain code. Lines are joined by a normalised product name, prices compare with a 0.01 tolerance, and any exception means the case is not approved.</p>
+<div class="table"><table><thead><tr><th>Code</th><th>Fires when</th></tr></thead><tbody>
+<tr><td><code>missing_po</code> · <code>missing_receipt</code></td><td>The document isn't found</td></tr>
+<tr><td><code>not_on_po</code></td><td>Invoiced but not ordered</td></tr>
+<tr><td><code>quantity_vs_po</code></td><td>Invoiced quantity differs from ordered</td></tr>
+<tr><td><code>price_missing</code> · <code>price_vs_po</code></td><td>A unit price is absent, or differs from the PO by more than 0.01</td></tr>
+<tr><td><code>not_received</code> · <code>quantity_vs_receipt</code></td><td>Invoiced but not received, or more invoiced than received</td></tr>
+<tr><td><code>total_mismatch</code></td><td>The invoice total is missing, or lines don't add up to it</td></tr>
+</tbody></table></div></section>
+
+<section id="agent"><h2>The resolution agent</h2>
+<p class="lead">Planned. It runs only in <code>INVESTIGATING</code>, for one case, with at most 8 tool calls and a fixed token budget. Hitting a limit hands the case to a person with what it found so far.</p>
+<div class="table"><table><thead><tr><th>Tool (read-only)</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>get_case</code> · <code>get_document_text</code> · <code>get_pdf_text_layer</code></td><td>Look at the evidence</td></tr>
+<tr><td><code>get_po</code> · <code>get_receipts</code> · <code>get_vendor</code></td><td>Fetch current ERP records</td></tr>
+<tr><td><code>reread_page</code></td><td>Repeat a read at higher resolution</td></tr>
+<tr><td><code>search_past_cases</code></td><td>Similar resolved cases from pgvector memory</td></tr>
+<tr><td><code>rerun_match</code></td><td>Rerun the matcher on a correction that comes from a second source</td></tr>
+</tbody></table></div>
+<p>Output is a validated <code>Proposal</code>: root cause, cited evidence, recommended action, confidence. An evidence check rejects any proposal whose cited values aren't in the case data. Built on LangGraph for this one loop only; step 7.1 first checks the NVIDIA model can call tools. Memory is written only when a person closes a case, so a malicious invoice can't teach a bad precedent (<a href="agent-memory.html">agent memory</a>).</p></section>
+
+<section id="queue"><h2>Queue, retries and scale to zero</h2>
+<p class="lead">The queue lives in the same Postgres as the cases (pgmq), so a state change and its next job commit together. Nothing runs when there is no work.</p>
+<ol>
+<li>Supabase Cron runs each minute and checks in SQL whether a job is visible or a <code>due_at</code> timer has passed.</li>
+<li>Only then does it POST to <code>/internal/drain</code> through <code>pg_net</code>, with the bearer token from Supabase Vault.</li>
+<li>Cloud Run starts. <code>drain()</code> first turns due timers into jobs, then reads batches of 10 with a 60 s visibility timeout.</li>
+<li>Each job names the state it was queued for. The handler locks the case row and runs the step only if the case is still in that state, so a repeat delivery does nothing.</li>
+<li>A failed job becomes visible again after 2<sup>n</sup> × 10 s. After 5 attempts it moves to <code>jobs_dlq</code>.</li>
+<li>The drain stops when the queue is empty or after <code>DRAIN_SECONDS</code> (50 s in production), and the instance scales to zero.</li>
+</ol>
+<p>See <a href="../classic-system-design/queues.html">message queues</a> for delivery guarantees and the outbox pattern.</p></section>
+
+<section id="approval"><h2>Approval and execution</h2>
+<p class="lead">Planned. A person reviews every case in v1. The agent proposes; a separate executor acts, and only with a valid approval.</p>
+<ol>
+<li>The review page (FastAPI, Jinja2, HTMX, same service) shows the invoice, evidence, signals, the agent's reasoning and the exact action.</li>
+<li>The approval stores a hash of the action, the approver and an expiry, and commits with an <code>outbox</code> row.</li>
+<li>The executor recomputes the hash, re-reads the PO and invoice, and stops if either changed.</li>
+<li>It writes <code>erp_postings</code> with idempotency key <code>case_id:action</code>, reads it back, and closes the case.</li>
+</ol>
+<p>Approvers have amount limits and can't approve a case they raised. Unanswered cases escalate and never approve themselves.</p></section>
+
+<section id="deploy"><h2>Deployment</h2>
+<div class="table"><table><thead><tr><th>Part</th><th>Service</th><th>Set up by (Phase 11)</th></tr></thead><tbody>
+<tr><td>API, worker, review UI</td><td>Google Cloud Run, 0 to 1 instance, 1 vCPU, 512 MiB</td><td>deploy.sh, Dockerfile</td></tr>
+<tr><td>Database, queue, cron, vectors</td><td>Supabase Postgres with pgmq, pg_cron, pg_net, pgvector</td><td>migrate.py</td></tr>
+<tr><td>Secrets</td><td>Google Secret Manager; Supabase Vault for the cron's URL and token</td><td>deploy.sh</td></tr>
+<tr><td>LLM traces</td><td>Langfuse over OTLP</td><td>telemetry.py</td></tr>
+<tr><td>Parsing and LLM</td><td>NVIDIA hosted endpoints (trial terms)</td><td><code>NVIDIA_API_KEY</code></td></tr>
+<tr><td>Local</td><td>Docker Compose: Supabase Postgres image + API</td><td>docker-compose.yml</td></tr>
+</tbody></table></div>
+<p>The deploy script will apply migrations, deploy from source, store the drain URL in Vault, then run a smoke test that pushes cases through every path.</p>
+<div class="note"><p><strong>Biggest catch:</strong> NVIDIA's hosted catalog is a trial for evaluation. Real use needs paid access or self-hosted weights; the parser and LLM sit behind interfaces so that is a config change. See <a href="open-weight-models.html">open-weight models</a>.</p></div></section>
+
+<section id="observe"><h2>Observability and evals</h2>
+<p>One OpenTelemetry trace follows a case across requests, because the trace id is the case id. Logs are JSON lines with <code>case_id</code> and <code>trace_id</code>. <code>case_events</code> is append-only, enforced by a trigger.</p>
+<div class="table"><table><thead><tr><th>Release gate (planned)</th><th>Target</th></tr></thead><tbody>
+<tr><td>Bad invoices reaching approval as clean</td><td class="num">0</td></tr>
+<tr><td>Exact duplicates caught</td><td class="num">100%</td></tr>
+<tr><td>Injection suite: unsafe action taken</td><td class="num">0</td></tr>
+<tr><td>Field extraction accuracy</td><td class="num">≥ 98%</td></tr>
+<tr><td>Agent root cause correct</td><td class="num">≥ 85%</td></tr>
+</tbody></table></div>
+<p>See <a href="evals.html">evals</a> and <a href="eval-rubrics.html">eval rubrics</a>.</p></section>
+
+<section id="risks"><h2>Risks</h2>
+<div class="table"><table><thead><tr><th>Risk</th><th>Mitigation</th></tr></thead><tbody>
+<tr><td>Parser drops a value (invoice 11077's total)</td><td>Cross-check with the PDF text layer; arithmetic check holds the case</td></tr>
+<tr><td>Prompt injection in a PDF</td><td>Screen before the agent sees it; read-only tools; approval bound to an action hash</td></tr>
+<tr><td>Agent talks the matcher into a pass</td><td><code>rerun_match</code> accepts only corrections from a second source</td></tr>
+<tr><td>Two workers race on one invoice</td><td>Row lock on the case; unique constraints on file hash and idempotency key</td></tr>
+<tr><td>Northwind has no vendor master or bank details</td><td>Seed vendors and labelled fakes made from altered Northwind PDFs</td></tr>
+<tr><td>Supabase Free pauses after a week idle</td><td>Weekly keep-alive job and nightly dump</td></tr>
+</tbody></table></div></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="note"><p>"It's a workflow, not an agent, because the steps are known: read, screen, extract, check, match, approve, post. A Postgres state machine runs it, with the queue in the same database so a state change and its next job commit together, and every step is idempotent. Rules decide money; the LLM only reads documents and, for exceptions, investigates with read-only tools and proposes. A person approves an action hash, and a separate executor writes to the ERP with an idempotency key and reads it back. It scales to zero: a cron checks for due work in SQL before waking Cloud Run."</p></div></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="support-agent.html">Support agent with actions</a></li><li><a href="agent-memory.html">Agent memory</a></li><li><a href="evals.html">Evals</a></li><li><a href="access-control.html">Access control</a></li><li><a href="../classic-system-design/queues.html">Message queues</a></li><li><a href="../classic-system-design/payments.html">Payments</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Planned components are marked as planned; figures for them are design targets, not measurements. Check vendor docs before relying on a specific product limit.</div></footer>
+<script src="progress.js"></script>
+</body>
+</html>
