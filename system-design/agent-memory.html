@@ -209,11 +209,12 @@
 <li>No delete path, or a delete that misses the vector store and summaries.</li>
 <li>Filtering by user in the prompt instead of in the query.</li>
 </ul></section><section id="interview"><h2>Saying it in an interview</h2>
-<div class="say"><p>"I'd split memory into three types: short-term session state, a small profile of preferences keyed by user id, and episodic summaries of past issues in a vector store. At session end a small model extracts facts, and code checks them for confidence, consent and conflicts, with newer winning, before writing with a TTL. On each turn I load the profile and the top three relevant episodes within about 500 tokens, filtered by the signed-in user id in code, and live account data always comes from the system of record. Users can see and delete what's remembered. I'd measure memory recall on multi-session test scripts, aiming for 90%, with zero cross-user leaks as a release blocker."</p></div></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="after-retrieval.html">After retrieval</a></li><li><a href="access-control.html">Access control</a></li><li><a href="evals.html">Evals</a></li><li><a href="support-agent.html">Customer support agent</a></li><li><a href="routing.html">Routing</a></li></ul></section></article>
+<div class="say"><p>"I'd split memory into three types: short-term session state, a small profile of preferences keyed by user id, and episodic summaries of past issues in a vector store. At session end a small model extracts facts, and code checks them for confidence, consent and conflicts, with newer winning, before writing with a TTL. On each turn I load the profile and the top three relevant episodes within about 500 tokens, filtered by the signed-in user id in code, and live account data always comes from the system of record. Users can see and delete what's remembered. I'd measure memory recall on multi-session test scripts, aiming for 90%, with zero cross-user leaks as a release blocker."</p></div></section><section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="after-retrieval.html">After retrieval</a></li><li><a href="access-control.html">Access control</a></li><li><a href="evals.html">Evals</a></li><li><a href="support-agent.html">Customer support agent</a></li><li><a href="routing.html">Routing</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
 
 <script src="progress.js"></script>
+<script src="check-yourself.js"></script>
 </body>
 </html>

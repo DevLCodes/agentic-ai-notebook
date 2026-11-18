@@ -52,4 +52,5 @@ Each topic page can have a deck of flashcards and quiz questions at `system-desi
 - Flashcards: flip, previous and next, shuffle, mark as known, and skip known cards. Known cards are saved in `localStorage` (`study_known:<page>`), wrapped in try/catch so blocked storage only loses the saving.
 - Quiz: one question at a time, choices shuffled, instant feedback with the `why` and a link to the section, a score at the end, and a retry of only the wrong ones.
 - Keyboard: Space flips (also when a button has focus), the arrow keys move, K marks known; in the quiz 1 to 4 pick an answer and Enter or the right arrow moves on.
+- Check yourself: every topic page has an empty `<section id="check-yourself" hidden></section>` before Related and loads `check-yourself.js`. When the page's slug is in `decks/index.json`, the block shows 3 random quiz questions and a link to the flashcards; finishing it marks the topic quizzed (`q`) in `progress.js`. A new deck lights it up with no page edit; new topic pages copy the placeholder and script tag.
 - The hub routes with the hash: `study.html#<slug>/cards` and `study.html#<slug>/quiz` can be linked directly.
