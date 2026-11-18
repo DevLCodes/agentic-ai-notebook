@@ -1,0 +1,147 @@
+{
+  "title": "Evals",
+  "page": "evals.html",
+  "cards": [
+    {
+      "front": "Why evals are a loop",
+      "back": "Production failures become new golden questions, so the same bug cannot come back silently.",
+      "link": "evals.html#why"
+    },
+    {
+      "front": "Why measure each stage separately",
+      "back": "An end-to-end score tells you something got worse; component scores tell you where.",
+      "link": "evals.html#layers"
+    },
+    {
+      "front": "Recall@k formula",
+      "back": "Relevant chunks in the top k ÷ all relevant chunks for that question. 3 of 4 gold chunks in the top 5 gives recall@5 = 0.75.",
+      "link": "evals.html#m-recall"
+    },
+    {
+      "front": "Hit rate@k",
+      "back": "1 if any gold chunk is in the top k, else 0. Use it when the same fact lives in several chunks and finding one is enough.",
+      "link": "evals.html#m-recall"
+    },
+    {
+      "front": "Reading an MRR value",
+      "back": "MRR 0.5 means the first right chunk is typically at rank 2; 0.33 means rank 3.",
+      "link": "evals.html#m-mrr"
+    },
+    {
+      "front": "nDCG@k",
+      "back": "Each result earns its relevance grade discounted by log₂(rank + 1), divided by the ideal order. It sees reorders inside the top k that recall can't.",
+      "link": "evals.html#m-ndcg"
+    },
+    {
+      "front": "Groundedness vs correctness",
+      "back": "Groundedness checks every claim is supported by the retrieved context, not that it is true. Faithfully repeating stale context scores 1.0 and is still wrong.",
+      "link": "evals.html#m-grounded"
+    },
+    {
+      "front": "Known LLM judge biases",
+      "back": "Judges prefer longer answers, the first option in a pair and their own model family. Shuffle order, cap length and use a different family.",
+      "link": "evals.html#generation"
+    },
+    {
+      "front": "Evaluating agents in a sandbox",
+      "back": "Fake but realistic tools; score task success from the final state, plus steps, tokens, latency and any forbidden calls.",
+      "link": "evals.html#agents"
+    },
+    {
+      "front": "Golden set slices",
+      "back": "Common, exact-ID, multi-hop, stale, no-answer, permission and injection cases. Start with 100 to 300 and grow from production.",
+      "link": "evals.html#golden"
+    },
+    {
+      "front": "Eval tooling: two pieces",
+      "back": "An offline library that runs the golden set in CI (Ragas, DeepEval, promptfoo) plus a tracing platform that scores production traffic (Langfuse, Phoenix, LangSmith).",
+      "link": "evals.html#tools"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Recall@5 is 0.4. Which change can fix the answers?",
+      "choices": [
+        "A better prompt",
+        "Improving retrieval: chunking, embeddings or hybrid search",
+        "A stronger LLM",
+        "A stricter judge"
+      ],
+      "answer": 1,
+      "why": "If recall@k is low the model never saw the right text, so no prompt can fix it.",
+      "link": "evals.html#evallab"
+    },
+    {
+      "q": "A reranker reorders results inside the top 5. Which metric shows the change?",
+      "choices": [
+        "Recall@5",
+        "Hit rate@5",
+        "nDCG@5",
+        "Recall@50"
+      ],
+      "answer": 2,
+      "why": "Recall@k ignores order within the top k; nDCG rewards the best chunks near the top.",
+      "link": "evals.html#m-ndcg"
+    },
+    {
+      "q": "A multi-hop question needs two sections. It scores MRR 1.0 but still fails. Why?",
+      "choices": [
+        "MRR only scores the first relevant chunk",
+        "MRR penalises long answers",
+        "The judge was lenient",
+        "MRR needs graded labels"
+      ],
+      "answer": 0,
+      "why": "Pair MRR with recall@k to see the second, third or fourth relevant chunk.",
+      "link": "evals.html#m-mrr"
+    },
+    {
+      "q": "A candidate improves recall and groundedness but correct refusals drop from 100% to 97%. Ship it?",
+      "choices": [
+        "Yes, the averages improved",
+        "Yes, as a canary",
+        "Only if latency holds",
+        "No; one failed safety rule blocks the release"
+      ],
+      "answer": 3,
+      "why": "Safety rules must be perfect, whatever the averages say.",
+      "link": "evals.html#gate"
+    },
+    {
+      "q": "Recall dropped after relabelling. What should you check before trusting it?",
+      "choices": [
+        "The judge's temperature",
+        "Review the misses by hand for unlabelled relevant chunks",
+        "Switch to MRR",
+        "Increase k to 100"
+      ],
+      "answer": 1,
+      "why": "Incomplete labels count a correct find as a miss.",
+      "link": "evals.html#m-recall"
+    },
+    {
+      "q": "A judge passes an answer saying 14 weeks where the source says 12. What fixes this?",
+      "choices": [
+        "Ask for the evidence quote and spot-check numbers with code",
+        "Use a 1 to 10 scale",
+        "Raise the temperature",
+        "Trust it once it is above 0.95"
+      ],
+      "answer": 0,
+      "why": "Lenient judges pass paraphrases that change numbers.",
+      "link": "evals.html#m-grounded"
+    },
+    {
+      "q": "Before an LLM judge gates releases, how do you calibrate it?",
+      "choices": [
+        "Run it twice and compare",
+        "Use the newest model",
+        "Label 100 to 200 answers by hand and require at least 85% agreement",
+        "Compare it with another tool's faithfulness score"
+      ],
+      "answer": 2,
+      "why": "A judge is a measuring instrument; never compare numbers across tools.",
+      "link": "evals.html#m-grounded"
+    }
+  ]
+}

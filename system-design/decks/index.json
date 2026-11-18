@@ -7,5 +7,13 @@
   "batching",
   "quantization",
   "open-weight-models",
-  "nvidia-architecture"
+  "nvidia-architecture",
+  "ml-basics",
+  "routing",
+  "metrics",
+  "evals",
+  "eval-rubrics",
+  "testing",
+  "agent-memory",
+  "numbers"
 ]
