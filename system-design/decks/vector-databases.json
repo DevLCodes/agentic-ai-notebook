@@ -1,0 +1,147 @@
+{
+  "title": "Vector databases",
+  "page": "vector-databases.html",
+  "cards": [
+    {
+      "front": "What a vector database answers",
+      "back": "Which stored vectors are nearest to this query vector, among those that pass my filters?",
+      "link": "vector-databases.html#what"
+    },
+    {
+      "front": "Why store metadata with each vector",
+      "back": "One record per chunk; the metadata is what makes filtered search and deletes possible.",
+      "link": "vector-databases.html#what"
+    },
+    {
+      "front": "When exact search stops being enough",
+      "back": "Exact search is fine up to roughly a million vectors. Beyond that, systems use an approximate nearest neighbour (ANN) index.",
+      "link": "vector-databases.html#ann"
+    },
+    {
+      "front": "How ANN quality is measured",
+      "back": "By recall: how often the true nearest neighbours appear in the results. ANN trades a little recall for orders of magnitude less work.",
+      "link": "vector-databases.html#ann"
+    },
+    {
+      "front": "HNSW",
+      "back": "A layered graph: search starts at the top with long hops and drops a layer each time no neighbour is closer. High recall and low latency, but memory-hungry because the graph lives in RAM.",
+      "link": "vector-databases.html#indexes"
+    },
+    {
+      "front": "IVF",
+      "back": "Clusters the vectors and searches only the probed clusters. Smaller and simpler, but needs training on a sample and recall depends on how many clusters you probe.",
+      "link": "vector-databases.html#indexes"
+    },
+    {
+      "front": "nprobe",
+      "back": "How many IVF clusters are searched. More probes means better recall and slower queries.",
+      "link": "vector-databases.html#indexes"
+    },
+    {
+      "front": "Product quantisation (PQ)",
+      "back": "Compresses vectors 8 to 32 times at some loss of accuracy, usually paired with a rerank on the full vectors.",
+      "link": "vector-databases.html#indexes"
+    },
+    {
+      "front": "Post-filter vs pre-filter vs filtered ANN",
+      "back": "Post-filter can leave almost nothing; pre-filter is accurate but slow when many survive; filtered ANN skips non-matching vectors during traversal and is what you want for permissions.",
+      "link": "vector-databases.html#filtering"
+    },
+    {
+      "front": "Vector memory estimate",
+      "back": "memory ≈ vectors × dimensions × 4 bytes × 1.3 to 2 for index overhead. 50M × 768 dims ≈ 154 GB raw, roughly 200 to 300 GB with HNSW.",
+      "link": "vector-databases.html#sizing"
+    },
+    {
+      "front": "A good default vector store answer",
+      "back": "Start with the database the team already operates if it supports filtered vector search. Move to a dedicated engine when scale or latency demands it.",
+      "link": "vector-databases.html#options"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Around what size do systems usually switch from exact search to an ANN index?",
+      "choices": [
+        "About ten thousand vectors",
+        "Roughly a million vectors",
+        "About a billion vectors",
+        "Never; exact search always scales"
+      ],
+      "answer": 1,
+      "why": "Exact search is fine up to roughly a million vectors; beyond that ANN indexes are used.",
+      "link": "vector-databases.html#ann"
+    },
+    {
+      "q": "What is the main cost of an HNSW index?",
+      "choices": [
+        "Memory, because the graph lives in RAM",
+        "It needs training on a sample first",
+        "It cannot handle inserts",
+        "It compresses vectors and loses accuracy"
+      ],
+      "answer": 0,
+      "why": "HNSW gives high recall and low latency but is memory-hungry.",
+      "link": "vector-databases.html#indexes"
+    },
+    {
+      "q": "In an IVF index, what happens when you raise nprobe?",
+      "choices": [
+        "Recall goes down and queries get faster",
+        "Memory use halves",
+        "Nothing changes",
+        "Recall goes up and queries get slower"
+      ],
+      "answer": 3,
+      "why": "Probing more clusters finds more true neighbours but does more work.",
+      "link": "vector-databases.html#indexes"
+    },
+    {
+      "q": "A permission filter matches only 1% of chunks. Which approach can return almost nothing?",
+      "choices": [
+        "Filtered ANN",
+        "Pre-filtering",
+        "Post-filtering",
+        "Exact search over the survivors"
+      ],
+      "answer": 2,
+      "why": "Post-filtering searches first, so a selective filter drops most of the top results.",
+      "link": "vector-databases.html#filtering"
+    },
+    {
+      "q": "Roughly how much raw vector memory do 50M chunks at 768 dimensions in float32 need?",
+      "choices": [
+        "About 15 GB",
+        "About 154 GB",
+        "About 1.5 TB",
+        "About 40 GB"
+      ],
+      "answer": 1,
+      "why": "50M × 768 × 4 bytes ≈ 154 GB, before index overhead.",
+      "link": "vector-databases.html#sizing"
+    },
+    {
+      "q": "Your team already runs Postgres and has a few million vectors that need transactions with other data. What fits?",
+      "choices": [
+        "pgvector",
+        "A dedicated engine on day one",
+        "Elasticsearch only for keyword search",
+        "No vector store; use exact search in the app"
+      ],
+      "answer": 0,
+      "why": "pgvector suits teams already on Postgres needing transactions, up to tens of millions of vectors.",
+      "link": "vector-databases.html#options"
+    },
+    {
+      "q": "What does product quantisation trade away?",
+      "choices": [
+        "Write speed, for faster deletes",
+        "Filtering, for lower latency",
+        "Recall tuning, for fewer knobs",
+        "Some accuracy, for 8 to 32 times smaller vectors"
+      ],
+      "answer": 3,
+      "why": "PQ compresses vectors and loses some accuracy, so it is often paired with a rerank on full vectors.",
+      "link": "vector-databases.html#indexes"
+    }
+  ]
+}

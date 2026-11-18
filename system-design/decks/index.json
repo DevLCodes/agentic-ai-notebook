@@ -2,5 +2,15 @@
   "chunking",
   "embeddings",
   "vector-search",
-  "reranking"
+  "reranking",
+  "search-types",
+  "vector-databases",
+  "access-control",
+  "retrieval-weights",
+  "after-retrieval",
+  "citations",
+  "confidence-scoring",
+  "knowledge-base",
+  "knowledge-freshness",
+  "backfills"
 ]

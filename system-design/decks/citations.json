@@ -1,0 +1,152 @@
+{
+  "title": "Citations",
+  "page": "citations.html",
+  "cards": [
+    {
+      "front": "Why cite",
+      "back": "Trust, one-click verification, audit months later, and the cheapest hallucination signal: a sentence whose citation fails a check.",
+      "link": "citations.html#why"
+    },
+    {
+      "front": "Citations start at ingestion",
+      "back": "You can only cite what you labelled: store a stable id and source metadata with every chunk. If re-chunking changes ids, old citations break.",
+      "link": "citations.html#grain"
+    },
+    {
+      "front": "Citation grains",
+      "back": "Document, page or section, chunk, span (quote) and table cell or XBRL fact. Finer grains are easier to check but can hide context.",
+      "link": "citations.html#grain"
+    },
+    {
+      "front": "Native citation APIs",
+      "back": "Pass documents with citations enabled; the provider guarantees the quoted text is in the document. The highest-trust approach.",
+      "link": "citations.html#generate"
+    },
+    {
+      "front": "Why post-hoc attribution is risky",
+      "back": "Writing first and then searching for a similar source nearly always finds something, but sharing words is not supporting the claim.",
+      "link": "citations.html#generate"
+    },
+    {
+      "front": "Three cheap code checks",
+      "back": "The cited id was retrieved, the quote is in the source, and every number in the sentence is in the source.",
+      "link": "citations.html#verify"
+    },
+    {
+      "front": "Entailment check",
+      "back": "An NLI model or LLM judge reads (source, sentence) and answers supported, contradicted or not enough information. It catches laundering.",
+      "link": "citations.html#verify"
+    },
+    {
+      "front": "No source, no sentence",
+      "back": "When a sentence fails, drop it, regenerate it or say the source doesn't state it. Don't show it with a warning.",
+      "link": "citations.html#verify"
+    },
+    {
+      "front": "Citation laundering",
+      "back": "A real citation attached to a claim it doesn't support, like \"operating margin improved [c41]\" when c41 is about gross margin. Only entailment catches it.",
+      "link": "citations.html#failures"
+    },
+    {
+      "front": "Citation recall vs precision",
+      "back": "Recall: share of sentences fully supported by their citations. Precision: share of individual citations that support their sentence; over-citing lowers it.",
+      "link": "citations.html#metrics"
+    },
+    {
+      "front": "Unsupported-claim rate",
+      "back": "In production, the share of sentences the verifier dropped or flagged. A rise after a change is a regression alarm that needs no labels.",
+      "link": "citations.html#metrics"
+    },
+    {
+      "front": "Never use list positions as ids",
+      "back": "\"doc 3\" changes whenever ranking does; use stable chunk ids.",
+      "link": "citations.html#ui"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "The model cites c77, which was never retrieved. What catches it?",
+      "choices": [
+        "Only an NLI judge",
+        "The id check",
+        "Citation recall",
+        "Nothing; it looks valid"
+      ],
+      "answer": 1,
+      "why": "Checking ids against the retrieved set is exact and free.",
+      "link": "citations.html#failures"
+    },
+    {
+      "q": "\"Operating margin improved [c41]\", but c41 is about gross margin. What catches it?",
+      "choices": [
+        "Only entailment (NLI or judge)",
+        "The id check",
+        "The quote check",
+        "Citation precision alone"
+      ],
+      "answer": 0,
+      "why": "The id and quote are real; only an entailment check sees the claim isn't supported.",
+      "link": "citations.html#failures"
+    },
+    {
+      "q": "Which way of getting citations from a model is lowest trust?",
+      "choices": [
+        "Native citation APIs",
+        "Structured output with quotes",
+        "Per-sentence JSON with chunk ids",
+        "Inline [n] markers"
+      ],
+      "answer": 3,
+      "why": "Markers need regex parsing and list positions change when ranking does.",
+      "link": "citations.html#generate"
+    },
+    {
+      "q": "A computed operating margin of 29.8% appears in the answer. What should it cite?",
+      "choices": [
+        "The model's own arithmetic",
+        "Any chunk mentioning margin",
+        "The calculator tool output",
+        "Nothing; computed numbers need no source"
+      ],
+      "answer": 2,
+      "why": "Every number must come from a cited chunk or a calculator output.",
+      "link": "citations.html#verify"
+    },
+    {
+      "q": "A sentence fails verification. What should happen?",
+      "choices": [
+        "Show it with a warning icon",
+        "Drop or regenerate it",
+        "Show it in grey",
+        "Ask the user to check it"
+      ],
+      "answer": 1,
+      "why": "No source, no sentence.",
+      "link": "citations.html#verify"
+    },
+    {
+      "q": "Adding three ids to a sentence that one supports lowers which metric?",
+      "choices": [
+        "Citation precision",
+        "Citation recall",
+        "Faithfulness",
+        "Unsupported-claim rate"
+      ],
+      "answer": 0,
+      "why": "Precision counts how many individual citations support their sentence.",
+      "link": "citations.html#metrics"
+    },
+    {
+      "q": "Why do citations depend on ingestion?",
+      "choices": [
+        "Ingestion runs the NLI judge",
+        "Ingestion picks the model",
+        "Citations are generated at indexing time",
+        "You can only cite ids and metadata stored with each chunk"
+      ],
+      "answer": 3,
+      "why": "Stable ids and source metadata must be written with every chunk.",
+      "link": "citations.html#grain"
+    }
+  ]
+}

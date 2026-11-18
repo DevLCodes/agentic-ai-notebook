@@ -426,9 +426,18 @@
     window.__studyGroups = groups;
     var all = [];
     groups.forEach(function (g) { g.items.forEach(function (it) { if (have.indexOf(it.slug) >= 0) all.push(it.slug); }); });
+    // Decks for pages that are not on topics.html (design walkthroughs) go in a last group, titled from the deck.
+    var extra = { name: 'Design walkthroughs', items: [] };
+    have.forEach(function (slug) {
+      if (all.indexOf(slug) < 0 && /^[\w-]+$/.test(slug)) { all.push(slug); extra.items.push({ slug: slug, title: slug }); }
+    });
+    if (extra.items.length) groups.push(extra);
     return Promise.all(all.map(function (slug) {
       return StudyEngine.load('decks/' + slug + '.json')
-        .then(function (d) { if (d && d.cards && d.quiz) decks[slug] = d; })
+        .then(function (d) {
+          if (d && d.cards && d.quiz) decks[slug] = d;
+          extra.items.forEach(function (it) { if (it.slug === slug && d && d.title) it.title = d.title; });
+        })
         .catch(function () {});
     }));
   }).then(function () {
