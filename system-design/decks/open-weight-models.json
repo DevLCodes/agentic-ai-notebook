@@ -1,0 +1,147 @@
+{
+  "title": "Open-weight models",
+  "page": "open-weight-models.html",
+  "cards": [
+    {
+      "front": "What \"the model\" you deploy really is",
+      "back": "The weights file plus the architecture config and the tokenizer, loaded by a runtime such as vLLM or llama.cpp. All three must match.",
+      "link": "open-weight-models.html#weights"
+    },
+    {
+      "front": "Open-weight vs open source",
+      "back": "Open-weight means you can download the weights under some licence. The OSI definition also requires the training code and enough data detail to rebuild the model, so most \"open\" models are only open-weight.",
+      "link": "open-weight-models.html#open"
+    },
+    {
+      "front": "What custom licences can restrict",
+      "back": "Monthly active users, using outputs to train other models, or attribution. Read the licence on the exact checkpoint and record it in your model registry.",
+      "link": "open-weight-models.html#open"
+    },
+    {
+      "front": "Base vs instruct model",
+      "back": "Base is pre-trained only and just continues text. Instruct adds instruction tuning and preference training, and is the default download for apps.",
+      "link": "open-weight-models.html#variants"
+    },
+    {
+      "front": "LoRA adapter",
+      "back": "A small add-on file, often under 1% of the model. Runtimes like vLLM can load many adapters on one base model, so ten fine-tuned tasks cost one GPU.",
+      "link": "open-weight-models.html#variants"
+    },
+    {
+      "front": "Weights memory by precision",
+      "back": "params_B × bytes per param: BF16 2, FP8/INT8 1, 4-bit about 0.55. Then total ≈ weights × 1.1 + KV cache + about 1 GB.",
+      "link": "open-weight-models.html#memory"
+    },
+    {
+      "front": "The KV cache sizing trap",
+      "back": "Llama 3.1 8B keeps about 128 KB per token, so 32 users at 32k context need about 137 GB of cache, eight times the 16 GB of weights.",
+      "link": "open-weight-models.html#memory"
+    },
+    {
+      "front": "MoE memory rule",
+      "back": "Memory follows total parameters, speed follows active ones. gpt-oss-120b has about 117B parameters, routes each token through about 5B, and fits one 80 GB GPU only because it ships in 4-bit (about 63 GB).",
+      "link": "open-weight-models.html#memory"
+    },
+    {
+      "front": "Self-hosting break-even",
+      "back": "tokens/month ≈ GPU cost per month ÷ API price per token. One ~$2/h GPU (≈$1,460/month) at $0.60 per 1M tokens breaks even near 2.4B tokens a month.",
+      "link": "open-weight-models.html#route"
+    },
+    {
+      "front": "Where open weights already win",
+      "back": "Small retrieval-pipeline models: embedders, cross-encoder rerankers, classifiers and routers. Owning the embedder also means your index vectors never change because a provider retired a version.",
+      "link": "open-weight-models.html#retrieval"
+    },
+    {
+      "front": "Supply-chain hygiene for weights",
+      "back": "Load .safetensors rather than pickled files, never set trust_remote_code on an unreviewed repo, and pin, mirror and checksum the exact revision you evaluated.",
+      "link": "open-weight-models.html#safety"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "A team sized GPUs for the weights only. Users and context grew, and requests now queue or run out of memory. What did they miss?",
+      "choices": [
+        "Tokenizer overhead",
+        "The KV cache: context × concurrency",
+        "LoRA adapters",
+        "The chat template"
+      ],
+      "answer": 1,
+      "why": "The KV cache often dominates; budget it from context length and concurrency.",
+      "link": "open-weight-models.html#failures"
+    },
+    {
+      "q": "Data must never leave the network and the system runs air-gapped. Which route works?",
+      "choices": [
+        "Closed API",
+        "Hosted open-weight",
+        "Self-hosted open weights",
+        "Any of them with a private region"
+      ],
+      "answer": 2,
+      "why": "Only self-hosting runs with no internet at run time.",
+      "link": "open-weight-models.html#route"
+    },
+    {
+      "q": "An MoE model was sized by its active parameters and won't load. Why?",
+      "choices": [
+        "MoE models need FP32",
+        "Every expert must be loaded, so memory follows total parameters",
+        "Active parameters ignore the KV cache only",
+        "Experts need separate GPUs"
+      ],
+      "answer": 1,
+      "why": "MoE saves compute per token, not memory.",
+      "link": "open-weight-models.html#memory"
+    },
+    {
+      "q": "A self-hosted model rambles, confuses roles and ignores the system prompt. Most likely cause?",
+      "choices": [
+        "Wrong chat template",
+        "Quantization to FP8",
+        "Too few LoRA adapters",
+        "Prefix caching"
+      ],
+      "answer": 0,
+      "why": "Use the tokenizer's own chat template.",
+      "link": "open-weight-models.html#failures"
+    },
+    {
+      "q": "Why should you avoid loading pickled .bin or .pt weights from strangers?",
+      "choices": [
+        "They are slower to load",
+        "They can't be quantized",
+        "They are always open source",
+        "Unpickling can run arbitrary code"
+      ],
+      "answer": 3,
+      "why": "Prefer .safetensors, which holds only tensors.",
+      "link": "open-weight-models.html#safety"
+    },
+    {
+      "q": "One model size is Apache-2.0. What can you assume about the other sizes from the same vendor?",
+      "choices": [
+        "They are Apache-2.0 too",
+        "They are all OSI open source",
+        "Nothing; check each checkpoint's licence",
+        "They are API-only"
+      ],
+      "answer": 2,
+      "why": "One vendor can ship different sizes under different terms.",
+      "link": "open-weight-models.html#open"
+    },
+    {
+      "q": "Volume is low and spiky with no GPU team. Which route usually wins on cost?",
+      "choices": [
+        "Self-hosted on reserved GPUs",
+        "Per-token pricing via a closed API or hosted open-weight",
+        "Air-gapped deployment",
+        "Buying GPUs to run overnight"
+      ],
+      "answer": 1,
+      "why": "Idle GPUs still cost, so below the break-even per-token pricing wins.",
+      "link": "open-weight-models.html#route"
+    }
+  ]
+}

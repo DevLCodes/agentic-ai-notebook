@@ -2,5 +2,10 @@
   "chunking",
   "embeddings",
   "vector-search",
-  "reranking"
+  "reranking",
+  "llm-serving",
+  "batching",
+  "quantization",
+  "open-weight-models",
+  "nvidia-architecture"
 ]
