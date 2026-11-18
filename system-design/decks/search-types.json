@@ -57,12 +57,12 @@
     {
       "q": "A user searches for the exact ID HR-4512. Which search type finds it most reliably?",
       "choices": [
-        "Keyword (BM25)",
         "Dense (semantic)",
+        "Keyword (BM25)",
         "Metadata filter only",
         "Query rewriting alone"
       ],
-      "answer": 0,
+      "answer": 1,
       "why": "Keyword search matches the exact token, while dense search is weak at exact tokens and numbers.",
       "link": "search-types.html#keyword"
     },
@@ -81,36 +81,36 @@
     {
       "q": "What is the safe default for enterprise documents full of IDs, names and jargon?",
       "choices": [
-        "Hybrid search plus reranking",
         "Dense search only",
         "Keyword search only",
-        "Metadata filters only"
+        "Metadata filters only",
+        "Hybrid search plus reranking"
       ],
-      "answer": 0,
+      "answer": 3,
       "why": "Hybrid covers each method's blind spot, and reranking sorts the fused list.",
       "link": "search-types.html#when"
     },
     {
       "q": "How should keyword and dense searches run in a hybrid setup?",
       "choices": [
-        "In parallel, then fused",
         "Keyword first, then dense on its results",
         "Dense first, then keyword on its results",
+        "In parallel, then fused",
         "Only one, picked at random per query"
       ],
-      "answer": 0,
+      "answer": 2,
       "why": "The two searches are independent, so they run in parallel and their lists are fused.",
       "link": "search-types.html#hybrid"
     },
     {
       "q": "Where should a permission filter be applied?",
       "choices": [
-        "Inside every search",
         "After retrieval, before the prompt",
+        "Inside every search",
         "Only in the reranker",
         "In the model's system prompt"
       ],
-      "answer": 0,
+      "answer": 1,
       "why": "Filtering inside the search means ranking only ever considers permitted chunks.",
       "link": "search-types.html#when"
     },

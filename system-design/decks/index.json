@@ -5,5 +5,12 @@
   "reranking",
   "search-types",
   "vector-databases",
-  "access-control"
+  "access-control",
+  "retrieval-weights",
+  "after-retrieval",
+  "citations",
+  "confidence-scoring",
+  "knowledge-base",
+  "knowledge-freshness",
+  "backfills"
 ]

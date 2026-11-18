@@ -62,12 +62,12 @@
     {
       "q": "Around what size do systems usually switch from exact search to an ANN index?",
       "choices": [
-        "Roughly a million vectors",
         "About ten thousand vectors",
+        "Roughly a million vectors",
         "About a billion vectors",
         "Never; exact search always scales"
       ],
-      "answer": 0,
+      "answer": 1,
       "why": "Exact search is fine up to roughly a million vectors; beyond that ANN indexes are used.",
       "link": "vector-databases.html#ann"
     },
@@ -86,36 +86,36 @@
     {
       "q": "In an IVF index, what happens when you raise nprobe?",
       "choices": [
-        "Recall goes up and queries get slower",
         "Recall goes down and queries get faster",
         "Memory use halves",
-        "Nothing changes"
+        "Nothing changes",
+        "Recall goes up and queries get slower"
       ],
-      "answer": 0,
+      "answer": 3,
       "why": "Probing more clusters finds more true neighbours but does more work.",
       "link": "vector-databases.html#indexes"
     },
     {
       "q": "A permission filter matches only 1% of chunks. Which approach can return almost nothing?",
       "choices": [
-        "Post-filtering",
         "Filtered ANN",
         "Pre-filtering",
+        "Post-filtering",
         "Exact search over the survivors"
       ],
-      "answer": 0,
+      "answer": 2,
       "why": "Post-filtering searches first, so a selective filter drops most of the top results.",
       "link": "vector-databases.html#filtering"
     },
     {
       "q": "Roughly how much raw vector memory do 50M chunks at 768 dimensions in float32 need?",
       "choices": [
-        "About 154 GB",
         "About 15 GB",
+        "About 154 GB",
         "About 1.5 TB",
         "About 40 GB"
       ],
-      "answer": 0,
+      "answer": 1,
       "why": "50M × 768 × 4 bytes ≈ 154 GB, before index overhead.",
       "link": "vector-databases.html#sizing"
     },
@@ -134,12 +134,12 @@
     {
       "q": "What does product quantisation trade away?",
       "choices": [
-        "Some accuracy, for 8 to 32 times smaller vectors",
         "Write speed, for faster deletes",
         "Filtering, for lower latency",
-        "Recall tuning, for fewer knobs"
+        "Recall tuning, for fewer knobs",
+        "Some accuracy, for 8 to 32 times smaller vectors"
       ],
-      "answer": 0,
+      "answer": 3,
       "why": "PQ compresses vectors and loses some accuracy, so it is often paired with a rerank on full vectors.",
       "link": "vector-databases.html#indexes"
     }

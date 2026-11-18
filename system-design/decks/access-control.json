@@ -57,12 +57,12 @@
     {
       "q": "A rule says \"readable if user.region == doc.region\". Which model is that?",
       "choices": [
-        "ABAC",
         "ACL",
+        "ABAC",
         "RBAC",
         "Zanzibar tuples"
       ],
-      "answer": 0,
+      "answer": 1,
       "why": "Attribute-based access control evaluates a policy over attributes.",
       "link": "access-control.html#models"
     },
@@ -81,36 +81,36 @@
     {
       "q": "Where should the main permission filter live?",
       "choices": [
-        "Inside the vector and keyword queries",
         "After retrieval, on the top 5",
         "In the model's instructions",
-        "In the UI, by hiding links"
+        "In the UI, by hiding links",
+        "Inside the vector and keyword queries"
       ],
-      "answer": 0,
+      "answer": 3,
       "why": "Filtering after retrieval leaves the model with scraps, and models must never decide access.",
       "link": "access-control.html#enforce"
     },
     {
       "q": "A user is removed from a sensitive group. What should the pipeline do with that document's chunks?",
       "choices": [
-        "Rewrite their ACL metadata without re-embedding",
         "Re-embed every chunk of the document",
         "Wait for the nightly full rebuild",
+        "Rewrite their ACL metadata without re-embedding",
         "Nothing; the model will refuse"
       ],
-      "answer": 0,
+      "answer": 2,
       "why": "Permission changes are separate events that only touch metadata.",
       "link": "access-control.html#freshness"
     },
     {
       "q": "The permission recheck service times out. What should happen?",
       "choices": [
-        "Fail closed and deny",
         "Allow, since the search filter already ran",
+        "Fail closed and deny",
         "Let the model decide",
         "Retry forever before answering"
       ],
-      "answer": 0,
+      "answer": 1,
       "why": "Fail closed when the recheck cannot answer.",
       "link": "access-control.html#freshness"
     },
