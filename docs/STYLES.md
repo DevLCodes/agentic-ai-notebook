@@ -1,8 +1,8 @@
 # Style: the field manual
 
-This repo holds the advanced agentic system design pages (`system-design/`) and, until it moves to DevLCodes/classic-system-designs, `classic-system-design/`. Every page uses one look: a clean, quiet reference with grey paper, crisp type, precise diagrams and 3D scenes. The voice is dense and exact, with numbers, trade-offs, failure modes and interview framing. Fonts are Bricolage Grotesque (display), Instrument Sans (body) and IBM Plex Mono (labels, code); body text is 16px at 1.6 line height in a 760px reading column.
+This repo holds only the advanced agentic system design pages, in `system-design/`. Every page uses one look: a clean, quiet reference with grey paper, crisp type, precise diagrams and 3D scenes. The voice is dense and exact, with numbers, trade-offs, failure modes and interview framing. Fonts are Bricolage Grotesque (display), Instrument Sans (body) and IBM Plex Mono (labels, code); body text is 16px at 1.6 line height in a 760px reading column.
 
-The beginner concept notebooks moved to DevLCodes/agentic-ai-beginner, which has its own notebook style. The root `*.html` files here are only redirect stubs.
+The beginner concept notebooks moved to DevLCodes/agentic-ai-beginner and the classic (non-agentic) system design pages moved to DevLCodes/classic-system-designs; each has its own style. The root `*.html` files and `classic-system-design/*.html` here are only redirect stubs. The header's "Classic" link points to https://devlcodes.github.io/classic-system-designs/.
 
 ## Details
 

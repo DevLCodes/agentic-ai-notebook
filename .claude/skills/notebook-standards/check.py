@@ -18,7 +18,6 @@ from urllib.parse import unquote, urlparse
 
 ROOT = Path(__file__).resolve().parents[3]
 SD = ROOT / "system-design"
-CLASSIC = ROOT / "classic-system-design"
 NAV = ["Home", "Designs", "Topics", "Roadmap", "Study", "Classic", "Glossary"]
 ADVANCED_TOKENS = ["--bg: #e9ecef", "--paper: #f7f8f9", "--ink: #1c2530", "--accent: #4255d4",
                    "--c-serve: #d7932a", "--c-model: #e2674f", "--c-kb: #4d5fd8", "--c-ingest: #2a9d8f"]
@@ -75,12 +74,13 @@ def parse(path: Path) -> Links:
 
 
 def pages() -> list[Path]:
-    # Root *.html files are redirect stubs to the beginner repo (DevLCodes/agentic-ai-beginner); not checked.
-    return sorted(SD.glob("*.html")) + sorted(CLASSIC.glob("*.html"))
+    # Root *.html files redirect to DevLCodes/agentic-ai-beginner and classic-system-design/*.html redirect to
+    # DevLCodes/classic-system-designs; both are stubs and not checked.
+    return sorted(SD.glob("*.html"))
 
 
 def check_style(path: Path, text: str) -> None:
-    advanced = path.parent in (SD, CLASSIC)
+    advanced = path.parent == SD
     if advanced:
         missing = [t for t in ADVANCED_TOKENS if t not in text]
         if missing:
@@ -98,7 +98,7 @@ def check_style(path: Path, text: str) -> None:
 
 
 def check_nav(path: Path, links: Links) -> None:
-    if path.parent in (SD, CLASSIC) and links.nav != NAV:
+    if path.parent == SD and links.nav != NAV:
         fail(path, f"site header should be {NAV}, found {links.nav}")
 
 

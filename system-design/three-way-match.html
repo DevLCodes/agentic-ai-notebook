@@ -162,7 +162,7 @@
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
-<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html" aria-current="page">Designs</a><a href="topics.html">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html" aria-current="page">Designs</a><a href="topics.html">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Design · workflow + agent for exceptions · being built</p><h1>Three-Way Match Agent</h1><p class="lead">Matches each invoice against its purchase order and goods receipt, holds anything that doesn't line up, and lets an agent investigate only the exceptions. Rules decide money, a person approves every outcome, and every component below links to its code and its low-level design.</p></div></div>
 <div class="wrap doc">
@@ -332,7 +332,7 @@
 <li>A failed job becomes visible again after 2<sup>n</sup> × 10 s. After 5 attempts it moves to <code>jobs_dlq</code>.</li>
 <li>The drain stops when the queue is empty or after <code>DRAIN_SECONDS</code> (50 s in production), and the instance scales to zero.</li>
 </ol>
-<p>See <a href="../classic-system-design/queues.html">message queues</a> for delivery guarantees and the outbox pattern.</p></section>
+<p>See <a href="https://devlcodes.github.io/classic-system-designs/queues.html">message queues</a> for delivery guarantees and the outbox pattern.</p></section>
 
 <section id="approval"><h2>Approval and execution</h2>
 <p class="lead">Planned. A person reviews every case in v1. The agent proposes; a separate executor acts, and only with a valid approval.</p>
@@ -380,7 +380,7 @@
 <section id="interview"><h2>Saying it in an interview</h2>
 <div class="note"><p>"It's a workflow, not an agent, because the steps are known: read, screen, extract, check, match, approve, post. A Postgres state machine runs it, with the queue in the same database so a state change and its next job commit together, and every step is idempotent. Rules decide money; the LLM only reads documents and, for exceptions, investigates with read-only tools and proposes. A person approves an action hash, and a separate executor writes to the ERP with an idempotency key and reads it back. It scales to zero: a cron checks for due work in SQL before waking Cloud Run."</p></div></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="support-agent.html">Support agent with actions</a></li><li><a href="agent-memory.html">Agent memory</a></li><li><a href="evals.html">Evals</a></li><li><a href="access-control.html">Access control</a></li><li><a href="../classic-system-design/queues.html">Message queues</a></li><li><a href="../classic-system-design/payments.html">Payments</a></li></ul></section></article>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="support-agent.html">Support agent with actions</a></li><li><a href="agent-memory.html">Agent memory</a></li><li><a href="evals.html">Evals</a></li><li><a href="access-control.html">Access control</a></li><li><a href="https://devlcodes.github.io/classic-system-designs/queues.html">Message queues</a></li><li><a href="https://devlcodes.github.io/classic-system-designs/payments.html">Payments</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Planned components are marked as planned; figures for them are design targets, not measurements. Check vendor docs before relying on a specific product limit.</div></footer>

@@ -9,7 +9,7 @@ The style rules live in `docs/STYLES.md`; read it first. This skill adds where c
 
 ## 1. Decide where the content goes
 
-All content goes in `system-design/` (or `classic-system-design/` for non-agentic building blocks), in the field-manual style of the [live System Design home](https://devlcodes.github.io/agentic-ai-notebook/system-design/index.html). Beginner material doesn't go here: it lives in DevLCodes/agentic-ai-beginner, and the root `*.html` files are only redirect stubs to it.
+All content goes in `system-design/`, in the field-manual style of the [live System Design home](https://devlcodes.github.io/agentic-ai-notebook/system-design/index.html). Beginner material doesn't go here: it lives in DevLCodes/agentic-ai-beginner, and the root `*.html` files are only redirect stubs to it. Non-agentic building blocks and walkthroughs don't go here either: they live in DevLCodes/classic-system-designs (its own repo and style), and `classic-system-design/*.html` are only redirect stubs to it.
 
 Sort every concept with these rules, in order. Stop at the first rule that matches.
 
@@ -41,7 +41,7 @@ Product names go in the page's "In the real world" table.
 
 ## 2. Match the section's style
 
-- **`system-design/` and `classic-system-design/` (the default):** dense and exact. Use `.note`, `.formula`, `.table`, `.related` and `svg.dg` with the fixed layer colours. No handwriting fonts or stickies.
+- **`system-design/`:** dense and exact. Use `.note`, `.formula`, `.table`, `.related` and `svg.dg` with the fixed layer colours. No handwriting fonts or stickies.
 - **Explain before you list.** Open each topic with the intuition: one picture, analogy or worked example a newcomer can follow. Then explain how it works, then give numbers, tables and trade-offs. Define every term the first time it appears. A reader who knows software but not this topic should understand the first section without reading anything else.
 - **Make it interactive when the idea is a trade-off.** If the concept is about a knob and its effect, such as bits against error or batching mode against latency, add a `.lab` that lets the reader turn the knob. Build it in plain JavaScript inside the page, with `.lab`, `.lab-row`, `.seg` buttons and a `.lab-out` result line, copied from an existing lab such as `chunking.html`.
 - Copy markup from a neighbouring element on the same page rather than writing new CSS.
@@ -54,7 +54,7 @@ When you add or remove a term or a page, update every place that counts or lists
 - The glossary lead ("N terms used…") and the home card ("Browse N terms")
 - `STAGES` in `system-design/roadmap.html` and in the home page script, plus "/ N pages done"
 - The cards in `system-design/topics.html` or `designs.html`, and the group chip count at the top of `topics.html`
-- The shared header (Home, Designs, Topics, Roadmap, Study, Classic, Glossary) on every page in `system-design/` and `classic-system-design/`
+- The shared header (Home, Designs, Topics, Roadmap, Study, Classic, Glossary) on every page in `system-design/`
 
 ## 3a. Study decks (flashcards and quiz)
 
