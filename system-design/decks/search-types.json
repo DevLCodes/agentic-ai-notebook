@@ -1,0 +1,130 @@
+{
+  "title": "Search types",
+  "page": "search-types.html",
+  "cards": [
+    {
+      "front": "Keyword search (BM25)",
+      "back": "Tokenises text, builds an inverted index and scores shared words weighted by rarity. Fast, explainable and best when the user types the exact thing they want.",
+      "link": "search-types.html#keyword"
+    },
+    {
+      "front": "Where keyword search is weak",
+      "back": "Synonyms and paraphrases: it only matches words that actually appear in the document.",
+      "link": "search-types.html#types"
+    },
+    {
+      "front": "Dense (semantic) search",
+      "back": "Embeds the query and finds the nearest chunk vectors in a vector database. It shines when the user's words differ from the document's, like \"baby leave\" vs \"parental leave policy\".",
+      "link": "search-types.html#dense"
+    },
+    {
+      "front": "Where dense search is weak",
+      "back": "Exact tokens, numbers and negation, such as an ID like HR-4512.",
+      "link": "search-types.html#types"
+    },
+    {
+      "front": "Hybrid search",
+      "back": "Run keyword and dense searches in parallel, take the top 50 or so from each, fuse the lists, then send the fused list to a reranker.",
+      "link": "search-types.html#hybrid"
+    },
+    {
+      "front": "Reciprocal rank fusion (RRF)",
+      "back": "The robust default way to fuse ranked lists, using the usual constant k = 60. A weighted sum of normalised scores also works but needs tuning.",
+      "link": "search-types.html#hybrid"
+    },
+    {
+      "front": "Learned sparse search (e.g. SPLADE)",
+      "back": "Model-expanded keywords: keyword speed with some synonym handling, but it needs its own model and index.",
+      "link": "search-types.html#types"
+    },
+    {
+      "front": "Metadata filter",
+      "back": "Matches exact field values such as permissions, dates, regions and types. It is not a relevance ranking.",
+      "link": "search-types.html#types"
+    },
+    {
+      "front": "Permissions and search",
+      "back": "Apply the metadata filter inside every search, never after it.",
+      "link": "search-types.html#when"
+    },
+    {
+      "front": "Query rewriting",
+      "back": "Use a small model to make follow-ups standalone, pull out filters, expand acronyms from a glossary and sometimes search two or three alternative phrasings in parallel.",
+      "link": "search-types.html#rewrite"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "A user searches for the exact ID HR-4512. Which search type finds it most reliably?",
+      "choices": [
+        "Keyword (BM25)",
+        "Dense (semantic)",
+        "Metadata filter only",
+        "Query rewriting alone"
+      ],
+      "answer": 0,
+      "why": "Keyword search matches the exact token, while dense search is weak at exact tokens and numbers.",
+      "link": "search-types.html#keyword"
+    },
+    {
+      "q": "Which query is dense search best placed to handle?",
+      "choices": [
+        "\"baby leave\" finding the parental leave policy",
+        "An order number like 0000320193",
+        "A query that hinges on the word \"not\"",
+        "Only documents from the India region"
+      ],
+      "answer": 0,
+      "why": "Dense search matches meaning, so it works when the user's words differ from the document's.",
+      "link": "search-types.html#dense"
+    },
+    {
+      "q": "What is the safe default for enterprise documents full of IDs, names and jargon?",
+      "choices": [
+        "Hybrid search plus reranking",
+        "Dense search only",
+        "Keyword search only",
+        "Metadata filters only"
+      ],
+      "answer": 0,
+      "why": "Hybrid covers each method's blind spot, and reranking sorts the fused list.",
+      "link": "search-types.html#when"
+    },
+    {
+      "q": "How should keyword and dense searches run in a hybrid setup?",
+      "choices": [
+        "In parallel, then fused",
+        "Keyword first, then dense on its results",
+        "Dense first, then keyword on its results",
+        "Only one, picked at random per query"
+      ],
+      "answer": 0,
+      "why": "The two searches are independent, so they run in parallel and their lists are fused.",
+      "link": "search-types.html#hybrid"
+    },
+    {
+      "q": "Where should a permission filter be applied?",
+      "choices": [
+        "Inside every search",
+        "After retrieval, before the prompt",
+        "Only in the reranker",
+        "In the model's system prompt"
+      ],
+      "answer": 0,
+      "why": "Filtering inside the search means ranking only ever considers permitted chunks.",
+      "link": "search-types.html#when"
+    },
+    {
+      "q": "A user asks \"what about contractors?\" as a follow-up. What fixes this best?",
+      "choices": [
+        "Rewrite it into a standalone question",
+        "Lower the BM25 threshold",
+        "Increase the embedding dimension",
+        "Drop the reranker"
+      ],
+      "answer": 0,
+      "why": "Query rewriting turns follow-ups into standalone questions, which often helps more than changing the index.",
+      "link": "search-types.html#rewrite"
+    }
+  ]
+}

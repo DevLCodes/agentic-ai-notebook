@@ -2,5 +2,8 @@
   "chunking",
   "embeddings",
   "vector-search",
-  "reranking"
+  "reranking",
+  "search-types",
+  "vector-databases",
+  "access-control"
 ]
