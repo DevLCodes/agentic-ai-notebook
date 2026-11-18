@@ -1,0 +1,147 @@
+{
+  "title": "Chunking",
+  "page": "chunking.html",
+  "cards": [
+    {
+      "front": "What is chunking?",
+      "back": "Cutting each document into passages small enough to search precisely and cheap enough to put in a prompt, while keeping enough context that each still makes sense alone.",
+      "link": "chunking.html#what"
+    },
+    {
+      "front": "Why chunking sets the ceiling on retrieval quality",
+      "back": "Every later step works on chunks: embeddings are per chunk, search returns chunks, citations point at chunks and the model reads chunks.",
+      "link": "chunking.html#what"
+    },
+    {
+      "front": "Recursive splitting",
+      "back": "Splits by paragraphs, then sentences, then words, until each piece fits. A good general default, but blind to headings unless you add them.",
+      "link": "chunking.html#strategies"
+    },
+    {
+      "front": "Chunking by heading (structure)",
+      "back": "One section per chunk, split further if too long. Best for wikis, policies and runbooks; merge very short sections.",
+      "link": "chunking.html#strategies"
+    },
+    {
+      "front": "Semantic chunking",
+      "back": "Embeds sentences and cuts where the topic shifts. Useful for long unstructured text like transcripts, but ingestion is slower.",
+      "link": "chunking.html#strategies"
+    },
+    {
+      "front": "Default size and overlap",
+      "back": "300 to 800 tokens with 10 to 20% overlap for fixed or recursive splitting, never bigger than the embedding model's input limit. Then measure.",
+      "link": "chunking.html#size"
+    },
+    {
+      "front": "What does overlap buy you?",
+      "back": "A sentence that straddles a boundary stays whole in at least one chunk. It costs 10 to 20% more storage.",
+      "link": "chunking.html#size"
+    },
+    {
+      "front": "Heading path header",
+      "back": "Prefix each chunk with the document title and heading path before embedding. Cheap, and the biggest single win on structured documents.",
+      "link": "chunking.html#context"
+    },
+    {
+      "front": "Small-to-big",
+      "back": "Index small child chunks for precise matching, and return their parent section to the model for context.",
+      "link": "chunking.html#context"
+    },
+    {
+      "front": "Three fields every chunk needs",
+      "back": "A stable chunk_id built from doc_id, version and position; the doc_id itself so deletes are one call; and the ACL so permissions are enforced in the query.",
+      "link": "chunking.html#metadata"
+    },
+    {
+      "front": "Chunking big tables",
+      "back": "Keep small tables whole. Split big ones into row groups and repeat the header row in every group, or turn each row into a sentence.",
+      "link": "chunking.html#special"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Chunks for India and US \"adoptive parents\" rules look almost identical to search. What fixes it most cheaply?",
+      "choices": [
+        "Switch to fixed-size chunks",
+        "Prefix each chunk with its title and heading path",
+        "Double the chunk size",
+        "Remove overlap"
+      ],
+      "answer": 1,
+      "why": "The heading path tells the embedding which country a chunk is about.",
+      "link": "chunking.html#context"
+    },
+    {
+      "q": "Why do very large chunks match many questions weakly?",
+      "choices": [
+        "Their embedding becomes an average of several ideas",
+        "They exceed the vector database's row limit",
+        "Overlap makes them duplicate each other",
+        "Large chunks cannot hold metadata"
+      ],
+      "answer": 0,
+      "why": "A big chunk's vector drifts to the middle of its ideas, so it matches everything a little and nothing well.",
+      "link": "chunking.html#size"
+    },
+    {
+      "q": "When should you decide which metadata to attach?",
+      "choices": [
+        "After the first eval run",
+        "Only when a filter is needed",
+        "At query time",
+        "Before you chunk"
+      ],
+      "answer": 3,
+      "why": "Adding a field later means re-parsing everything, so decide it up front.",
+      "link": "chunking.html#metadata"
+    },
+    {
+      "q": "Why build chunk_id from doc_id, version and position?",
+      "choices": [
+        "It lets the model cite page numbers",
+        "It speeds up ANN search",
+        "Re-ingesting the same document overwrites instead of duplicating",
+        "It makes the vectors smaller"
+      ],
+      "answer": 2,
+      "why": "A stable id means the same chunk lands on the same row every time it is ingested.",
+      "link": "chunking.html#metadata"
+    },
+    {
+      "q": "How should you choose chunk size and overlap?",
+      "choices": [
+        "Use the setting with the fewest chunks",
+        "Sweep settings and compare recall@k on golden questions",
+        "Pick the largest size the model accepts",
+        "Copy the defaults of your framework and stop there"
+      ],
+      "answer": 1,
+      "why": "The page says don't guess: build 100 to 200 golden questions and sweep a few settings.",
+      "link": "chunking.html#tune"
+    },
+    {
+      "q": "Two settings give recall@5 of 0.86 and 0.88, but the second uses far more prompt tokens. Which do you pick?",
+      "choices": [
+        "The cheaper one, since it is within a point or two of the best",
+        "Always the highest recall",
+        "Neither; add more overlap",
+        "The one with more chunks"
+      ],
+      "answer": 0,
+      "why": "Prompt tokens are paid on every question, so pick the cheapest setting near the best recall.",
+      "link": "chunking.html#tune"
+    },
+    {
+      "q": "How should code be chunked?",
+      "choices": [
+        "Every 50 lines",
+        "One chunk per repository",
+        "Semantically, by comment density",
+        "Split on functions and classes, with the file path in the header"
+      ],
+      "answer": 3,
+      "why": "Function and class boundaries are the natural seams in code.",
+      "link": "chunking.html#special"
+    }
+  ]
+}

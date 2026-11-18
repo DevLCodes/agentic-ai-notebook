@@ -1,0 +1,135 @@
+{
+  "title": "Embeddings",
+  "page": "embeddings.html",
+  "cards": [
+    {
+      "front": "What is an embedding?",
+      "back": "A fixed-length list of numbers that represents a piece of text. The model is trained so that texts with similar meaning get similar numbers.",
+      "link": "embeddings.html#what"
+    },
+    {
+      "front": "Dimension",
+      "back": "The length of an embedding, set by the model. 384 to 3,072 is typical; more dimensions can capture more nuance but cost more memory.",
+      "link": "embeddings.html#choosing"
+    },
+    {
+      "front": "Dense (semantic) search",
+      "back": "Embed the question, then find the nearest document vectors. It turns \"find text that means the same thing\" into a geometry problem.",
+      "link": "embeddings.html#what"
+    },
+    {
+      "front": "Cosine similarity",
+      "back": "Measures the angle between two vectors and ignores their length. Most text models expect cosine or dot product on normalised vectors.",
+      "link": "embeddings.html#similarity"
+    },
+    {
+      "front": "When is dot product the same as cosine?",
+      "back": "When the vectors are normalised to unit length. Then the dot product reduces to the cosine of the angle.",
+      "link": "embeddings.html#similarity"
+    },
+    {
+      "front": "Best way to judge an embedding model",
+      "back": "Recall@k on your own golden questions. It beats any public leaderboard, because leaderboard rank rarely predicts your domain.",
+      "link": "embeddings.html#choosing"
+    },
+    {
+      "front": "Why does max input length matter?",
+      "back": "Text past the model's limit is cut off, so the limit caps your chunk size.",
+      "link": "embeddings.html#choosing"
+    },
+    {
+      "front": "Query vs document mode",
+      "back": "Many models embed questions and passages differently, using a task type or a prefix. Use the right mode for each side.",
+      "link": "embeddings.html#choosing"
+    },
+    {
+      "front": "Matryoshka-style embeddings",
+      "back": "Models trained so a shorter prefix of the vector still works. You can store 256 dimensions instead of 768 with a small quality loss.",
+      "link": "embeddings.html#choosing"
+    },
+    {
+      "front": "Where embeddings struggle",
+      "back": "Exact tokens such as IDs and SKUs, negation and numbers, very long text averaged into one vector, and new jargon the model never saw.",
+      "link": "embeddings.html#limits"
+    },
+    {
+      "front": "Why store embedding_model_version on every chunk?",
+      "back": "Vectors from two different models are not comparable, even at the same dimension. To upgrade, re-embed everything into a new index, evaluate it, then switch traffic.",
+      "link": "embeddings.html#versioning"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Roughly how much memory do 50M chunks at 768 float dimensions take?",
+      "choices": [
+        "About 15 GB",
+        "About 1.5 TB",
+        "About 4.8 GB",
+        "About 150 GB"
+      ],
+      "answer": 3,
+      "why": "50M × 768 floats × 4 bytes is about 150 GB, which is why dimension is a cost decision.",
+      "link": "embeddings.html#choosing"
+    },
+    {
+      "q": "A user searches \"policies that do not cover contractors\". What is the likely failure?",
+      "choices": [
+        "It errors because the query is too long",
+        "It only matches documents containing the word \"not\"",
+        "It lands near policies that do cover contractors",
+        "It returns nothing because no words match"
+      ],
+      "answer": 2,
+      "why": "Embeddings handle negation poorly, so the query sits close to its opposite.",
+      "link": "embeddings.html#limits"
+    },
+    {
+      "q": "You want to move from embedding model v1 to v2. What is the safe path?",
+      "choices": [
+        "Pick a v2 with the same dimension so the vectors stay compatible",
+        "Re-embed everything into a new index, evaluate it, then switch traffic",
+        "Embed only new documents with v2 and keep old v1 vectors",
+        "Keep v1 vectors and embed only queries with v2"
+      ],
+      "answer": 1,
+      "why": "Vectors from different models are not comparable even at the same dimension, so the whole index must be rebuilt.",
+      "link": "embeddings.html#versioning"
+    },
+    {
+      "q": "Why embed chunks rather than whole 40-page documents?",
+      "choices": [
+        "One vector for a long document averages away the details",
+        "Embedding APIs refuse documents over one page",
+        "Chunks always share more keywords with the query",
+        "Whole documents cannot be normalised"
+      ],
+      "answer": 0,
+      "why": "A single vector for very long text becomes an average that matches nothing precisely.",
+      "link": "embeddings.html#limits"
+    },
+    {
+      "q": "Searches for error codes like E-4021 keep returning the wrong tickets. What helps most?",
+      "choices": [
+        "Switch from cosine to Euclidean distance",
+        "Increase the embedding dimension",
+        "Remove normalisation from the vectors",
+        "Pair dense search with keyword search"
+      ],
+      "answer": 3,
+      "why": "Exact tokens such as IDs blur together in embeddings; keyword search matches them exactly.",
+      "link": "embeddings.html#limits"
+    },
+    {
+      "q": "Which similarity measure should you use?",
+      "choices": [
+        "Always raw dot product on unnormalised vectors",
+        "Whichever gives the highest scores",
+        "Whichever the model was trained for",
+        "Always Euclidean distance"
+      ],
+      "answer": 2,
+      "why": "Use the measure the model was trained for; most text models expect cosine or dot product on normalised vectors.",
+      "link": "embeddings.html#similarity"
+    }
+  ]
+}

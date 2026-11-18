@@ -54,6 +54,18 @@ When you add or remove a term or a page, update every place that counts or lists
 - The glossary lead ("N terms used…") and the home card ("Browse N terms")
 - `STAGES` in `system-design/roadmap.html` and in the home page script, plus "/ N pages done"
 - The cards in `system-design/topics.html` or `designs.html`, and the group chip count at the top of `topics.html`
+- The shared header (Home, Designs, Topics, Roadmap, Study, Classic, Glossary) on every page in `system-design/`
+
+## 3a. Study decks (flashcards and quiz)
+
+A topic's flashcards and quiz live in `system-design/decks/<page-slug>.json`, rendered by `system-design/study.js` on the hub `system-design/study.html`. The format and engine are documented in `docs/STYLES.md` under "Study decks"; don't change the format.
+
+To add a deck:
+1. Read the topic page and write 8 to 12 cards and 5 to 8 questions from what it says, each with a `link` to the section that explains it. Wrong choices should be plausible.
+2. Add the slug to `system-design/decks/index.json`.
+3. Run the check (it validates the schema, answer indexes, links and the index list), then open `study.html#<slug>/cards` and `study.html#<slug>/quiz` on the local server.
+
+Deck-only changes need no hub, roadmap or STAGES edits: the hub picks up the topic from `topics.html`.
 
 ## 4. Run the check
 
@@ -67,6 +79,7 @@ It checks the following:
 - That `progress.js` is loaded and each page appears in `STAGES` and on the hubs
 - Glossary order, duplicates and counts
 - Topic group chip counts
+- Every study deck in `system-design/decks/` (schema, answer index in range, links resolve) and that `decks/index.json` lists exactly those decks
 - That NVIDIA product names on topic pages appear only in "In the real world" and "Related"; elsewhere they belong on `nvidia-architecture.html`
 - That no new page was added since `main` without `--allow-new-page`
 
