@@ -1,0 +1,135 @@
+{
+  "title": "Reranking with cross-encoders",
+  "page": "reranking.html",
+  "cards": [
+    {
+      "front": "Retrieval vs reranking",
+      "back": "Retrieval is tuned for recall and casts a wide net quickly. Reranking is tuned for precision and puts the best few candidates on top.",
+      "link": "reranking.html#why"
+    },
+    {
+      "front": "Why rank 1 vs rank 7 matters",
+      "back": "The prompt only holds a handful of chunks and models pay most attention to the first ones, so reordering is often the cheapest quality win in RAG.",
+      "link": "reranking.html#why"
+    },
+    {
+      "front": "Bi-encoder",
+      "back": "Embeds query and chunk separately into vectors compared by cosine or dot product. The corpus is precomputed, so search takes milliseconds.",
+      "link": "reranking.html#how"
+    },
+    {
+      "front": "Cross-encoder",
+      "back": "Reads query and chunk concatenated and outputs one relevance score. Tokens interact, so it catches what similarity misses, but it runs once per candidate.",
+      "link": "reranking.html#how"
+    },
+    {
+      "front": "Why not cross-encode the whole corpus?",
+      "back": "The score depends on the query, so nothing can be precomputed: 50,000 chunks would mean 50,000 transformer passes per query.",
+      "link": "reranking.html#how"
+    },
+    {
+      "front": "Rerank latency estimate",
+      "back": "rerank_ms ≈ candidates × (tokens_per_pair / 512) ÷ pairs_per_second_at_512 × 1000. It sits on the critical path before the LLM starts.",
+      "link": "reranking.html#budget"
+    },
+    {
+      "front": "How to rerank fewer candidates",
+      "back": "Measure first-stage recall@k. If recall@50 is about the same as recall@100, send 50.",
+      "link": "reranking.html#budget"
+    },
+    {
+      "front": "Are reranker scores probabilities?",
+      "back": "No. A cross-encoder outputs a raw logit trained to order chunks for one query, so pick any threshold on your own labelled set.",
+      "link": "reranking.html#scores"
+    },
+    {
+      "front": "ColBERT (late interaction)",
+      "back": "Keeps one small vector per token. Each query token finds its best-matching chunk token (MaxSim) and the score is the sum, without a transformer pass per pair.",
+      "link": "reranking.html#options"
+    },
+    {
+      "front": "Hard negatives",
+      "back": "Training negatives the retriever ranked highly but are wrong. Random negatives teach a reranker nothing.",
+      "link": "reranking.html#training"
+    },
+    {
+      "front": "Proving a reranker earns its latency",
+      "back": "Run the golden set with and without it and compare NDCG@10 and MRR. Also log first-stage recall@k.",
+      "link": "reranking.html#when"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Why is a cross-encoder more accurate than a bi-encoder?",
+      "choices": [
+        "It precomputes every chunk score",
+        "It searches with HNSW instead of IVF",
+        "It never compresses the chunk before seeing the question",
+        "It uses a larger embedding dimension"
+      ],
+      "answer": 2,
+      "why": "A bi-encoder must decide what a chunk is about without knowing the question; a cross-encoder reads both together.",
+      "link": "reranking.html#how"
+    },
+    {
+      "q": "The right chunk is not in the top 100 candidates. Will a better reranker fix it?",
+      "choices": [
+        "Yes, with a lower score threshold",
+        "No; fix first-stage recall first",
+        "Yes, if it is a cross-encoder",
+        "Yes, if you use an LLM reranker"
+      ],
+      "answer": 1,
+      "why": "No reranker can rescue a chunk that isn't in the candidates.",
+      "link": "reranking.html#when"
+    },
+    {
+      "q": "Which change does NOT cut reranker latency?",
+      "choices": [
+        "Reranking the full parent section instead of the chunk",
+        "Sending fewer candidates where recall flattens",
+        "Batching pairs on a GPU",
+        "Using a smaller distilled model"
+      ],
+      "answer": 0,
+      "why": "Longer pairs cost more; rerank the chunk and truncate to the model's trained length.",
+      "link": "reranking.html#budget"
+    },
+    {
+      "q": "What can an LLM reranker do that a cross-encoder can't?",
+      "choices": [
+        "Run faster per candidate",
+        "Precompute document scores",
+        "Produce calibrated probabilities",
+        "Follow instructions like \"prefer audited statements\""
+      ],
+      "answer": 3,
+      "why": "LLM rerankers are instruction-following but cost 10 to 100× the latency.",
+      "link": "reranking.html#options"
+    },
+    {
+      "q": "Which listwise LLM reranking approach slides a window over 100 passages?",
+      "choices": [
+        "duoT5",
+        "ColBERTv2",
+        "RankGPT",
+        "monoT5"
+      ],
+      "answer": 2,
+      "why": "RankGPT shows ~20 passages, asks for ranked IDs and slides the window.",
+      "link": "reranking.html#options"
+    },
+    {
+      "q": "When is it reasonable to skip reranking?",
+      "choices": [
+        "When the prompt holds 5 chunks",
+        "Exact ID lookups with only one right answer",
+        "Whenever the corpus has more than 1M chunks",
+        "When using hybrid search"
+      ],
+      "answer": 1,
+      "why": "Also skip it for tiny corpora already right on the golden set, or strict latency budgets.",
+      "link": "reranking.html#when"
+    }
+  ]
+}

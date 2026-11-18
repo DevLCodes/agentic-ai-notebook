@@ -196,7 +196,7 @@
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
-<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="../classic-system-design/index.html">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · retrieval</p><h1>Vector Search</h1><p class="lead">What actually happens between a question and its nearest chunks: embedding the query, exact and approximate neighbours, the knobs that trade recall for speed, and the ways it quietly fails.</p></div></div>
 <div class="wrap doc">
@@ -284,7 +284,7 @@ return the k closest results</code></pre>
 <tr><td>Fix when low</td><td>Raise ef_search or nprobe</td><td>Better chunks, embedding model, hybrid search, filters, query rewriting</td></tr>
 </tbody></table></div>
 <div class="formula">index recall@k = |ANN top-k ∩ exact top-k| / k</div>
-<div class="note"><p>An index can score 0.99 index recall while retrieval recall is 0.6. That means the index faithfully returns the nearest vectors, and the nearest vectors are the wrong passages. Raising ef_search will not help; the problem is upstream. See <a href="evals.html#recall">recall@k, step by step</a>.</p></div></section><section id="compress"><h2>Making vectors smaller</h2>
+<div class="note"><p>An index can score 0.99 index recall while retrieval recall is 0.6. That means the index faithfully returns the nearest vectors, and the nearest vectors are the wrong passages. Raising ef_search will not help; the problem is upstream. See <a href="evals.html#m-recall">recall@k, step by step</a>.</p></div></section><section id="compress"><h2>Making vectors smaller</h2>
 <p>At scale, memory is the cost. Compression stores each vector in fewer bytes, searches the small form, then re-scores a shortlist with the full vectors.</p>
 <div class="table"><table><thead><tr><th>Form</th><th>Bytes for 768 dims</th><th>50M vectors</th><th>Accuracy</th></tr></thead><tbody>
 <tr><td>float32 (default)</td><td class="num">3,072</td><td class="num">154 GB</td><td>Full</td></tr>

@@ -19,11 +19,11 @@ from urllib.parse import unquote, urlparse
 ROOT = Path(__file__).resolve().parents[3]
 SD = ROOT / "system-design"
 CLASSIC = ROOT / "classic-system-design"
-NAV = ["Home", "Designs", "Topics", "Roadmap", "Classic", "Glossary"]
+NAV = ["Home", "Designs", "Topics", "Roadmap", "Study", "Classic", "Glossary"]
 ADVANCED_TOKENS = ["--bg: #e9ecef", "--paper: #f7f8f9", "--ink: #1c2530", "--accent: #4255d4",
                    "--c-serve: #d7932a", "--c-model: #e2674f", "--c-kb: #4d5fd8", "--c-ingest: #2a9d8f"]
 BEGINNER_TOKENS = ["--paper: #fdfbf3", "--ink: #1f3a93", "--hl: #ffe066"]
-SD_HUBS = {"index", "designs", "topics", "roadmap"}
+SD_HUBS = {"index", "designs", "topics", "roadmap", "study"}
 
 errors: list[tuple[str, str]] = []
 warnings: list[str] = []
@@ -175,6 +175,79 @@ def check_vendor_placement() -> None:
             fail(page, f"NVIDIA terms outside 'In the real world': {', '.join(found)}; move them to nvidia-architecture.html")
 
 
+DECK_KEYS = {"title", "page", "cards", "quiz"}
+
+
+def check_decks() -> None:
+    """Every system-design/decks/<slug>.json follows the shared deck format (docs/STYLES.md)."""
+    import json
+    deck_dir = SD / "decks"
+    files = sorted(p.stem for p in deck_dir.glob("*.json") if p.name != "index.json")
+    manifest = deck_dir / "index.json"
+    if files or manifest.exists():
+        try:
+            listed = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            listed = None
+        if not isinstance(listed, list) or sorted(listed) != files or len(set(listed)) != len(listed):
+            fail(manifest, f"must be a JSON list of every deck slug in decks/, exactly: {json.dumps(files)}")
+    for path in sorted(p for p in deck_dir.glob("*.json") if p.name != "index.json"):
+        try:
+            deck = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as e:
+            fail(path, f"not valid JSON: {e}")
+            continue
+        if not isinstance(deck, dict) or set(deck) != DECK_KEYS:
+            fail(path, f"deck keys must be exactly {sorted(DECK_KEYS)}")
+            continue
+        slug = path.stem
+        if deck["page"] != f"{slug}.html":
+            fail(path, f'"page" should be "{slug}.html"')
+        if not (SD / f"{slug}.html").exists():
+            fail(path, f"no topic page system-design/{slug}.html")
+        if not isinstance(deck["title"], str) or not deck["title"].strip():
+            fail(path, '"title" must be a non-empty string')
+        cards, quiz = deck["cards"], deck["quiz"]
+        if not isinstance(cards, list) or not 8 <= len(cards) <= 12:
+            fail(path, "needs 8 to 12 cards")
+            cards = cards if isinstance(cards, list) else []
+        if not isinstance(quiz, list) or not 5 <= len(quiz) <= 8:
+            fail(path, "needs 5 to 8 quiz questions")
+            quiz = quiz if isinstance(quiz, list) else []
+        links = []
+        fronts = []
+        for n, c in enumerate(cards, 1):
+            if not isinstance(c, dict) or set(c) != {"front", "back", "link"} or not all(isinstance(c[k], str) and c[k].strip() for k in c):
+                fail(path, f"card {n} needs non-empty front, back and link only")
+                continue
+            fronts.append(c["front"])
+            links.append((f"card {n}", c["link"]))
+        for dup in {f for f in fronts if fronts.count(f) > 1}:
+            fail(path, f"card front used twice: {dup}")
+        for n, q in enumerate(quiz, 1):
+            if not isinstance(q, dict) or set(q) != {"q", "choices", "answer", "why", "link"}:
+                fail(path, f"question {n} needs exactly q, choices, answer, why and link")
+                continue
+            ch = q["choices"]
+            if not isinstance(ch, list) or len(ch) != 4 or not all(isinstance(x, str) and x.strip() for x in ch) or len(set(ch)) != 4:
+                fail(path, f"question {n} needs 4 different non-empty choices")
+            elif not isinstance(q["answer"], int) or isinstance(q["answer"], bool) or not 0 <= q["answer"] < len(ch):
+                fail(path, f"question {n} answer index {q['answer']!r} is out of range")
+            if not all(isinstance(q[k], str) and q[k].strip() for k in ("q", "why", "link")):
+                fail(path, f"question {n} needs non-empty q, why and link")
+                continue
+            links.append((f"question {n}", q["link"]))
+        for where, link in links:
+            page, _, frag = link.partition("#")
+            target = SD / page
+            if not page.endswith(".html") or "/" in page or not target.exists():
+                fail(path, f"{where} link {link} is not a system-design page")
+            elif not frag:
+                fail(path, f"{where} link {link} needs a #section id")
+            elif frag not in parse(target).ids:
+                fail(path, f"{where} link {link} points at a missing #{frag}")
+
+
 def check_glossary() -> None:
     path = SD / "glossary.html"
     text = path.read_text(encoding="utf-8")
@@ -255,6 +328,7 @@ def main() -> int:
     check_system_design()
     check_vendor_placement()
     check_glossary()
+    check_decks()
     check_new_pages(args.base, args.allow_new_page)
 
     changed = None if args.all else changed_files(args.base)

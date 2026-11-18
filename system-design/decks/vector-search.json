@@ -1,0 +1,147 @@
+{
+  "title": "Vector search",
+  "page": "vector-search.html",
+  "cards": [
+    {
+      "front": "What is vector search?",
+      "back": "Finding the stored items whose embeddings point in nearly the same direction as the query's embedding. It matches on meaning, not shared words.",
+      "link": "vector-search.html#what"
+    },
+    {
+      "front": "Why embed the query with the exact index model and version?",
+      "back": "Vectors from two different models live in unrelated spaces, so comparing them gives meaningless scores rather than an error.",
+      "link": "vector-search.html#path"
+    },
+    {
+      "front": "Exact k-NN",
+      "back": "Compare the query with every stored vector and keep the k best. Cost per query is N vectors × d dimensions multiply-adds.",
+      "link": "vector-search.html#exact"
+    },
+    {
+      "front": "When is exact search the right answer?",
+      "back": "Small corpora up to roughly 100k to 1M vectors, very selective filters that leave few rows, and as ground truth for measuring an ANN index.",
+      "link": "vector-search.html#exact"
+    },
+    {
+      "front": "HNSW search in two phases",
+      "back": "A greedy descent through the upper layers of the graph, then a beam search on layer 0 that keeps the ef best candidates open.",
+      "link": "vector-search.html#walk"
+    },
+    {
+      "front": "ef_search",
+      "back": "The HNSW beam width at query time (default 40 in pgvector). Raising it improves recall and slows queries; it must be at least k.",
+      "link": "vector-search.html#knobs"
+    },
+    {
+      "front": "Index recall",
+      "back": "How much the ANN index approximates away, measured against exact k-NN over the same vectors. Typically 0.95 to 0.99; fix it with ef_search or nprobe.",
+      "link": "vector-search.html#recalls"
+    },
+    {
+      "front": "Retrieval recall",
+      "back": "Whether search finds the chunks that answer the question, measured against a labelled golden set. Fix it upstream: chunks, model, hybrid search, filters.",
+      "link": "vector-search.html#recalls"
+    },
+    {
+      "front": "Compress, then re-score",
+      "back": "Search a compressed form (int8, binary, PQ), shortlist k × 4 to 10, then re-score the shortlist with full vectors and keep k.",
+      "link": "vector-search.html#compress"
+    },
+    {
+      "front": "Retrieve wide, pass narrow",
+      "back": "50 to 100 candidates from vector search, a reranker to order them, and 5 to 10 chunks into the prompt.",
+      "link": "vector-search.html#results"
+    },
+    {
+      "front": "Maximal marginal relevance (MMR)",
+      "back": "Picks results one at a time, rewarding similarity to the query and penalising similarity to what is already picked. λ around 0.5 to 0.8 usually works.",
+      "link": "vector-search.html#results"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "In pgvector you ask for 100 results with the default ef_search of 40. What do you get?",
+      "choices": [
+        "An error saying ef is too small",
+        "100 results with lower recall",
+        "At most 40 results, quietly",
+        "100 results, slower"
+      ],
+      "answer": 2,
+      "why": "A query returns at most hnsw.ef_search rows unless iterative scans are enabled.",
+      "link": "vector-search.html#walk"
+    },
+    {
+      "q": "Index recall is 0.99 but retrieval recall is 0.6. What should you do?",
+      "choices": [
+        "Add more HNSW links per node",
+        "Fix chunks, the model, hybrid search or filters",
+        "Raise ef_search",
+        "Switch to exact search"
+      ],
+      "answer": 1,
+      "why": "The index faithfully returns the nearest vectors; they are just the wrong passages, so the problem is upstream.",
+      "link": "vector-search.html#recalls"
+    },
+    {
+      "q": "With unnormalised vectors and dot product, what goes wrong?",
+      "choices": [
+        "Long vectors win even when they point the wrong way",
+        "Short vectors always win",
+        "Scores become negative",
+        "Nothing; dot product ignores length"
+      ],
+      "answer": 0,
+      "why": "Dot product depends on length as well as angle, which is why unnormalised vectors are risky.",
+      "link": "vector-search.html#lab"
+    },
+    {
+      "q": "Why is a fixed similarity threshold like 0.8 fragile?",
+      "choices": [
+        "Scores above 0.8 are always duplicates",
+        "Cosine scores can't exceed 0.8",
+        "Thresholds slow the ANN search",
+        "Each model spreads scores differently, and 0.8 means different things per query"
+      ],
+      "answer": 3,
+      "why": "Similarity scores are not probabilities; calibrate any threshold on labelled data.",
+      "link": "vector-search.html#results"
+    },
+    {
+      "q": "FY2023 and FY2024 reports keep getting confused. What is the fix?",
+      "choices": [
+        "Increase the embedding dimension",
+        "Use binary quantization",
+        "Metadata filters extracted from the query",
+        "Raise ef_search"
+      ],
+      "answer": 2,
+      "why": "Numbers and years embed almost identically; a filter does the exact work.",
+      "link": "vector-search.html#failures"
+    },
+    {
+      "q": "Going from 0.95 to 0.995 index recall in the illustrative sweep costs about how much latency?",
+      "choices": [
+        "Nothing; recall is free",
+        "About 4×",
+        "About 10%",
+        "About 100×"
+      ],
+      "answer": 1,
+      "why": "The curve flattens: ef_search 40 to 200 goes from 2.3 ms to 8.9 ms.",
+      "link": "vector-search.html#knobs"
+    },
+    {
+      "q": "Why does re-scoring recover most of the accuracy lost to compression?",
+      "choices": [
+        "The compressed form only needs to get the right items onto the shortlist",
+        "Re-scoring retrains the index",
+        "Compression never loses accuracy",
+        "Re-scoring uses a cross-encoder"
+      ],
+      "answer": 0,
+      "why": "The full vectors then order the shortlist precisely.",
+      "link": "vector-search.html#compress"
+    }
+  ]
+}
