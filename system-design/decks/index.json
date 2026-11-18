@@ -2,5 +2,14 @@
   "chunking",
   "embeddings",
   "vector-search",
-  "reranking"
+  "reranking",
+  "enterprise-search",
+  "support-agent",
+  "coding-agent",
+  "ads-assistant",
+  "ask-your-data",
+  "finsight",
+  "oncall-assistant",
+  "review-insights",
+  "three-way-match"
 ]

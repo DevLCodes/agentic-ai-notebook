@@ -306,14 +306,14 @@
 <main>
 <div class="wrap">
   <div class="page-head"><p class="crumbs"><a href="index.html">Home</a> / Study</p><h1>Study</h1>
-  <p class="lead">Flashcards and a short quiz for each topic. Flip cards, mark the ones you know, then test yourself; every answer links back to the section that explains it.</p></div>
+  <p class="lead">Flashcards and a short quiz for each topic and design walkthrough. Flip cards, mark the ones you know, then test yourself; every answer links back to the section that explains it. Design quizzes are scenarios: something went wrong, what do you check first?</p></div>
   <div id="hub" class="page-body">
     <p id="hub-status" class="st-empty">Loading decks…</p>
     <div id="hub-groups"></div>
     <p class="st-empty">More decks are on the way. Topics without one yet are hidden.</p>
   </div>
   <div id="panel" class="st-panel" hidden>
-    <a class="st-back" href="#">← All topics</a>
+    <a class="st-back" href="#">← All decks</a>
     <div id="study"></div>
   </div>
 </div>
@@ -330,7 +330,7 @@
 
 <script src="study.js"></script>
 <script>
-/* The hub reads the topic order from topics.html, so it stays in sync, and shows only topics listed in decks/index.json. */
+/* The hub reads the topic order from topics.html and the design walkthroughs from designs.html, so it stays in sync, and shows only pages listed in decks/index.json. */
 (function () {
   var groupsEl = document.getElementById('hub-groups');
   var status = document.getElementById('hub-status');
@@ -358,6 +358,18 @@
     return groups;
   }
 
+  // Design walkthroughs are the a.card.walk links on designs.html; they form one "Designs" group after the topics.
+  function designsFromHub(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var items = [];
+    doc.querySelectorAll('a.card.walk').forEach(function (a) {
+      var m = (a.getAttribute('href') || '').match(/^([\w-]+)\.html$/);
+      var h3 = a.querySelector('h3');
+      if (m && h3) items.push({ slug: m[1], title: h3.textContent.trim() });
+    });
+    return items.length ? [{ name: 'Designs', id: 'designs', items: items }] : [];
+  }
+
   function drawHub(groups) {
     var shown = 0;
     groups.forEach(function (g) {
@@ -365,6 +377,7 @@
       if (!have.length) return;
       var wrap = document.createElement('div');
       wrap.className = 'group';
+      if (g.id) wrap.id = g.id;
       var h = text('h2', g.name); h.className = 'home-h';
       wrap.appendChild(h);
       var ul = document.createElement('ul'); ul.className = 'st-list';
@@ -419,10 +432,11 @@
   // check.py keeps it in sync with the files in decks/.
   Promise.all([
     fetch('topics.html').then(function (r) { return r.text(); }),
+    fetch('designs.html').then(function (r) { return r.ok ? r.text() : ''; }).catch(function () { return ''; }),
     fetch('decks/index.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : []; })
   ]).then(function (res) {
-    var groups = topicsFromHub(res[0]);
-    var have = Array.isArray(res[1]) ? res[1] : [];
+    var groups = topicsFromHub(res[0]).concat(designsFromHub(res[1]));
+    var have = Array.isArray(res[2]) ? res[2] : [];
     window.__studyGroups = groups;
     var all = [];
     groups.forEach(function (g) { g.items.forEach(function (it) { if (have.indexOf(it.slug) >= 0) all.push(it.slug); }); });
