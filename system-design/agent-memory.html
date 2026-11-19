@@ -159,6 +159,32 @@
   .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
 </style>
 
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .stage3d .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .ctl3 input[type=range] { width: 140px; accent-color: var(--accent); }
+  .ctl3 output { font-family: var(--font-mono); font-size: 12.5px; min-width: 5ch; }
+  .l3.cap b { color: var(--ink); }
+</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
@@ -166,7 +192,7 @@
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Agent memory: what to remember and how to use it</h1><p class="lead">How an assistant remembers across sessions: memory types, a write path with checks in code, a read path with a token budget, user control, and evals.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#picture">The whole picture</a></li><li><a href="#types">Types of memory</a></li><li><a href="#write">Write path: what to keep</a></li><li><a href="#read">Read path: what goes in the prompt</a></li><li><a href="#privacy">User control and privacy</a></li><li><a href="#evals">Evals and metrics</a></li><li><a href="#mistakes">Common mistakes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#picture">The whole picture</a></li><li><a href="#types">Types of memory</a></li><li><a href="#durable">Surviving restarts</a></li><li><a href="#write">Write path: what to keep</a></li><li><a href="#read">Read path: what goes in the prompt</a></li><li><a href="#privacy">User control and privacy</a></li><li><a href="#evals">Evals and metrics</a></li><li><a href="#mistakes">Common mistakes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="picture"><h2>The whole picture</h2><p>A model remembers nothing between calls. "Memory" is data your system stores and puts back into the prompt. The design is two paths: a <strong>read path</strong> that decides which memories go into each prompt, and a <strong>write path</strong> that decides what is worth keeping.</p><figure class="fig"><svg viewBox="0 0 722 312" class="dg" role="img" aria-label="Read path: user turn, memory loader filtered by user id reading the session, profile and episodic stores, pack within 500 tokens, model, reply. Write path: session end, extract facts with a small model, check in code, write to the profile and episodic stores with a TTL"><text x="10" y="22" class="cap">Read path (every turn)</text><rect x="10" y="34" width="120" height="46" rx="8" class="k-user"/><text x="70" y="61.5" class="small b" text-anchor="middle">User turn</text><path d="M130 57 L148 57" class="wire" marker-end="url(#ah)"/><rect x="150" y="34" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="53" class="small b" text-anchor="middle">Memory loader</text><text x="210" y="69" class="sm" text-anchor="middle">filter by user_id</text><path d="M270 57 L288 57" class="wire" marker-end="url(#ah)"/><rect x="290" y="34" width="120" height="46" rx="8" class="k-kb"/><text x="350" y="53" class="small b" text-anchor="middle">Pack</text><text x="350" y="69" class="sm" text-anchor="middle">≤ 500 tokens</text><path d="M410 57 L428 57" class="wire" marker-end="url(#ah)"/><rect x="430" y="34" width="120" height="46" rx="8" class="k-model"/><text x="490" y="61.5" class="small b" text-anchor="middle">Model</text><path d="M550 57 L568 57" class="wire" marker-end="url(#ah)"/><rect x="570" y="34" width="120" height="46" rx="8" class="k-serve"/><text x="630" y="61.5" class="small b" text-anchor="middle">Reply</text><rect x="40" y="140" width="160" height="46" rx="8" class="k-src"/><text x="120" y="159" class="small b" text-anchor="middle">Session store</text><text x="120" y="175" class="sm" text-anchor="middle">short-term · hours</text><rect x="280" y="140" width="160" height="46" rx="8" class="k-src"/><text x="360" y="159" class="small b" text-anchor="middle">Profile store</text><text x="360" y="175" class="sm" text-anchor="middle">preferences · key-value</text><rect x="520" y="140" width="160" height="46" rx="8" class="k-src"/><text x="600" y="159" class="small b" text-anchor="middle">Episodic store</text><text x="600" y="175" class="sm" text-anchor="middle">past issues · vectors</text><path d="M120 140 L196 82" class="wire dash" marker-end="url(#ah)"/><path d="M360 140 L214 82" class="wire dash" marker-end="url(#ah)"/><path d="M600 140 L226 82" class="wire dash" marker-end="url(#ah)"/><text x="190" y="242" class="cap">Write path (session end)</text><rect x="10" y="254" width="150" height="46" rx="8" class="k-user"/><text x="85" y="273" class="small b" text-anchor="middle">Session end</text><text x="85" y="289" class="sm" text-anchor="middle">or &quot;remember this&quot;</text><path d="M160 277 L188 277" class="wire" marker-end="url(#ah)"/><rect x="190" y="254" width="150" height="46" rx="8" class="k-model"/><text x="265" y="273" class="small b" text-anchor="middle">Extract facts</text><text x="265" y="289" class="sm" text-anchor="middle">small model</text><path d="M340 277 L368 277" class="wire" marker-end="url(#ah)"/><rect x="370" y="254" width="150" height="46" rx="8" class="k-gov"/><text x="445" y="273" class="small b" text-anchor="middle">Check (code)</text><text x="445" y="289" class="sm" text-anchor="middle">consent · PII · conflicts</text><path d="M520 277 L548 277" class="wire" marker-end="url(#ah)"/><rect x="550" y="254" width="150" height="46" rx="8" class="k-kb"/><text x="625" y="273" class="small b" text-anchor="middle">Write</text><text x="625" y="289" class="sm" text-anchor="middle">upsert · TTL</text><path d="M110 186 L85 252" class="wire dash" marker-end="url(#ah)"/><path d="M600 254 L380 188" class="wire" marker-end="url(#ah)"/><path d="M640 254 L620 188" class="wire" marker-end="url(#ah)"/></svg><figcaption>Reads happen every turn and are cheap; writes happen once per session and go through checks in code. Budgets are illustrative.</figcaption></figure></section><section id="types"><h2>Types of memory</h2>
 <div class="table"><table><thead><tr><th>Type</th><th>Holds</th><th>Where it lives</th><th>How it is read</th><th>Lifetime</th></tr></thead><tbody>
 <tr><td>Short-term (working)</td><td>This conversation: turns, tool results, open task</td><td>Session store such as Redis / Memorystore or Firestore, keyed by session id</td><td>Recent turns in full; older turns replaced by a running summary once over budget</td><td>Hours</td></tr>
@@ -174,7 +200,57 @@
 <tr><td>Episodic</td><td>Past issues and outcomes as short dated summaries: "Mar 3: refund for order 812, resolved"</td><td>Vector store with a user id filter (Vertex AI Vector Search, AlloyDB / pgvector)</td><td>Top 3 by similarity to the current question, with a recency boost</td><td>Months, set by policy</td></tr>
 <tr><td>Procedural</td><td>How to do things: playbooks, "check the plan before suggesting upgrades"</td><td>Versioned prompts and tool descriptions, owned by the team</td><td>Always in the system prompt</td><td>Until the next release</td></tr>
 </tbody></table></div>
-<p>Managed options exist (for example Vertex AI Agent Engine Memory Bank, LangGraph stores, Mem0), but the decisions below are the same whichever you use.</p></section><section id="write"><h2>Write path: what to keep</h2>
+<p>Managed options exist (for example Vertex AI Agent Engine Memory Bank, LangGraph stores, Mem0), but the decisions below are the same whichever you use.</p></section><section id="durable"><h2>Surviving restarts: checkpointers</h2>
+<p class="lead">Short-term memory has to outlive the process holding it. Save the agent's state after every step to a store outside the pod, name each conversation with a thread id, and any pod can resume it. This is called durable execution.</p>
+<p>An agent turn can take many steps: call the model, run a tool, call the model again. If the pod crashes, is redeployed or scales down mid-turn, state kept only in memory is gone, and the user starts over. A <strong>checkpointer</strong> saves the full graph state (messages, tool results, the current step) after every step. A <strong>thread id</strong>, such as <code>user-4471</code>, names the conversation so any process can load its latest checkpoint.</p>
+<figure class="fig3d" id="restart3d">
+<div class="stage3d" role="img" aria-label="Three conversation steps run on pod 1, the pod restarts, and the conversation resumes or is lost depending on where state was saved"><p class="hint3">3D · drag to turn · the restart replays</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN.</p></div>
+<div class="ctl3"><span class="k">Checkpointer</span><button data-cp="memory" aria-pressed="true">In memory</button><button data-cp="sqlite" aria-pressed="false">SQLite file</button><button data-cp="postgres" aria-pressed="false">Postgres or Redis</button></div>
+<div class="ctl3"><span class="k">Deployment</span><button data-dep="one" aria-pressed="true">One pod</button><button data-dep="fleet" aria-pressed="false">Three pods behind a load balancer</button><button data-thread aria-pressed="true">thread_id: on</button></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>Coloured cubes are the conversation's steps. Steps 1 to 3 run on pod 1, then pod 1 restarts. Watch whether steps 1 to 3 come back for step 4, or vanish and turn the rest red.</figcaption>
+</figure>
+<h3>In LangGraph</h3>
+<p>LangChain's prebuilt agent, <code>create_agent</code> from <code>langchain.agents</code>, builds a model-plus-tools agent that runs on LangGraph and takes a checkpointer directly. The older <code>create_react_agent</code> from <code>langgraph.prebuilt</code> is deprecated.</p>
+<pre><code>from langchain.agents import create_agent
+from langgraph.checkpoint.postgres import PostgresSaver
+
+with PostgresSaver.from_conn_string(DB_URL) as checkpointer:
+    checkpointer.setup()                       # creates the checkpoint tables once
+    agent = create_agent(
+        model,
+        tools=[lookup_order, issue_refund],
+        checkpointer=checkpointer,             # state saved after every step
+    )
+    agent.invoke(
+        {"messages": [{"role": "user", "content": "Where is my order?"}]},
+        config={"configurable": {"thread_id": "user-4471"}},   # same id resumes
+    )</code></pre>
+<p>Call it again with the same <code>thread_id</code>, from any process that uses the same database, and the agent sees the whole conversation so far. The same checkpoints power human-in-the-loop pauses: the graph stops before a risky tool, and resumes when a person approves.</p>
+<h3>Choosing a checkpointer</h3>
+<p>Pick the cheapest store that meets your durability need.</p>
+<div class="table"><table><thead><tr><th>Checkpointer</th><th>Survives a restart?</th><th>Shared across pods?</th><th>Use for</th></tr></thead><tbody>
+<tr><td><code>InMemorySaver</code> (also <code>MemorySaver</code>)</td><td>No</td><td>No</td><td>Tests and notebooks only</td></tr>
+<tr><td><code>SqliteSaver</code>, <code>AsyncSqliteSaver</code></td><td>Yes</td><td>No: a local file</td><td>A single server or a local tool</td></tr>
+<tr><td><code>PostgresSaver</code>, <code>RedisSaver</code>, <code>AsyncMongoDBSaver</code></td><td>Yes</td><td>Yes</td><td>A fleet of replicas where any pod can resume any conversation</td></tr>
+</tbody></table></div>
+<h3>Async serving</h3>
+<p>A high-throughput agent server is almost always async, so one process can keep many model and tool calls in flight while it waits. Use the async checkpointer classes, whose methods are <code>aput</code>, <code>aget</code> and <code>alist</code> instead of <code>put</code>, <code>get</code> and <code>list</code>, and call the agent with <code>ainvoke</code> or <code>astream</code>.</p>
+<h3>Gotcha: async tool fan-out</h3>
+<p>When one model step asks for several tool calls, LangGraph's prebuilt <code>ToolNode</code> runs them differently depending on how you call it:</p>
+<ul class="plain">
+<li><strong>Sync</strong> (<code>invoke</code>): runs the calls in a thread pool that respects <code>max_concurrency</code> from the run config.</li>
+<li><strong>Async</strong> (<code>ainvoke</code>): starts every call at once with <code>asyncio.gather</code> and ignores <code>max_concurrency</code>.</li>
+</ul>
+<p>We confirmed this in the <code>langgraph-prebuilt</code> 1.1.1 source. So if a step requests ten tool calls that each hit your self-hosted model endpoint, all ten land together. That can spike the server's queue or trigger a cold scale-up. Bound the fan-out yourself:</p>
+<pre><code>import asyncio
+gpu_slots = asyncio.Semaphore(4)               # at most 4 concurrent calls to the endpoint
+
+async def summarize(doc: str) -> str:
+    async with gpu_slots:
+        return await llm.ainvoke(f"Summarize: {doc}")</code></pre>
+<p>Limiting how many tools the model may call in one step also helps.</p>
+</section><section id="write"><h2>Write path: what to keep</h2>
 <div class="table"><table><thead><tr><th>Decision</th><th>Default</th></tr></thead><tbody>
 <tr><td>When</td><td>At session end, asynchronously, not on every turn. An explicit "remember that…" writes immediately.</td></tr>
 <tr><td>What</td><td>A small model extracts stable preferences, unresolved issues and outcomes. Skip one-off chatter, secrets and anything the user did not state about themselves.</td></tr>
@@ -214,6 +290,18 @@
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
 
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { mountRestart } from '../assets/gpu3d.js';
+mountRestart(document.getElementById('restart3d'));
+</script>
 <script src="progress.js"></script>
 </body>
 </html>
