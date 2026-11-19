@@ -189,13 +189,7 @@
 <p>Batching runs many requests through one read of the weights. Static batching suits offline jobs, dynamic batching suits fixed-size models like embedders, and in-flight (continuous) batching suits LLM generation, because short answers don't wait for long ones. <a href="batching.html">Batching</a> compares the three in a simulation.</p></section>
 
 <section id="parallelism"><h2>Parallelism</h2>
-<div class="table"><table><thead><tr><th>To use more GPUs</th><th>How it splits</th><th>Cost</th></tr></thead><tbody>
-<tr><td>Tensor parallelism</td><td>Every layer split across GPUs; all GPUs work on every token</td><td>Heavy GPU-to-GPU traffic, so keep it inside one fast-linked node</td></tr>
-<tr><td>Pipeline parallelism</td><td>Different layers on different GPUs, like an assembly line</td><td>Less traffic, but stages can idle; can span nodes</td></tr>
-<tr><td>Expert parallelism</td><td>MoE experts placed on different GPUs</td><td>Routing traffic between GPUs; uneven load if some experts are popular</td></tr>
-<tr><td>Replicas</td><td>Whole copies of the model behind a load balancer</td><td>Simplest way to add throughput, if one copy fits</td></tr>
-</tbody></table></div>
-<p>Use tensor parallelism when the model doesn't fit on one GPU, and replicas when it does but you need more throughput.</p></section>
+<p>A model too big for one GPU is split across several. Tensor parallelism slices every layer, so all GPUs work on every token. Pipeline parallelism gives each GPU a run of layers, like an assembly line. Replicas copy a model that already fits. <a href="model-fitting.html">Fitting a model on GPUs</a> has a lab that sizes the model and says when to quantize, split or share a GPU.</p></section>
 
 <section id="metrics"><h2>Throughput vs latency</h2>
 <ul class="plain">
@@ -227,7 +221,7 @@
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#kv-cache">Glossary: KV cache</a></li></ul></section></article>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="model-fitting.html">Fitting a model on GPUs</a></li><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#kv-cache">Glossary: KV cache</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>

@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Durable agent execution: checkpointers · Agentic System Designs</title>
+<meta name="description" content="Making agent conversations survive restarts: checkpointers, thread ids, LangGraph create_agent, choosing InMemory, SQLite or Postgres savers, async serving and the async tool fan-out gotcha, with a restart simulator.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  /* labs */
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Durable agent execution: checkpointers</h1><p class="lead">A long agent conversation should survive a crash or a redeploy. Save the agent's state after every step, name each conversation, and any process can pick it up where it stopped.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#idea">The idea</a></li><li><a href="#lab">Try it: restart a pod mid-conversation</a></li><li><a href="#langgraph">In LangGraph</a></li><li><a href="#backends">Choosing a checkpointer</a></li><li><a href="#async">Async serving</a></li><li><a href="#fanout">Gotcha: async tool fan-out</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="idea"><h2>The idea</h2>
+<p class="lead">Durable execution means a running agent can be stopped at any moment and resumed later without losing work or repeating it.</p>
+<p>An agent turn can take many steps: call the model, run a tool, call the model again. If the process holding that state crashes, is redeployed or scales down, an agent that keeps state only in memory starts over and the user loses their context. Two pieces fix this:</p>
+<ul class="plain">
+<li><strong>A checkpointer</strong> saves the agent's full state (messages, tool results, where it is in its graph) after every step, to a store outside the process.</li>
+<li><strong>A thread id</strong> names the conversation, such as <code>user-4471</code>. Whichever process handles the next request loads that thread's latest checkpoint and continues.</li>
+</ul></section>
+
+<section id="lab"><h2>Try it: restart a pod mid-conversation</h2>
+<p>An agent conversation has five steps. Pick where state is saved and how many pods serve the agent, then restart the pod after step 3 and see what the user gets.</p>
+<div class="lab" id="durlab">
+  <div class="lab-row"><span class="lab-k">Checkpointer</span><span class="seg" role="group" aria-label="Checkpointer">
+    <button data-cp="memory" aria-pressed="true">In memory</button><button data-cp="sqlite" aria-pressed="false">SQLite file</button><button data-cp="postgres" aria-pressed="false">Postgres or Redis</button></span></div>
+  <div class="lab-row"><span class="lab-k">Deployment</span><span class="seg" role="group" aria-label="Deployment">
+    <button data-dep="one" aria-pressed="true">One pod</button><button data-dep="fleet" aria-pressed="false">Three pods behind a load balancer</button></span>
+    <label for="dur-thread"><input type="checkbox" id="dur-thread" checked> Pass a thread_id</label></div>
+  <div class="fig" style="margin:0"><svg id="dur-svg" class="dg" viewBox="0 0 722 150" role="img" aria-label="Five conversation steps, a restart after step 3, and whether the conversation resumes"></svg></div>
+  <p class="lab-out" id="dur-out" aria-live="polite"></p>
+</div></section>
+
+<section id="langgraph"><h2>In LangGraph</h2>
+<p>LangChain's prebuilt agent, <code>create_agent</code> from <code>langchain.agents</code>, builds a model-plus-tools agent that runs on LangGraph and takes a checkpointer directly. The older <code>create_react_agent</code> from <code>langgraph.prebuilt</code> is deprecated.</p>
+<pre><code>from langchain.agents import create_agent
+from langgraph.checkpoint.postgres import PostgresSaver
+
+with PostgresSaver.from_conn_string(DB_URL) as checkpointer:
+    checkpointer.setup()                       # creates the checkpoint tables once
+    agent = create_agent(
+        model,
+        tools=[lookup_order, issue_refund],
+        checkpointer=checkpointer,             # state saved after every step
+    )
+    agent.invoke(
+        {"messages": [{"role": "user", "content": "Where is my order?"}]},
+        config={"configurable": {"thread_id": "user-4471"}},   # same id resumes
+    )</code></pre>
+<p>Call it again with the same <code>thread_id</code>, from any process that uses the same database, and the agent sees the whole conversation so far. The same checkpoints power human-in-the-loop pauses: the graph stops before a risky tool, and resumes when a person approves.</p></section>
+
+<section id="backends"><h2>Choosing a checkpointer</h2>
+<p>Pick the cheapest store that meets your durability need.</p>
+<div class="table"><table><thead><tr><th>Checkpointer</th><th>Survives a restart?</th><th>Shared across pods?</th><th>Use for</th></tr></thead><tbody>
+<tr><td><code>InMemorySaver</code> (also <code>MemorySaver</code>)</td><td>No</td><td>No</td><td>Tests and notebooks only</td></tr>
+<tr><td><code>SqliteSaver</code>, <code>AsyncSqliteSaver</code></td><td>Yes</td><td>No: a local file</td><td>A single server or a local tool</td></tr>
+<tr><td><code>PostgresSaver</code>, <code>RedisSaver</code>, <code>AsyncMongoDBSaver</code></td><td>Yes</td><td>Yes</td><td>A fleet of replicas where any pod can resume any conversation</td></tr>
+</tbody></table></div></section>
+
+<section id="async"><h2>Async serving</h2>
+<p>A high-throughput agent server is almost always async, so one process can keep many model and tool calls in flight while it waits. Use the async checkpointer classes, whose methods are <code>aput</code>, <code>aget</code> and <code>alist</code> instead of <code>put</code>, <code>get</code> and <code>list</code>, and call the agent with <code>ainvoke</code> or <code>astream</code>.</p></section>
+
+<section id="fanout"><h2>Gotcha: async tool fan-out</h2>
+<p>When one model step asks for several tool calls, LangGraph's prebuilt <code>ToolNode</code> runs them differently depending on how you call it:</p>
+<ul class="plain">
+<li><strong>Sync</strong> (<code>invoke</code>): runs the calls in a thread pool that respects <code>max_concurrency</code> from the run config.</li>
+<li><strong>Async</strong> (<code>ainvoke</code>): starts every call at once with <code>asyncio.gather</code> and ignores <code>max_concurrency</code>.</li>
+</ul>
+<p>We confirmed this in the <code>langgraph-prebuilt</code> 1.1.1 source. So if a step requests ten tool calls that each hit your self-hosted model endpoint, all ten land together. That can spike the server's queue or trigger a cold scale-up. Bound the fan-out yourself:</p>
+<pre><code>import asyncio
+gpu_slots = asyncio.Semaphore(4)               # at most 4 concurrent calls to the endpoint
+
+async def summarize(doc: str) -> str:
+    async with gpu_slots:
+        return await llm.ainvoke(f"Summarize: {doc}")</code></pre>
+<p>Limiting how many tools the model may call in one step also helps.</p></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="note"><p>"Agent state can't live in the process, because pods restart and requests land on different replicas. I'd build the agent with a Postgres checkpointer and pass the user's thread id on every call, so any pod can resume the conversation from its last step. In-memory savers are for tests only. The server is async for throughput, so I'd use the async checkpointer and put a semaphore in front of the model endpoint, because async tool execution fans out without a concurrency limit."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th></tr></thead><tbody>
+<tr><td>Checkpointed agent graphs</td><td>LangGraph checkpointers (<code>langgraph-checkpoint-postgres</code>, <code>-sqlite</code>, <code>-redis</code>, MongoDB)</td></tr>
+<tr><td>General durable workflows</td><td>Temporal, Restate, AWS Step Functions, DBOS</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="agent-memory.html">Agent memory</a></li><li><a href="testing.html">Testing and rollout</a></li><li><a href="nvidia-architecture.html#two-tier">Two model tiers on NIM</a></li><li><a href="glossary.html#checkpointer">Glossary: checkpointer</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script>
+(() => {
+  const root = document.getElementById('durlab');
+  if (!root) return;
+  const NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('dur-svg'), out = document.getElementById('dur-out'), thread = document.getElementById('dur-thread');
+  const st = { cp: 'memory', dep: 'one' };
+  const STEPS = ['User asks', 'Model plans', 'Tool: lookup', 'Model drafts', 'Reply sent'];
+  const el = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; return n; };
+  function render() {
+    let ok, why;
+    if (!thread.checked) { ok = false; why = 'No thread_id, so there is nothing to look the saved state up by. The next request starts a new conversation.'; }
+    else if (st.cp === 'memory') { ok = false; why = 'In-memory state died with the pod. The user starts over at step 1.'; }
+    else if (st.cp === 'sqlite' && st.dep === 'fleet') { ok = false; why = 'The SQLite file lives on the pod that restarted. The load balancer sends step 4 to another pod, which has no copy, so it starts over. A fleet needs a shared store.'; }
+    else if (st.cp === 'sqlite') { ok = true; why = 'The same pod comes back, reads its local SQLite file and resumes at step 4.'; }
+    else { ok = true; why = 'Any pod loads thread user-4471 from the shared store and resumes at step 4. Nothing is lost or repeated.'; }
+    svg.textContent = '';
+    STEPS.forEach((s, i) => {
+      const x = 10 + i * 142, after = i >= 3, cls = !after ? 'k-ingest' : ok ? 'k-ingest' : 'k-dlq';
+      svg.appendChild(el('rect', { x, y: 30, width: 128, height: 44, rx: 8, class: cls }));
+      svg.appendChild(el('text', { x: x + 10, y: 50, class: 'small b' }, (i + 1) + '. ' + s));
+      svg.appendChild(el('text', { x: x + 10, y: 66, class: 'sm' }, !after ? 'saved' : ok ? 'resumed' : 'lost: restart from 1'));
+    });
+    svg.appendChild(el('line', { x1: 435, y1: 18, x2: 435, y2: 90, class: 'wire red', 'stroke-width': 2.5 }));
+    svg.appendChild(el('text', { x: 440, y: 16, class: 'bad' }, 'pod restarts'));
+    svg.appendChild(el('text', { x: 10, y: 120, class: 'sm' }, 'Green: state the user keeps. Red: work lost after the restart.'));
+    out.textContent = why;
+  }
+  root.querySelectorAll('[data-cp]').forEach(b => b.addEventListener('click', () => { st.cp = b.dataset.cp; root.querySelectorAll('[data-cp]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  root.querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => { st.dep = b.dataset.dep; root.querySelectorAll('[data-dep]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  thread.addEventListener('change', render);
+  render();
+})();
+</script>
+<script src="progress.js"></script>
+</body>
+</html>
