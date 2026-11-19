@@ -219,8 +219,14 @@ details.qa .say{margin-bottom:14px}
 <div class="wrap doc">
   <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#stack">The stack</a></li><li><a href="#nim">NIM</a></li><li><a href="#triton">Triton Inference Server</a></li><li><a href="#trtllm">TensorRT-LLM engine</a></li><li><a href="#levers">Serving levers</a></li><li><a href="#two-tier">Two model tiers</a></li><li><a href="#cuda">CUDA and streams</a></li><li><a href="#sharing">Sharing a GPU: MIG</a></li><li><a href="#gpus">GPU generations and FP8</a></li><li><a href="#nemo">NeMo tools</a></li><li><a href="#check">Check yourself</a></li><li><a href="#exam">Exam patterns</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="stack"><h2>The stack</h2>
-<p class="lead">Three layers, each with one job. NIM packages the model, Triton schedules requests, and TensorRT-LLM runs the maths on the GPUs.</p>
-<figure class="fig"><svg viewBox="0 0 722 300" class="dg" role="img" aria-label="Client calls a NIM container; Triton batches requests and hands them to a TensorRT-LLM engine split across four GPUs"><rect x="10" y="118" width="120" height="56" rx="10" class="k-user"/><text x="70" y="142" class="small b" text-anchor="middle">Agent</text><text x="70" y="160" class="sm" text-anchor="middle">OpenAI-style HTTP</text><path d="M130 146 L176 146" class="wire hot" marker-end="url(#ah)"/><rect x="180" y="10" width="532" height="280" rx="14" class="ghost"/><text x="196" y="34" class="b">NIM container</text><text x="696" y="34" class="sm mono" text-anchor="end">nemotron-3-super-120b-a12b</text><rect x="200" y="52" width="492" height="74" rx="10" class="k-serve"/><text x="216" y="78" class="b">Triton Inference Server</text><text x="216" y="98" class="small">HTTP/gRPC · request queue · dynamic batching</text><text x="216" y="115" class="small">concurrent model instances · metrics</text><path d="M446 126 L446 150" class="wire" marker-end="url(#ah)"/><rect x="200" y="152" width="492" height="122" rx="10" class="k-model"/><text x="216" y="178" class="b">TensorRT-LLM engine</text><text x="216" y="198" class="small">FP8 weights · tensor parallelism · paged KV cache · in-flight batching</text><rect x="216" y="214" width="106" height="44" rx="8" class="box"/><text x="269" y="234" class="small b" text-anchor="middle">GPU 0</text><text x="269" y="250" class="sm" text-anchor="middle">¼ of each layer</text><rect x="334" y="214" width="106" height="44" rx="8" class="box"/><text x="387" y="234" class="small b" text-anchor="middle">GPU 1</text><text x="387" y="250" class="sm" text-anchor="middle">¼ of each layer</text><rect x="452" y="214" width="106" height="44" rx="8" class="box"/><text x="505" y="234" class="small b" text-anchor="middle">GPU 2</text><text x="505" y="250" class="sm" text-anchor="middle">¼ of each layer</text><rect x="570" y="214" width="106" height="44" rx="8" class="box"/><text x="623" y="234" class="small b" text-anchor="middle">GPU 3</text><text x="623" y="250" class="sm" text-anchor="middle">¼ of each layer</text></svg><figcaption>Illustrative layout. Tensor parallelism of 4 splits every layer across four GPUs, which talk over NVLink.</figcaption></figure>
+<p class="lead">Follow one request from your agent through a NIM container and back: API server, tokenizer, queue and scheduler, prefill and decode on the GPUs, then streaming. Press Play, or step through it.</p>
+<figure class="fig3d" id="life3d">
+<div class="stage3d" role="img" aria-label="One request travelling through a NIM container: API server, tokenizer, queue, prefill and decode on four GPUs, and streaming back"><p class="hint3">3D · drag to turn · press Play or pick a step</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN.</p></div>
+<div class="ctl3"><button data-prev>← Back</button><button data-play aria-pressed="true">Pause</button><button data-next>Next →</button></div>
+<div class="ctl3 steps3"></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>One request's lifecycle. Gold: the request. Orange cubes: prompt tokens. Blue cubes on the GPUs: KV cache blocks. Green cubes: generated tokens streaming back. The purple pulse is tensor-parallel traffic between GPUs after every layer.</figcaption>
+</figure>
 <div class="table"><table><thead><tr><th>Layer</th><th>Job</th><th>What you tune</th></tr></thead><tbody>
 <tr><td><strong>NIM</strong></td><td>A container with the model, an optimized engine for your GPU and an OpenAI-compatible API</td><td>Which model and profile (precision, GPU count)</td></tr>
 <tr><td><strong>Triton Inference Server</strong></td><td>Takes requests, queues and batches them, runs model instances, exposes metrics</td><td>Batching delay and sizes, instance count, ensembles</td></tr>
@@ -255,14 +261,13 @@ resp = client.chat.completions.create(
 <li><strong>Self-hosted:</strong> run the same NIM container on your own GPUs and point <code>base_url</code> at it. Moving a model from hosted to self-hosted is a configuration change, not a rewrite.</li>
 <li><strong>Two sizes, one interface:</strong> a small model (about 8B) for routing, classification and high-volume tool calls where latency matters; a large one (about 70B) for hard reasoning and final answers. Only the <code>model</code> string changes.</li>
 </ul>
-<div class="lab" id="nimlab">
-  <div class="lab-row"><span class="lab-k">base_url</span><span class="seg" role="group" aria-label="Base URL">
-    <button data-url="nim" aria-pressed="true">NVIDIA NIM</button><button data-url="default" aria-pressed="false">Leave the SDK default</button><button data-url="self" aria-pressed="false">Self-hosted NIM</button></span></div>
-  <div class="lab-row"><span class="lab-k">Model</span><span class="seg" role="group" aria-label="Model">
-    <button data-nm="small" aria-pressed="true">Small: llama-3.1-8b-instruct</button><button data-nm="large" aria-pressed="false">Large: llama-3.3-70b-instruct</button></span></div>
-  <pre id="nim-code" style="margin:0 0 10px"></pre>
-  <p class="lab-out" id="nim-out" aria-live="polite"></p>
-</div>
+<figure class="fig3d" id="nim3d">
+<div class="stage3d" role="img" aria-label="An OpenAI SDK request travelling to OpenAI, an NVIDIA-hosted NIM or a self-hosted NIM, depending on base_url"><p class="hint3">3D · drag to turn</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN.</p></div>
+<div class="ctl3"><span class="k">base_url</span><button data-url="nim" aria-pressed="true">NVIDIA NIM</button><button data-url="default" aria-pressed="false">Leave the SDK default</button><button data-url="self" aria-pressed="false">Self-hosted NIM</button></div>
+<div class="ctl3"><span class="k">Model</span><button data-nm="small" aria-pressed="true">8B llama-3.1-8b-instruct</button><button data-nm="large" aria-pressed="false">70B llama-3.3-70b-instruct</button></div>
+<pre style="margin:10px 0 0"></pre>
+<p class="out3" aria-live="polite"></p>
+</figure>>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">The hosted catalog changes often. On 19 November 2026 neither of these two Llama models was listed on <code>integrate.api.nvidia.com/v1/models</code>, so list the models before you hard-code one. The pattern, not the model name, is what exams test.</p></section>
 
 <section id="triton"><h2>Triton Inference Server</h2>
@@ -300,15 +305,12 @@ instance_group [ { count: 2, kind: KIND_GPU } ]</code></pre>
 <li><strong>FP8 on Hopper:</strong> roughly halves weight and activation memory compared with FP16, with little accuracy loss. Lower-bit methods (AWQ, GPTQ, INT8, INT4) shrink further. FP64 is for scientific computing, never for serving. <a href="quantization.html">More</a></li>
 <li><strong>Tensor parallelism:</strong> shards every layer across GPUs in one server over NVLink, so a model too big for one card fits. Pipeline parallelism instead places groups of layers on different GPUs and can span servers. <a href="model-fitting.html">More</a></li>
 </ul>
-<div class="lab" id="leverlab">
-  <div class="lab-row">
-    <label for="lv-paged"><input type="checkbox" id="lv-paged"> PagedAttention</label>
-    <label for="lv-inflight"><input type="checkbox" id="lv-inflight"> In-flight batching</label>
-    <label for="lv-fp8"><input type="checkbox" id="lv-fp8"> FP8</label>
-    <label for="lv-tp"><input type="checkbox" id="lv-tp"> Tensor parallel across 2 GPUs</label></div>
-  <div class="fig" style="margin:0"><svg id="lv-svg" class="dg" viewBox="0 0 722 170" role="img" aria-label="Memory per GPU and relative throughput for the chosen levers"></svg></div>
-  <p class="lab-out" id="lv-out" aria-live="polite"></p>
-</div>
+<figure class="fig3d" id="levers3d">
+<div class="stage3d" role="img" aria-label="An 80 GB H100 whose memory and throughput change as serving levers are switched on"><p class="hint3">3D · drag to turn · switch levers on and off</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN.</p></div>
+<div class="ctl3"><span class="k">Levers</span><button data-lever="paged" aria-pressed="false">PagedAttention</button><button data-lever="inflight" aria-pressed="false">In-flight batching</button><button data-lever="fp8" aria-pressed="false">FP8</button><button data-lever="tp" aria-pressed="false">Tensor parallel × 2</button></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>A 70B model on 80 GB cards. Orange: weights. Pale blue: KV cache reserved without paging; solid blue cubes: KV blocks actually in use. Grey: activations and overhead. Gold lamps: batch slots, dark when a finished request is holding one. The green column is throughput per GPU. Illustrative numbers.</figcaption>
+</figure>>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Illustrative numbers: 140 GB of FP16 weights, a KV cache of 24 GB reserved without paging or about 6 GB with it for the same conversations, and 3 GB of activations and overhead. The throughput multipliers show direction, not a benchmark.</p></section>
 
 <section id="two-tier"><h2>Worked example: one agent, two model tiers</h2>
@@ -317,7 +319,7 @@ instance_group [ { count: 2, kind: KIND_GPU } ]</code></pre>
 <li><strong>Cheap tier, hosted.</strong> Send simple turns to a small model on a hosted NIM endpoint. Per-token pricing suits a bursty long tail, and you run no GPUs.</li>
 <li><strong>Hard tier, self-hosted.</strong> Run a 70B model on your own H100s. FP16 overflows one 80 GB card, so turn on FP8 and it fits on one. PagedAttention and in-flight batching then let that card serve many conversations at once.</li>
 <li><strong>One interface.</strong> Both tiers speak the OpenAI-compatible NIM API, so the agent code is the same and a <a href="routing.html">router</a> only picks <code>base_url</code> and <code>model</code>.</li>
-<li><strong>Durable conversations.</strong> Give the agent a shared checkpoint store, such as Postgres, and a <code>thread_id</code> per user, so a pod restart on the GPU tier resumes the conversation instead of losing it. See <a href="durable-agents.html">durable agent execution</a>.</li>
+<li><strong>Durable conversations.</strong> Give the agent a shared checkpoint store, such as Postgres, and a <code>thread_id</code> per user, so a pod restart on the GPU tier resumes the conversation instead of losing it. See <a href="agent-memory.html#durable">Agent memory: surviving restarts</a>.</li>
 </ol>
 <p>If the small model really handles 70 to 80% of turns, total inference cost drops sharply, often quoted as 60 to 80%. Measure your own split and quality before you count on it.</p></section>
 
@@ -409,75 +411,14 @@ instance_group [ { count: 2, kind: KIND_GPU } ]</code></pre>
 }
 </script>
 <script type="module">
-import { mountStreams, mountShare } from '../assets/gpu3d.js';
+import { mountStreams, mountShare, mountNim, mountLevers, mountLifecycle } from '../assets/gpu3d.js';
+mountLifecycle(document.getElementById('life3d'));
+mountNim(document.getElementById('nim3d'));
+mountLevers(document.getElementById('levers3d'));
 mountStreams(document.getElementById('streams3d'));
 mountShare(document.getElementById('share3d'), { sliceName: 'MIG slice' });
 </script>
-<script>
-(() => {
-  const NS = 'http://www.w3.org/2000/svg';
-  const el = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; return n; };
 
-  // NIM call builder
-  const nroot = document.getElementById('nimlab');
-  if (nroot) {
-    const code = document.getElementById('nim-code'), out = document.getElementById('nim-out');
-    const st = { url: 'nim', model: 'small' };
-    const URLS = { nim: 'https://integrate.api.nvidia.com/v1', self: 'http://nim-70b.internal:8000/v1', default: null };
-    const MODELS = { small: 'meta/llama-3.1-8b-instruct', large: 'meta/llama-3.3-70b-instruct' };
-    function render() {
-      const url = URLS[st.url], key = st.url === 'default' ? 'os.environ["OPENAI_API_KEY"]' : st.url === 'self' ? '"not-used"' : 'os.environ["NVIDIA_API_KEY"]';
-      code.textContent = 'client = OpenAI(\n' + (url ? '    base_url="' + url + '",\n' : '    # base_url not set: the SDK uses https://api.openai.com/v1\n') + '    api_key=' + key + ',\n)\nclient.chat.completions.create(model="' + MODELS[st.model] + '", ...)\n\n# sends: POST ' + (url || 'https://api.openai.com/v1') + '/chat/completions';
-      const fit = st.model === 'small' ? 'The small model suits routing, classification and high-volume tool calls, where low latency matters most.' : 'The large model suits hard reasoning and final-answer synthesis, where accuracy matters more than latency.';
-      if (st.url === 'default') out.textContent = 'Doesn’t reach NIM. Without base_url the SDK calls OpenAI, which has no "' + MODELS[st.model] + '" model, so the request fails. Only base_url and the key need to change.';
-      else if (st.url === 'nim') out.textContent = 'Reaches an NVIDIA-hosted NIM. Same SDK, same code; only base_url, the key and the model string changed. ' + fit;
-      else out.textContent = 'Reaches a NIM container on your own GPUs. Same code again: moving from hosted to self-hosted is a configuration change. Authentication is whatever your own gateway requires. ' + fit;
-    }
-    nroot.querySelectorAll('[data-url]').forEach(b => b.addEventListener('click', () => { st.url = b.dataset.url; nroot.querySelectorAll('[data-url]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
-    nroot.querySelectorAll('[data-nm]').forEach(b => b.addEventListener('click', () => { st.model = b.dataset.nm; nroot.querySelectorAll('[data-nm]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
-    render();
-  }
-
-  // serving levers: 70B on 80 GB GPUs
-  const lroot = document.getElementById('leverlab');
-  if (lroot) {
-    const svg = document.getElementById('lv-svg'), out = document.getElementById('lv-out');
-    const ids = ['paged', 'inflight', 'fp8', 'tp'], box = {};
-    ids.forEach(k => { box[k] = document.getElementById('lv-' + k); box[k].addEventListener('change', render); });
-    function render() {
-      const on = k => box[k].checked, gpus = on('tp') ? 2 : 1, CAP = 80;
-      const weights = 140 * (on('fp8') ? 0.5 : 1) / gpus, kv = (on('paged') ? 6 : 24) * (on('fp8') ? 0.5 : 1) / gpus, act = 3;
-      const total = weights + kv + act, fits = total <= CAP;
-      const thr = (on('paged') ? 1.6 : 1) * (on('inflight') ? 2 : 1) * (on('fp8') ? 1.5 : 1);
-      svg.textContent = '';
-      const X0 = 150, X1 = 700, x = v => X0 + v / 180 * (X1 - X0);
-      svg.appendChild(el('text', { x: 10, y: 16, class: 'cap' }, 'Memory on each GPU (' + gpus + ' GPU' + (gpus > 1 ? 's' : '') + ')'));
-      svg.appendChild(el('text', { x: 10, y: 48, class: 'small b' }, 'Per GPU'));
-      let cx = 0;
-      [[weights, 'k-model', 'weights'], [kv, 'k-kb', 'KV cache'], [act, 'k-cross', '']].forEach(([v, cls, label]) => {
-        svg.appendChild(el('rect', { x: x(cx), y: 30, width: Math.max(1, x(cx + v) - x(cx)), height: 28, rx: 4, class: cls }));
-        if (label && x(cx + v) - x(cx) > 60) svg.appendChild(el('text', { x: x(cx) + 6, y: 49, class: 'sm' }, label + ' ' + v.toFixed(0)));
-        cx += v;
-      });
-      svg.appendChild(el('line', { x1: x(CAP), y1: 22, x2: x(CAP), y2: 66, class: 'wire', 'stroke-width': 2.5, style: 'stroke:var(--ink)' }));
-      svg.appendChild(el('text', { x: x(CAP) + 4, y: 80, class: 'sm b' }, '80 GB card'));
-      svg.appendChild(el('text', { x: x(total) + 6, y: 49, class: fits ? 'okt' : 'bad' }, '~' + total.toFixed(0) + ' GB'));
-      svg.appendChild(el('text', { x: 10, y: 118, class: 'small b' }, 'Throughput'));
-      svg.appendChild(el('rect', { x: X0, y: 100, width: x(thr * 30) - X0, height: 28, rx: 4, class: 'k-ingest' }));
-      svg.appendChild(el('text', { x: x(thr * 30) + 6, y: 119, class: 'small b' }, thr.toFixed(1) + '× per GPU'));
-      svg.appendChild(el('text', { x: 10, y: 160, class: 'sm' }, 'Relative to a plain FP16 server with a fixed batch and a reserved KV cache. Illustrative.'));
-      const tips = [];
-      if (!fits) tips.push('Doesn’t fit on one 80 GB card. Turn on FP8 to halve the weights, or tensor parallelism to shard them across 2 GPUs.');
-      else tips.push('Fits: about ' + total.toFixed(0) + ' GB' + (gpus > 1 ? ' on each of 2 GPUs' : ' on one GPU') + '.');
-      if (on('fp8') && on('tp')) tips.push('With FP8 it already fits on one card, so tensor parallelism mostly buys headroom and lower latency per request, at the cost of a second GPU.');
-      if (!on('paged')) tips.push('Without paging, the KV cache reserves space for the longest possible answer and strands memory.');
-      if (!on('inflight')) tips.push('Without in-flight batching, finished requests hold their slots until the whole batch drains.');
-      out.textContent = tips.join(' ');
-    }
-    render();
-  }
-})();
-</script>
 <script src="progress.js"></script>
 </body>
 </html>
