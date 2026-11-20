@@ -360,7 +360,7 @@ answer  = lead.merge(question, reports)          # see "merge the findings"</cod
 </tbody></table></div>
 <h3>Three layers of memory</h3>
 <ul class="plain">
-<li><strong>Short-term:</strong> one agent's context window for one run. It is private and disappears when the run ends.</li>
+<li><strong>Short-term:</strong> one agent's messages list, sent in full on every call and bounded by its context window. It is private to that agent. The window is a token limit, not storage, and is not the same as the GPU's KV cache; see <a href="agent-memory.html#context-window">where the context window lives</a>.</li>
 <li><strong>Shared working memory:</strong> the plan, open questions and findings for one job, kept outside any single context so the supervisor can reload it if its own context fills or the job restarts. Checkpoint it, as described in <a href="agent-memory.html#durable">agent memory</a>.</li>
 <li><strong>Long-term:</strong> facts that outlive the job (user preferences, past decisions), in a database or vector store, read and written through explicit tools. See <a href="agent-memory.html">Agent memory</a>.</li>
 </ul>
