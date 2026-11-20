@@ -12,5 +12,6 @@
   "confidence-scoring",
   "knowledge-base",
   "knowledge-freshness",
-  "backfills"
+  "backfills",
+  "multi-agent"
 ]
