@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Multi-agent coordination patterns · Agentic System Designs</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<meta name="description" content="Multi-agent coordination: when to split one agent into several, the supervisor (orchestrator-worker) pattern, network, hierarchical and handoff topologies, shared state and message passing, and merging workers' findings. With labs.">
+<meta name="description" content="Multi-agent coordination: when to split one agent into several, the supervisor (orchestrator-worker) pattern, network, hierarchical and handoff topologies, shared state and message passing, decentralized coordination on lossy networks, and merging workers' findings. With labs.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
@@ -243,7 +243,7 @@
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Multi-agent coordination patterns</h1><p class="lead">When to split one agent into several, the supervisor (orchestrator-worker) pattern, network, hierarchical and handoff topologies, how agents share state and memory, and how a supervisor merges what its workers find.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#why">Why and when to go multi-agent</a></li><li><a href="#lab">Try it: one agent or a team</a></li><li><a href="#supervisor">Supervisor / orchestrator-worker</a></li><li><a href="#topologies">Network, hierarchical and handoff</a></li><li><a href="#state">Shared state, memory and messages</a></li><li><a href="#merge">Case: merge the findings</a></li><li><a href="#failure">Failure modes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#why">Why and when to go multi-agent</a></li><li><a href="#lab">Try it: one agent or a team</a></li><li><a href="#supervisor">Supervisor / orchestrator-worker</a></li><li><a href="#topologies">Network, hierarchical and handoff</a></li><li><a href="#state">Shared state, memory and messages</a></li><li><a href="#decentralized">No centre: robots and lost messages</a></li><li><a href="#merge">Case: merge the findings</a></li><li><a href="#failure">Failure modes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="glance"><h2>At a glance</h2>
 <p class="lead">A single agent is one loop with one context window. A multi-agent system is several loops, each with its own prompt, tools and context, plus rules for who runs next and how results come back.</p>
 <p>Think of a research desk. One researcher reading 300 pages ends up with a desk buried in paper and forgets what was on page 12. A lead who sends three researchers off with clear questions, and gets back one page from each, can think clearly about the answer. That is the whole idea: <strong>workers absorb the reading, the lead sees only the summaries</strong>. The cost is that every researcher is paid, and every summary loses some detail.</p>
@@ -252,6 +252,7 @@
 <tr><td><strong>Network</strong> (peer to peer)</td><td>Each agent, by calling another</td><td>Open-ended flows with no fixed order</td><td>Loops, no owner of the answer, hard to trace</td></tr>
 <tr><td><strong>Hierarchical</strong></td><td>A supervisor at each level</td><td>Very large jobs with real sub-teams</td><td>Detail lost per layer; cost and latency per layer</td></tr>
 <tr><td><strong>Handoff</strong></td><td>The active agent transfers control</td><td>Conversations routed to one specialist at a time</td><td>Context lost at the transfer; ping-pong between agents</td></tr>
+<tr><td><strong>Decentralized</strong> (contract net, market)</td><td>Peers, by bidding for each task</td><td>Many physical agents, no single point of failure, lossy networks</td><td>Inconsistent views; duplicate or lost messages</td></tr>
 </tbody></table></div></section>
 
 <section id="why"><h2>Why and when to go multi-agent</h2>
@@ -374,6 +375,43 @@ answer  = lead.merge(question, reports)          # see "merge the findings"</cod
 </div>
 <div class="note"><p><strong>Pass references, not contents.</strong> A worker that produced a 20-page result saves it to a file or object store and returns the path or ID with a short summary. The supervisor's context stays small, and the full result is one tool call away. Anthropic describes workers writing to a filesystem and passing lightweight references for this reason.</p></div></section>
 
+<section id="decentralized"><h2>No centre: robots and lost messages</h2>
+<p>Everything above assumes one place that sees everything: a supervisor, or a shared board. Some systems can't have one. Take a practice-exam case: <strong>40 warehouse robots</strong> must avoid collisions, share which aisles are free and reassign work when shelves move. There must be <strong>no single point of failure</strong>, and the wireless network <strong>sometimes drops messages</strong>.</p>
+<p>A central controller or a shared blackboard server fails the first rule: when it goes down, all 40 robots stop. Free-form peer chat fails the second: with dropped messages and no rules, two robots can each believe they own the same task or aisle. The design that fits is <strong>decentralized, peer-to-peer coordination</strong> built from four parts.</p>
+<figure class="fig"><svg viewBox="0 0 722 232" class="dg" role="img" aria-label="Contract net: robot R3 announces a task, three robots bid with their cost, the cheapest is awarded the task and acknowledges; aisle state spreads by gossip">
+<text x="10" y="18" class="cap">CONTRACT NET FOR ONE TASK</text>
+<rect x="10" y="74" width="120" height="56" rx="10" class="k-serve"/><text x="70" y="98" class="b small" text-anchor="middle">R3 (manager)</text><text x="70" y="115" class="sm" text-anchor="middle">shelf moved: task T88</text>
+<rect x="300" y="26" width="120" height="40" rx="9" class="k-kb"/><text x="360" y="51" class="sm" text-anchor="middle">R7 bids 42 s</text>
+<rect x="300" y="82" width="120" height="40" rx="9" class="k-kb"/><text x="360" y="107" class="sm" text-anchor="middle">R12 bids 18 s</text>
+<rect x="300" y="138" width="120" height="40" rx="9" class="k-kb"/><text x="360" y="163" class="sm" text-anchor="middle">R21 bids 65 s</text>
+<path d="M130 92 C200 70 230 46 296 46" class="wire" marker-start="url(#ah)" marker-end="url(#ah)"/><path d="M130 102 H296" class="wire" marker-start="url(#ah)" marker-end="url(#ah)"/><path d="M130 112 C200 134 230 158 296 158" class="wire" marker-start="url(#ah)" marker-end="url(#ah)"/>
+<text x="210" y="40" class="sm" text-anchor="middle">1 announce</text><text x="210" y="96" class="sm" text-anchor="middle">2 bids</text>
+<rect x="560" y="82" width="152" height="40" rx="9" class="k-ingest"/><text x="636" y="100" class="sm b" text-anchor="middle">R12: award T88</text><text x="636" y="114" class="sm" text-anchor="middle">award id a-5521</text>
+<path d="M420 102 H556" class="wire hot" marker-end="url(#ah)"/><text x="488" y="94" class="sm" text-anchor="middle">3 award</text>
+<path d="M636 122 C636 215 70 215 70 134" class="wire dash" marker-end="url(#ah)"/><text x="360" y="226" class="sm" text-anchor="middle">4 ack back to R3 (award resent until acked)</text>
+</svg><figcaption>Any robot can act as manager for the task it noticed, so there is no fixed centre. The award carries an ID, so a repeated award is recognised and ignored.</figcaption></figure>
+<div class="table"><table><thead><tr><th>Part</th><th>What it does</th><th>Why it fits</th></tr></thead><tbody>
+<tr><td><strong>Contract net or market-based allocation</strong></td><td>A robot that notices work announces a task; others bid their cost (distance, battery, load); the cheapest bid wins the award</td><td>Allocation happens wherever the work appears, and a robot that fails just stops bidding</td></tr>
+<tr><td><strong>Gossip</strong></td><td>Every second, each robot sends its view of aisle availability to a few random peers, who pass it on</td><td>Spreads to all 40 robots in a handful of rounds even if many messages drop, with no broadcast server</td></tr>
+<tr><td><strong>Replicated shared state with leases</strong></td><td>Each robot holds a copy of the aisle map; an aisle reservation is a lease with an owner, a version and an expiry</td><td>If the holder goes silent, the lease expires and the aisle frees itself; versions settle conflicting updates</td></tr>
+<tr><td><strong>Reliable messaging on an unreliable network</strong></td><td>Acknowledgements, retries with backoff, sequence numbers, and idempotent handling keyed by message or award ID</td><td>Retries survive drops; idempotency makes the resulting duplicates harmless</td></tr>
+</tbody></table></div>
+<div class="note"><p><strong>Safety never waits for the network.</strong> Each robot's own sensors and local collision avoidance stay on at all times. Coordination makes the fleet efficient; it is not what stops two robots hitting each other.</p></div>
+<h3>Try it: drops, retries and duplicates</h3>
+<p>A retry fixes a lost message, but if the message arrived and only the acknowledgement was lost, the retry delivers it twice. Without idempotency, the robot accepts task T88 twice, or reserves an aisle it already holds.</p>
+<div class="lab" id="netlab">
+  <div class="lab-row">
+    <label for="net-p">Messages dropped <input type="range" id="net-p" min="0" max="40" value="10"><output id="net-p-o"></output></label>
+    <label for="net-k">Retries <input type="range" id="net-k" min="0" max="5" value="0"><output id="net-k-o"></output></label>
+  </div>
+  <div class="lab-row"><label for="net-idem"><input type="checkbox" id="net-idem"> Receivers ignore repeated award IDs (idempotent)</label></div>
+  <div class="metrics" id="net-m"></div>
+  <p class="lab-out" id="net-out"></p>
+</div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Model: each message and each acknowledgement is dropped independently with the chance shown; the sender retries until it gets an acknowledgement or runs out of retries. Counts are per 10,000 task awards.</p>
+<h3>How this differs from LLM agent topologies</h3>
+<p>The <a href="#topologies">network topology</a> above is peer-to-peer too, but its agents share a reliable message bus and a turn limit. Physical fleets add partitions, lost messages and hard real-time safety, so they borrow from distributed systems: leases instead of locks, gossip instead of broadcast, and idempotent, versioned updates instead of "last message wins".</p></section>
+
 <section id="merge"><h2>Case: merge the findings</h2>
 <p>Three workers have reported on "should we move search from Elasticsearch to a vector database?". The merge decides whether the team was worth its tokens.</p>
 <div class="table"><table><thead><tr><th>Worker</th><th>Reported</th></tr></thead><tbody>
@@ -405,11 +443,13 @@ answer  = lead.merge(question, reports)          # see "merge the findings"</cod
 <tr><td>A finding silently disappears</td><td>Concurrent overwrite of shared state</td><td>Reducers, per-agent keys or message passing</td></tr>
 <tr><td>The final answer cites a stale number</td><td>Merge by arrival order or vote</td><td>Reconcile on source quality and date; keep citations</td></tr>
 <tr><td>Supervisor forgets the plan halfway</td><td>Plan lived only in its context, which filled up</td><td>Keep the plan in shared working memory; checkpoint it</td></tr>
+<tr><td>The whole fleet stops when one server fails</td><td>A central controller or blackboard server</td><td>Decentralized allocation (contract net, auctions) with gossip and replicated state</td></tr>
+<tr><td>Two robots both take the same task after a network blip</td><td>Retries without idempotency or leases</td><td>Award IDs handled idempotently; leases with versions and expiry</td></tr>
 <tr><td>Nobody can tell which agent went wrong</td><td>No cross-agent tracing</td><td>One trace ID across agents; a span per agent and tool call</td></tr>
 </tbody></table></div></section>
 
 <section id="interview"><h2>Saying it in an interview</h2>
-<div class="note"><p>"I'd start with one agent and only split when the work is broad and parallel, because multi-agent costs several times the tokens. For research I'd use a supervisor: it plans, writes each worker a brief with an objective, an output format, sources, boundaries and a budget, runs the workers in parallel with their own contexts, and merges structured reports: dedupe, resolve conflicts on source quality and date, keep citations, and name the gaps for a capped follow-up round. For support I'd use handoffs from a triage agent to specialists, with a structured handoff note and a transfer cap. Shared state goes in a checkpointed store with append-only reducers so parallel writes can't overwrite each other, big results are passed by reference, and every agent shares one trace ID so I can debug the whole team."</p></div></section>
+<div class="note"><p>"I'd start with one agent and only split when the work is broad and parallel, because multi-agent costs several times the tokens. For research I'd use a supervisor: it plans, writes each worker a brief with an objective, an output format, sources, boundaries and a budget, runs the workers in parallel with their own contexts, and merges structured reports: dedupe, resolve conflicts on source quality and date, keep citations, and name the gaps for a capped follow-up round. For support I'd use handoffs from a triage agent to specialists, with a structured handoff note and a transfer cap. Shared state goes in a checkpointed store with append-only reducers so parallel writes can't overwrite each other, big results are passed by reference, and every agent shares one trace ID so I can debug the whole team. If there can be no central point at all, as with a robot fleet on a lossy network, I'd switch to contract-net or auction allocation, gossip for shared state, leases for reservations, and acknowledged, retried, idempotent messages."</p></div></section>
 
 <section id="real-world"><h2>In the real world</h2>
 <div class="table"><table><thead><tr><th>Pattern</th><th>Where you meet it</th></tr></thead><tbody>
@@ -417,11 +457,12 @@ answer  = lead.merge(question, reports)          # see "merge the findings"</cod
 <tr><td>Handoff</td><td>OpenAI Agents SDK handoffs; LangGraph router nodes and <code>Command</code>; service-desk bots with triage agents</td></tr>
 <tr><td>Network</td><td>AutoGen group chats; LangGraph network graphs</td></tr>
 <tr><td>Hierarchical</td><td>LangGraph hierarchical teams; Google ADK agent trees</td></tr>
+<tr><td>Decentralized fleets</td><td>FIPA Contract Net Protocol; market-based multi-robot task allocation; ROS 2 over DDS; gossip libraries such as HashiCorp memberlist</td></tr>
 <tr><td>Shared state</td><td>LangGraph state and reducers with checkpointers; shared task lists and plan files in coding agents</td></tr>
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Further reading: Anthropic, <a href="https://www.anthropic.com/engineering/multi-agent-research-system">How we built our multi-agent research system</a>.</p></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="reasoning-patterns.html">Reasoning and planning patterns</a></li><li><a href="agent-memory.html">Agent memory</a></li><li><a href="routing.html">Routing</a></li><li><a href="citations.html">Citations</a></li><li><a href="testing.html">Testing</a></li><li><a href="glossary.html#orchestrator-worker">Glossary: orchestrator-worker</a></li></ul></section></article>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="reasoning-patterns.html">Reasoning and planning patterns</a></li><li><a href="agent-memory.html">Agent memory</a></li><li><a href="routing.html">Routing</a></li><li><a href="citations.html">Citations</a></li><li><a href="testing.html">Testing</a></li><li><a href="agent-operations.html">Run, monitor and maintain</a></li><li><a href="glossary.html#orchestrator-worker">Glossary: orchestrator-worker</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
@@ -496,6 +537,31 @@ answer  = lead.merge(question, reports)          # see "merge the findings"</cod
   };
   function merge(k) { $('merge-text').textContent = MERGE[k][0]; $('merge-out').innerHTML = MERGE[k][1]; }
   seg($('mergelab'), 'm', merge); merge('concat');
+
+  // ---- lossy network ----
+  function net() {
+    var p = +$('net-p').value / 100, k = +$('net-k').value, idem = $('net-idem').checked, N = 10000;
+    $('net-p-o').textContent = Math.round(p * 100) + '%'; $('net-k-o').textContent = k;
+    var q = (1 - p) * (1 - p), attempts = 0;
+    for (var i = 0; i <= k; i++) attempts += Math.pow(1 - q, i);
+    var lostP = Math.pow(p, k + 1), deliv = attempts * (1 - p), dup = Math.max(0, deliv - (1 - lostP));
+    var lost = lostP * N, dups = dup * N;
+    function f(x) { return x >= 10 ? Math.round(x).toLocaleString('en-US') : x >= 0.1 ? x.toFixed(1) : x > 0 ? '<0.1' : '0'; }
+    $('net-m').innerHTML =
+      metric(f(lost), 'Awards never arrive', 'robot never hears it') +
+      metric(f(dups), 'Duplicate deliveries', 'ack lost, then retried') +
+      metric(idem ? '0' : f(dups), 'Harmful duplicates', idem ? 'ignored by award ID' : 'task taken twice') +
+      metric(attempts.toFixed(2), 'Sends per award', 'average');
+    var out;
+    if (k === 0) out = '<strong>No retries:</strong> about ' + f(lost) + ' awards in 10,000 simply vanish, and those tasks are never done. Add retries.';
+    else if (!idem && dups >= 1) out = '<strong>Retries fixed the losses but created duplicates.</strong> About ' + f(dups) + ' awards arrive twice because the acknowledgement was dropped. Turn on idempotency.';
+    else if (lost >= 1) out = '<strong>Duplicates are harmless now, but ' + f(lost) + ' awards are still lost.</strong> Add retries, and let the manager re-announce tasks nobody acknowledged.';
+    else out = '<strong>Robust.</strong> Retries make loss negligible and idempotency makes duplicates harmless. Leases cover the last case: a robot that dies holding a task.';
+    $('net-out').innerHTML = out;
+  }
+  ['net-p', 'net-k'].forEach(function (id) { $(id).addEventListener('input', net); });
+  $('net-idem').addEventListener('change', net);
+  net();
 })();
 </script>
 <script src="progress.js"></script>
