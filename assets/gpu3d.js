@@ -120,6 +120,11 @@ function label(parent, html, cls, pos) {
   parent.add(obj);
   return obj;
 }
+// remove an object and any HTML labels under it (CSS2DRenderer leaves their elements behind otherwise)
+function drop(o) {
+  o.traverse(c => { if (c.isCSS2DObject) c.element.remove(); });
+  if (o.parent) o.parent.remove(o);
+}
 // smooth movers: set obj.userData.goal = { y, sy, x, op } and the ticker eases toward it
 function ease(list, dt) {
   const k = 1 - Math.exp(-dt * 7);
@@ -402,7 +407,7 @@ export function mountStreams(fig) {
   scene.add(playhead, ph);
   const timeLbl = label(scene, '', 'q', new V3(0, 3.2, 0));
   function build() {
-    blocks.forEach(b => { scene.remove(b.m); }); lanes.forEach(l => scene.remove(l)); blocks = []; lanes = [];
+    blocks.forEach(b => drop(b.m)); lanes.forEach(drop); blocks = []; lanes = [];
     const bars = schedule(st.streams, st.kind);
     end = Math.max(...bars.map(b => b.end));
     const rows = st.kind === 'small' ? [['in', 0, 'copy in'], ['compute', 0, 'compute (half of GPU)'], ['compute', 1, 'compute (other half)'], ['out', 0, 'copy out']] : [['in', 0, 'copy in'], ['compute', 0, 'compute (whole GPU)'], ['out', 0, 'copy out']];
@@ -920,4 +925,133 @@ export function mountLifecycle(fig) {
     caption.position.set(i <= 0 ? X.api - 2 : i === 1 ? X.api : i === 2 ? X.tok : i === 3 ? X.queue : i === 7 ? 0 : X.eng, 5.1, 0);
   });
   go(0, true);
+}
+
+// ---------- 8. reasoning patterns: CoT, ReAct, ToT, plan-and-execute, reflection ----------
+const PATTERNS = {
+  cot: {
+    name: 'Chain-of-thought', calls: '1 LLM call', cost: 1,
+    nodes: [['q', 'Question', -6, 0, 0, 'ask'], ['t1', 'step 1', -3.6, 0, 0, 'think'], ['t2', 'step 2', -1.2, 0, 0, 'think'], ['t3', 'step 3', 1.2, 0, 0, 'think'], ['t4', 'step 4', 3.6, 0, 0, 'think'], ['a', 'Answer', 6, 0, 0, 'ans']],
+    edges: [['q', 't1'], ['t1', 't2'], ['t2', 't3'], ['t3', 't4'], ['t4', 'a']],
+    path: ['q', 't1', 't2', 't3', 't4', 'a'],
+    say: 'One call: the model writes its reasoning steps, then the answer. Cheap and fast, but every step comes from the model’s own memory, and one wrong step carries through to the end.',
+  },
+  react: {
+    name: 'ReAct', calls: '4 LLM calls, 3 tool calls', cost: 4,
+    nodes: [['q', 'Question', -6.5, 0, 0, 'ask'],
+      ['t1', 'Thought', -4, 0, -1.2, 'think'], ['x1', 'Action: search', -2.6, 0, 1.4, 'tool'], ['o1', 'Observation', -1.2, 0, -1.2, 'obs'],
+      ['t2', 'Thought', 0.2, 0, 1.4, 'think'], ['x2', 'Action: lookup', 1.6, 0, -1.2, 'tool'], ['o2', 'Observation', 3, 0, 1.4, 'obs'],
+      ['t3', 'Thought', 4.4, 0, -1.2, 'think'], ['a', 'Answer', 6.6, 0, 0, 'ans']],
+    edges: [['q', 't1'], ['t1', 'x1'], ['x1', 'o1'], ['o1', 't2'], ['t2', 'x2'], ['x2', 'o2'], ['o2', 't3'], ['t3', 'a']],
+    path: ['q', 't1', 'x1', 'o1', 't2', 'x2', 'o2', 't3', 'a'],
+    say: 'A loop: think, call a tool, read the result, think again. Each step reacts to real observations, so it handles unknown paths and fresh facts. It decides greedily one step at a time, so cap the steps.',
+  },
+  tot: {
+    name: 'Tree of thoughts', calls: '~13 LLM calls (generate and score)', cost: 13,
+    nodes: [['q', 'Problem', -6, 0, 0, 'ask'],
+      ['a1', '0.8', -2.5, 0, -3, 'think'], ['a2', '0.3', -2.5, 0, 0, 'think'], ['a3', '0.6', -2.5, 0, 3, 'think'],
+      ['b1', '0.4', 1, 0, -4, 'think'], ['b2', '0.9', 1, 0, -2.2, 'think'], ['b3', '0.5', 1, 0, 2.2, 'think'], ['b4', '0.2', 1, 0, 4, 'think'],
+      ['c1', 'solved', 4.5, 0, -2.2, 'ans'], ['c2', 'dead end', 4.5, 0, 2.2, 'think']],
+    edges: [['q', 'a1'], ['q', 'a2'], ['q', 'a3'], ['a1', 'b1'], ['a1', 'b2'], ['a3', 'b3'], ['a3', 'b4'], ['b2', 'c1'], ['b3', 'c2']],
+    path: ['q', 'a1', 'a2', 'a3', 'b1', 'b2', 'b3', 'b4', 'c2', 'c1'],
+    pruned: ['a2', 'b1', 'b4', 'c2'], best: ['q', 'a1', 'b2', 'c1'],
+    say: 'Branch, score, prune: the model proposes several next steps, an evaluator scores each partial solution, weak branches are dropped and the search can back up. Much better on puzzles where an early choice decides everything, at many times the cost.',
+  },
+  plan: {
+    name: 'Plan-and-execute', calls: '1 planner call + 4 cheap executor steps', cost: 2.5,
+    nodes: [['q', 'Goal', -6.5, 0, 0, 'ask'], ['p', 'Planner', -3.8, 0, 0, 'plan'],
+      ['s1', '1. fetch PO', -0.8, 0, -3, 'step'], ['s2', '2. fetch receipt', -0.8, 0, -1, 'step'], ['s3', '3. compare lines', -0.8, 0, 1, 'step'], ['s4', '4. draft result', -0.8, 0, 3, 'step'],
+      ['e', 'Executor', 2.6, 0, 0, 'tool'], ['a', 'Answer', 5.8, 0, 0, 'ans']],
+    edges: [['q', 'p'], ['p', 's1'], ['p', 's2'], ['p', 's3'], ['p', 's4'], ['s1', 'e'], ['s2', 'e'], ['s3', 'e'], ['s4', 'e'], ['e', 'a']],
+    path: ['q', 'p', 's1', 'e', 's2', 'e', 's3', 'e', 's4', 'e', 'a'],
+    say: 'A strong model writes the whole plan once; a cheaper model or plain code runs each step. Fewer big-model calls, steps can run in parallel, and a person can approve the plan first. It’s rigid: if the world changes mid-plan, it needs re-planning.',
+  },
+  reflect: {
+    name: 'Reflection and re-planning', calls: '2–3 attempts + critiques', cost: 5,
+    nodes: [['q', 'Task', -6.5, 0, 0, 'ask'], ['d1', 'Attempt 1', -3.6, 0, -1.8, 'think'], ['c1', 'Check: tests fail', -1, 0, -1.8, 'bad'],
+      ['r1', 'Reflect: why?', 1.6, 0, -1.8, 'plan'], ['d2', 'Attempt 2', -1, 0, 1.8, 'think'], ['c2', 'Check: pass', 1.6, 0, 1.8, 'ans'], ['a', 'Answer', 5, 0, 1.8, 'ans']],
+    edges: [['q', 'd1'], ['d1', 'c1'], ['c1', 'r1'], ['r1', 'd2'], ['d2', 'c2'], ['c2', 'a']],
+    path: ['q', 'd1', 'c1', 'r1', 'd2', 'c2', 'a'],
+    say: 'Try, check, learn, retry. A checker (tests, a validator or a critic model) judges the attempt; the agent writes down what went wrong and tries again with that note. In a planning agent, a failed step triggers re-planning of the remaining steps. Works best with a real external check, and a cap on retries.',
+  },
+};
+const KIND = { ask: COL.kv, think: 0x8a5cd8, tool: COL.serve, obs: COL.ingest, ans: COL.ok, plan: COL.gov, step: 0x9aa5b1, bad: COL.bad };
+export function mountReasoning(fig) {
+  const host = fig.querySelector('.stage3d'), out = fig.querySelector('.out3');
+  const S = stage(host, { cam: [0, 11, 12], target: [0, 0.4, 0] });
+  if (!S) return;
+  const { scene } = S;
+  let objs = [], nodes = {}, st = { key: 'cot', t: 0 };
+  const token = new THREE.Mesh(new THREE.SphereGeometry(0.28, 24, 16), material(COL.token, { glow: 1.4 }));
+  scene.add(token);
+  const counter = label(scene, '', 'q', new V3(0, 3.2, -5));
+  function clear() { objs.forEach(drop); objs = []; nodes = {}; }
+  function build() {
+    clear();
+    const P = PATTERNS[st.key];
+    P.nodes.forEach(([id, name, x, y, z, kind]) => {
+      const m = kind === 'tool' || kind === 'step' || kind === 'plan' ? box(1.5, 0.7, 0.9, KIND[kind], { r: 0.12, glow: 0.05 })
+        : new THREE.Mesh(new THREE.SphereGeometry(0.45, 28, 18), material(KIND[kind], { glow: 0.05 }));
+      m.castShadow = true;
+      m.position.set(x, 0.6 + y, z);
+      scene.add(m); objs.push(m);
+      const l = label(m, name, kind === 'ans' ? 'sc' : kind === 'bad' ? 'miss' : '', new V3(0, 0.75, 0));
+      objs.push(l);
+      nodes[id] = { m, kind, seen: false };
+    });
+    P.edges.forEach(([a, b]) => {
+      const A = nodes[a].m.position, B = nodes[b].m.position;
+      const e = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, A.distanceTo(B), 8), material(0xb8c0c9, { glow: 0 }));
+      e.position.copy(A).add(B).multiplyScalar(0.5);
+      e.quaternion.setFromUnitVectors(new V3(0, 1, 0), B.clone().sub(A).normalize());
+      e.userData.ab = a + '>' + b;
+      scene.add(e); objs.push(e);
+    });
+    counter.element.textContent = P.name + ' · ' + P.calls;
+    out.textContent = P.say;
+    st.t = 0;
+    fig.querySelectorAll('[data-pat]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pat === st.key));
+    S.frame([0, 0.4, 0], 13, 11);
+  }
+  S.tick((dt, t) => {
+    const P = PATTERNS[st.key];
+    st.t += dt * 1.4;
+    const n = P.path.length, total = n + 2, now = reduceMotion ? n : st.t % total, idx = Math.min(n - 1, Math.floor(now)), u = Math.min(1, now - Math.floor(now));
+    const a = nodes[P.path[idx]], b = nodes[P.path[Math.min(n - 1, idx + 1)]];
+    if (a && b) token.position.lerpVectors(a.m.position, b.m.position, idx >= n - 1 ? 0 : u * u * (3 - 2 * u)).add(new V3(0, 0.75 + Math.sin(u * Math.PI) * 0.6, 0));
+    Object.entries(nodes).forEach(([id, nd]) => {
+      const reached = P.path.indexOf(id) !== -1 && P.path.indexOf(id) <= idx;
+      const pruned = P.pruned && P.pruned.includes(id) && reached && now > P.path.indexOf(id) + 0.6;
+      const best = P.best && P.best.includes(id) && now >= n - 0.4;
+      nd.m.material.emissive.set(pruned ? COL.bad : best ? COL.ok : KIND[nd.kind]);
+      nd.m.material.emissiveIntensity = reached ? (pruned ? 0.5 : best ? 0.9 : 0.55) : 0.03;
+      nd.m.material.opacity = 1;
+      nd.m.scale.setScalar(pruned ? 0.7 : 1);
+    });
+    objs.forEach(o => {
+      if (!o.userData.ab) return;
+      const [x, y] = o.userData.ab.split('>');
+      const ia = P.path.indexOf(x), ib = P.path.indexOf(y), on = ia !== -1 && ib !== -1 && Math.max(ia, ib) <= idx;
+      const best = P.best && P.best.includes(x) && P.best.includes(y) && now >= n - 0.4;
+      o.material.color.set(best ? COL.ok : on ? COL.nvlink : 0xb8c0c9);
+      o.material.emissive.set(best ? COL.ok : COL.nvlink); o.material.emissiveIntensity = best || on ? 0.6 : 0;
+    });
+  });
+  fig.querySelectorAll('[data-pat]').forEach(b => b.addEventListener('click', () => { st.key = b.dataset.pat; build(); }));
+  // the chooser: answers pick a pattern
+  const qs = fig.querySelectorAll('[data-q]');
+  const pick = fig.querySelector('[data-pick]');
+  function choose() {
+    const v = {}; qs.forEach(q => { v[q.dataset.q] = q.getAttribute('aria-pressed') === 'true'; });
+    let key, why;
+    if (v.search) { key = 'tot'; why = 'Early choices decide everything and you can score partial solutions: tree of thoughts, if the extra calls are affordable.'; }
+    else if (v.tools && v.known) { key = 'plan'; why = 'It needs tools and the steps are known up front: plan-and-execute, with re-planning when a step fails.'; }
+    else if (v.tools) { key = 'react'; why = 'It needs tools or fresh facts and the path isn’t known in advance: ReAct, with a step limit.'; }
+    else { key = 'cot'; why = 'The model can answer from what it knows; it just needs to reason: chain-of-thought, or a reasoning model.'; }
+    if (v.check) why += ' Your output can be checked, so wrap it in a reflection loop: attempt, check, reflect, retry.';
+    pick.textContent = why;
+    st.key = key; build();
+  }
+  qs.forEach(q => q.addEventListener('click', () => { q.setAttribute('aria-pressed', q.getAttribute('aria-pressed') !== 'true'); choose(); }));
+  build();
 }
