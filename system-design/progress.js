@@ -1,5 +1,5 @@
 /* Reading progress for Agentic System Designs, kept in one first-party cookie.
-   Cookie "asd_roadmap" holds "slug.state" pairs joined by "|": v = visited, d = done.
+   Cookie "asd_roadmap" holds "slug.state" pairs joined by "|": v = visited, q = quizzed (finished Check yourself), d = done.
    Every page in this folder loads this file; topic pages mark themselves visited,
    and the index renders the roadmap from the same data. */
 (function () {
