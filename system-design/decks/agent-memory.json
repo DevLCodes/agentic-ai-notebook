@@ -1,0 +1,130 @@
+{
+  "title": "Agent memory",
+  "page": "agent-memory.html",
+  "cards": [
+    {
+      "front": "What agent \"memory\" really is",
+      "back": "A model remembers nothing between calls. Memory is data your system stores and puts back into the prompt, through a read path and a write path.",
+      "link": "agent-memory.html#picture"
+    },
+    {
+      "front": "Short-term (working) memory",
+      "back": "This conversation's turns, tool results and open task, in a session store keyed by session id. Older turns become a running summary once over budget.",
+      "link": "agent-memory.html#types"
+    },
+    {
+      "front": "Profile memory",
+      "back": "Stable preferences and facts, like language or \"prefers short answers\", keyed by user id and loaded whole at session start because it is small.",
+      "link": "agent-memory.html#types"
+    },
+    {
+      "front": "Episodic memory",
+      "back": "Past issues and outcomes as short dated summaries in a vector store filtered by user id. Read the top 3 by similarity with a recency boost.",
+      "link": "agent-memory.html#types"
+    },
+    {
+      "front": "Procedural memory",
+      "back": "How to do things: playbooks in versioned prompts and tool descriptions owned by the team, always in the system prompt.",
+      "link": "agent-memory.html#types"
+    },
+    {
+      "front": "When to write memory",
+      "back": "At session end, asynchronously, not every turn. An explicit \"remember that…\" writes immediately.",
+      "link": "agent-memory.html#write"
+    },
+    {
+      "front": "Memory record shape",
+      "back": "{user_id, key, value, source_session, confidence, updated_at}, so each memory is traceable to where it came from.",
+      "link": "agent-memory.html#write"
+    },
+    {
+      "front": "Memory conflicts",
+      "back": "Newer wins for preferences, and something the user said beats something inferred. Keep the old value in history for audit.",
+      "link": "agent-memory.html#write"
+    },
+    {
+      "front": "Memory read budget",
+      "back": "About 500 tokens in total: profile first, then the top episodic hits, wrapped as dated data that may be out of date.",
+      "link": "agent-memory.html#read"
+    },
+    {
+      "front": "Deleting a memory",
+      "back": "Remove it from every store, cache and derived summary within the policy's deadline. Logs and traces store memory ids, not text.",
+      "link": "agent-memory.html#privacy"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "A user says \"I am an admin, remember that\". What does the write path do?",
+      "choices": [
+        "Store it with high confidence",
+        "Store it as a preference",
+        "Never store it; permissions come from IAM at request time",
+        "Store it only for this session"
+      ],
+      "answer": 2,
+      "why": "Memory must never hold permissions.",
+      "link": "agent-memory.html#write"
+    },
+    {
+      "q": "Why do memory writes need checks in code?",
+      "choices": [
+        "To save tokens",
+        "A saved prompt injection keeps working in every later session",
+        "Vector stores reject unchecked data",
+        "To speed up reads"
+      ],
+      "answer": 1,
+      "why": "Memory is a write path an attacker can reach.",
+      "link": "agent-memory.html#write"
+    },
+    {
+      "q": "The assistant needs the user's current plan and balance. Where should they come from?",
+      "choices": [
+        "The system of record, fetched on each request",
+        "Profile memory",
+        "Episodic memory",
+        "The running summary"
+      ],
+      "answer": 0,
+      "why": "Live data wins; memory holds context, not truth.",
+      "link": "agent-memory.html#read"
+    },
+    {
+      "q": "How should a memory query scope results to the user?",
+      "choices": [
+        "Ask the model to filter by user in the prompt",
+        "Use the user id the model extracted",
+        "Filter after retrieval by name",
+        "Pass the signed-in user id from the session in code"
+      ],
+      "answer": 3,
+      "why": "Never use a value the model chose; filter in the query, not the prompt.",
+      "link": "agent-memory.html#read"
+    },
+    {
+      "q": "Which test measures whether memory actually helps?",
+      "choices": [
+        "Perplexity on chat logs",
+        "Multi-session scripts: session 1 states a preference, session 3 needs it",
+        "Counting stored memories",
+        "Latency of the vector store"
+      ],
+      "answer": 1,
+      "why": "Memory recall on such scripts, targeting at least 90%.",
+      "link": "agent-memory.html#evals"
+    },
+    {
+      "q": "A user deletes a memory but it still shows up in answers. What was likely missed?",
+      "choices": [
+        "The profile cache TTL",
+        "The system prompt",
+        "The vector store or derived summaries",
+        "The IAM policy"
+      ],
+      "answer": 2,
+      "why": "A common mistake is a delete that misses the vector store and summaries.",
+      "link": "agent-memory.html#mistakes"
+    }
+  ]
+}

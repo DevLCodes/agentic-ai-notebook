@@ -1,0 +1,147 @@
+{
+  "title": "Numbers cheat sheet: tokens, cost and latency",
+  "page": "numbers.html",
+  "cards": [
+    {
+      "front": "Tokens per word and page",
+      "back": "1 token ≈ 4 characters ≈ ¾ of an English word. 1,000 words ≈ 1,300 tokens; one page ≈ 600 tokens.",
+      "link": "numbers.html#top"
+    },
+    {
+      "front": "Output vs input price",
+      "back": "Output costs 4 to 8 times more than input per token, so long answers are expensive and short labels are cheap.",
+      "link": "numbers.html#top"
+    },
+    {
+      "front": "Three price tiers per 1M tokens",
+      "back": "Small about $0.10 in / $0.40 out, mid about $0.30 / $2.50, large about $1.25 / $10.",
+      "link": "numbers.html#prices"
+    },
+    {
+      "front": "Size of a chat turn with RAG",
+      "back": "About 5K tokens in (2K system prompt, 2K chunks, 1K history) and 250 out, about $0.002 on a mid model.",
+      "link": "numbers.html#requests"
+    },
+    {
+      "front": "Why agent tasks are expensive",
+      "back": "Every step re-sends the context, so an agent task is 30K to 100K tokens in. 8 steps take about 10 to 40 seconds.",
+      "link": "numbers.html#top"
+    },
+    {
+      "front": "Tool definitions cost",
+      "back": "100 to 300 tokens each, so 20 tools add about 4K tokens to every call.",
+      "link": "numbers.html#tokens"
+    },
+    {
+      "front": "Non-Latin scripts",
+      "back": "Hindi, Tamil and other non-Latin scripts take 2 to 4 times the tokens of the same English text, so they cost more.",
+      "link": "numbers.html#tokens"
+    },
+    {
+      "front": "Batch and cached discounts",
+      "back": "Batch mode is about 50% off; cached input is 75 to 90% off.",
+      "link": "numbers.html#prices"
+    },
+    {
+      "front": "Monthly cost method",
+      "back": "Requests per day × tokens per request × price per million, then × 30. Say every assumption out loud.",
+      "link": "numbers.html#examples"
+    },
+    {
+      "front": "Classifier vs LLM on fixed labels",
+      "back": "A classifier is 10 to 100 times cheaper and faster on high-volume fixed-label work: a few dollars vs $100+ per million items, 10 ms vs 1 s.",
+      "link": "numbers.html#classifier"
+    },
+    {
+      "front": "Output speed",
+      "back": "50 to 200 tokens per second, so a 300-token answer takes about 2 to 4 seconds; time to first token is 0.3 to 1 s.",
+      "link": "numbers.html#latency"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Answering over a 100-page document: how does RAG with the top 5 chunks compare with sending it in full?",
+      "choices": [
+        "About the same cost",
+        "About 10 times cheaper",
+        "About 100 times cheaper",
+        "More expensive, because of embeddings"
+      ],
+      "answer": 1,
+      "why": "About 60K tokens in full vs about 5K with RAG: roughly $0.02 vs $0.002 on a mid model.",
+      "link": "numbers.html#requests"
+    },
+    {
+      "q": "What is usually the biggest lever for cutting the LLM bill?",
+      "choices": [
+        "Batch mode",
+        "Capping output",
+        "A smaller model where evals allow",
+        "A response cache"
+      ],
+      "answer": 2,
+      "why": "Routing or a cascade to a smaller model is often 5 to 10 times cheaper.",
+      "link": "numbers.html#levers"
+    },
+    {
+      "q": "1M items a day need fixed labels. What's usually the best interview answer?",
+      "choices": [
+        "A large LLM for every item",
+        "A cascade: classifier for all, LLM for the ~10% it is unsure about",
+        "Rules only",
+        "A mid LLM zero-shot"
+      ],
+      "answer": 1,
+      "why": "The cascade costs about $1K to $2K a month with a mid LLM and is mostly fast.",
+      "link": "numbers.html#classifier"
+    },
+    {
+      "q": "About how many tokens is one hour of audio?",
+      "choices": [
+        "About 10K",
+        "About 100K",
+        "About 1M",
+        "About 3.6K"
+      ],
+      "answer": 1,
+      "why": "Audio is about 30 tokens per second, so an hour is about 100K.",
+      "link": "numbers.html#tokens"
+    },
+    {
+      "q": "Support chat: 50K conversations × 6 turns × 5K in, 250 out. About what per month on a mid model?",
+      "choices": [
+        "About $1.9K",
+        "About $19K",
+        "About $190K",
+        "About $79K"
+      ],
+      "answer": 1,
+      "why": "1.5B in and 75M out a day is about $640 a day, around $19K a month; large tier is about four times that.",
+      "link": "numbers.html#examples"
+    },
+    {
+      "q": "Which cut applies to the fixed system prompt and tool definitions sent on every call?",
+      "choices": [
+        "Prompt caching",
+        "Batch mode",
+        "A smaller embedding model",
+        "Chunked prefill"
+      ],
+      "answer": 0,
+      "why": "Caching takes 75 to 90% off those repeated tokens.",
+      "link": "numbers.html#levers"
+    },
+    {
+      "q": "What does a cross-encoder rerank of 50 chunks typically add?",
+      "choices": [
+        "1 to 20 ms",
+        "10 to 50 ms",
+        "50 to 200 ms",
+        "1 to 5 s"
+      ],
+      "answer": 2,
+      "why": "Reranking 50 chunks takes about 50 to 200 ms; vector search is 10 to 50 ms.",
+      "link": "numbers.html#latency"
+    }
+  ]
+}

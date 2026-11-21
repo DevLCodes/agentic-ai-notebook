@@ -5,6 +5,8 @@
      StudyEngine.load('decks/embeddings.json').then(function (deck) {
        StudyEngine.mount(document.getElementById('study'), deck, 'cards' | 'quiz');
      });
+   Options: mount(el, deck, mode, { base, scoped, onFinish(right, total) }); scoped limits
+   keys to when the block has focus or is on screen, onFinish runs when a quiz ends.
    mount() returns { destroy() }. Only one deck is mounted at a time per page. */
 (function () {
   'use strict';
@@ -119,6 +121,8 @@
       keyHandler = function (e) {
         if (e.altKey || e.ctrlKey || e.metaKey || typingTarget(e.target)) return;
         if (!document.body.contains(box)) return;
+        // Embedded on a content page, keys only act while the block has focus or is on screen.
+        if (opts.scoped && !root.contains(document.activeElement) && !inView(box)) return;
         down(e);
       };
       // A handled Space on a focused button would also "click" it on keyup; stop that.
@@ -127,6 +131,11 @@
       };
       document.addEventListener('keydown', keyHandler);
       document.addEventListener('keyup', upHandler);
+    }
+
+    function inView(n) {
+      var r = n.getBoundingClientRect();
+      return r.bottom > 0 && r.top < (window.innerHeight || document.documentElement.clientHeight);
     }
 
     function header(sub) {
@@ -316,6 +325,7 @@
         box.appendChild(row);
         var first = row.querySelector('button');
         if (first) first.focus();
+        if (opts.onFinish) opts.onFinish(right, items.length);
       }
 
       onKeys(function (e) {

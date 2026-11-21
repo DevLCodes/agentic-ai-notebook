@@ -45,11 +45,12 @@ Each topic page can have a deck of flashcards and quiz questions at `system-desi
 
 - 8 to 12 cards and 5 to 8 questions per page. Check every answer against the page itself, not memory.
 - Every `link` points at a real section `id` on a system-design page. Wrong choices should be plausible, and the right answer should not always sit in the same position (the engine shuffles choices anyway).
-- Add the slug to `system-design/decks/index.json`. The hub reads that list so it never requests a deck that doesn't exist, and shows topics in the order of `topics.html`. Topics without a deck stay hidden, so adding a deck means one JSON file plus one line in the list.
+- Add the slug to `system-design/decks/index.json`. The hub reads that list so it never requests a deck that doesn't exist, and shows topics in the order of `topics.html`, followed by a Designs group for the walkthroughs on `designs.html` (`a.card.walk`). Design decks use scenario questions ("latency doubled after adding a reranker; what do you check first?") and cards for the design's key numbers and decisions. Topics without a deck stay hidden, so adding a deck means one JSON file plus one line in the list.
 - `check.py` validates every deck: the keys, card and question counts, four distinct choices, the answer index, that every link resolves to a section id, and that `index.json` lists exactly the deck files.
 
 **The engine** (`study.js`, no dependencies) exposes `StudyEngine.load(url)` and `StudyEngine.mount(element, deck, "cards" | "quiz")`. It injects its own CSS built on the `:root` tokens, so it works on any field-manual page.
 - Flashcards: flip, previous and next, shuffle, mark as known, and skip known cards. Known cards are saved in `localStorage` (`study_known:<page>`), wrapped in try/catch so blocked storage only loses the saving.
 - Quiz: one question at a time, choices shuffled, instant feedback with the `why` and a link to the section, a score at the end, and a retry of only the wrong ones.
 - Keyboard: Space flips (also when a button has focus), the arrow keys move, K marks known; in the quiz 1 to 4 pick an answer and Enter or the right arrow moves on.
+- Check yourself: every topic page has an empty `<section id="check-yourself" hidden></section>` before Related and loads `check-yourself.js`. When the page's slug is in `decks/index.json`, the block shows 3 random quiz questions and a link to the flashcards; finishing it marks the topic quizzed (`q`) in `progress.js`. A new deck lights it up with no page edit; new topic pages copy the placeholder and script tag.
 - The hub routes with the hash: `study.html#<slug>/cards` and `study.html#<slug>/quiz` can be linked directly.
