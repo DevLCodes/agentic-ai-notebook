@@ -1,0 +1,152 @@
+{
+  "title": "Metrics cheat sheet",
+  "page": "metrics.html",
+  "cards": [
+    {
+      "front": "How to name a metric in an interview",
+      "back": "Name the metric, give one target number, and say how you would measure it.",
+      "link": "metrics.html#top"
+    },
+    {
+      "front": "Freshness lag",
+      "back": "Time from a source change to it being searchable. Example target: p95 under 15 minutes.",
+      "link": "metrics.html#ingestion"
+    },
+    {
+      "front": "Recall@k",
+      "back": "Share of questions where a relevant chunk is in the top k. Example target: recall@5 of at least 0.85.",
+      "link": "metrics.html#retrieval"
+    },
+    {
+      "front": "MRR vs NDCG@k",
+      "back": "MRR measures how high the first relevant result ranks (1 means always first). NDCG@k rewards the most relevant items sitting near the top.",
+      "link": "metrics.html#retrieval"
+    },
+    {
+      "front": "Groundedness (faithfulness)",
+      "back": "Share of answer claims supported by the retrieved sources. Example target: at least 95%.",
+      "link": "metrics.html#generation"
+    },
+    {
+      "front": "Execution accuracy",
+      "back": "The text-to-SQL metric: the query's result matches the expected result. Example target: at least 85%.",
+      "link": "metrics.html#generation"
+    },
+    {
+      "front": "Task success vs argument accuracy",
+      "back": "Task success checks the end state in a sandbox, not just the text (≥ 85%). Argument accuracy checks ids, amounts and dates are exactly right (≥ 98%).",
+      "link": "metrics.html#agents"
+    },
+    {
+      "front": "Pass rate over repeats",
+      "back": "Agents are not deterministic, so run each case 3 to 5 times and report the rate, not one run.",
+      "link": "metrics.html#agents"
+    },
+    {
+      "front": "Calibration",
+      "back": "A 0.8 score is right about 80% of the time. Check it before using scores as confidence.",
+      "link": "metrics.html#classification"
+    },
+    {
+      "front": "Over-refusal rate",
+      "back": "Benign questions wrongly refused. Example target: 3% or less.",
+      "link": "metrics.html#safety"
+    },
+    {
+      "front": "Trusting labels and judges",
+      "back": "Inter-rater kappa of at least 0.7, and judge-human agreement of at least 80% before an LLM judge gates releases.",
+      "link": "metrics.html#labels"
+    },
+    {
+      "front": "Golden-set release gate",
+      "back": "Compare every metric with the current version per slice: no slice may drop more than 1 point.",
+      "link": "metrics.html#release"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "You need ±3 points of precision on a measured rate per slice. About how many examples per slice?",
+      "choices": [
+        "About 30",
+        "About 100",
+        "About 400",
+        "About 5,000"
+      ],
+      "answer": 2,
+      "why": "The confidence interval shrinks with more examples; ±3 points needs about 400 per slice.",
+      "link": "metrics.html#labels"
+    },
+    {
+      "q": "Which belongs as a guardrail in an A/B test, not the primary metric?",
+      "choices": [
+        "Latency and cost",
+        "The one business metric decided up front",
+        "Resolution rate as the primary",
+        "Significance level"
+      ],
+      "answer": 0,
+      "why": "Run one primary metric, with CSAT, latency, cost and safety as guardrails that must not get worse.",
+      "link": "metrics.html#release"
+    },
+    {
+      "q": "What should check citation accuracy: an LLM judge or code?",
+      "choices": [
+        "An LLM judge",
+        "Human raters only",
+        "Neither; it can't be measured",
+        "Code: every cited id exists, was retrieved and supports the claim"
+      ],
+      "answer": 3,
+      "why": "Use code for anything exact, and judges only for fuzzy qualities.",
+      "link": "metrics.html#note"
+    },
+    {
+      "q": "Positives are rare. Which curve compares models better?",
+      "choices": [
+        "ROC curve",
+        "PR curve",
+        "Confusion matrix only",
+        "RMSE"
+      ],
+      "answer": 1,
+      "why": "PR-AUC is better than ROC-AUC when positives are rare.",
+      "link": "metrics.html#classification"
+    },
+    {
+      "q": "A canary at 5% shows thumbs-down up 40%. What should happen?",
+      "choices": [
+        "Promote to 25%",
+        "Wait a month",
+        "Auto-rollback",
+        "Switch the primary metric"
+      ],
+      "answer": 2,
+      "why": "Canary guardrails auto-roll back if errors double or thumbs-down rises 30%.",
+      "link": "metrics.html#release"
+    },
+    {
+      "q": "Users are editing drafts more often than last month. What does that signal?",
+      "choices": [
+        "A quality drop",
+        "Higher adoption",
+        "Lower latency",
+        "Better calibration"
+      ],
+      "answer": 0,
+      "why": "Rising edit rate on drafts is a production sign that quality dropped.",
+      "link": "metrics.html#online"
+    },
+    {
+      "q": "Which safety metric is a release blocker at zero?",
+      "choices": [
+        "Over-refusal rate",
+        "PII detector recall",
+        "Harmful output rate",
+        "Permission or cross-tenant leaks"
+      ],
+      "answer": 3,
+      "why": "Any answer revealing data the user cannot see blocks the release.",
+      "link": "metrics.html#safety"
+    }
+  ]
+}

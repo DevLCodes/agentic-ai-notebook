@@ -1,0 +1,130 @@
+{
+  "title": "Routing",
+  "page": "routing.html",
+  "cards": [
+    {
+      "front": "What a router does",
+      "back": "Looks at each request and decides who handles it: which specialist agent, which model, or whether to ask a clarifying question first.",
+      "link": "routing.html#what"
+    },
+    {
+      "front": "Why route instead of one big agent",
+      "back": "A few focused agents with 3 to 5 tools each are easier to prompt, test and secure than one agent with 30 tools.",
+      "link": "routing.html#what"
+    },
+    {
+      "front": "Rules router",
+      "back": "Regex, keywords, ticket ID patterns, slash commands or the UI the user came from. Free and instant, for exact signals like \"INC-4821\".",
+      "link": "routing.html#kinds"
+    },
+    {
+      "front": "Semantic router",
+      "back": "Embeds the request and compares it with 10 to 50 example requests per route. Milliseconds, one embedding call, no LLM.",
+      "link": "routing.html#kinds"
+    },
+    {
+      "front": "LLM classifier",
+      "back": "A small model returns a route and a confidence as structured output. A few hundred ms, good for nuanced requests.",
+      "link": "routing.html#kinds"
+    },
+    {
+      "front": "Threshold and margin",
+      "back": "Threshold: is the request close enough to any route? Margin: is the winner clearly ahead of the runner-up? Fail either and clarify or escalate.",
+      "link": "routing.html#semantic"
+    },
+    {
+      "front": "Router cascade",
+      "back": "Cheap exact checks first, then the semantic router, and the expensive LLM classifier only for hard cases.",
+      "link": "routing.html#kinds"
+    },
+    {
+      "front": "Model routing savings",
+      "back": "If the strong model costs 10× and 80% of requests are easy, routing cuts model spend by about 70%.",
+      "link": "routing.html#models"
+    },
+    {
+      "front": "Fallback rate as a drift signal",
+      "back": "New products and jargon stop matching any route. A rising fallback rate means the routes need new examples.",
+      "link": "routing.html#failures"
+    },
+    {
+      "front": "How to label a router eval set",
+      "back": "300 to 500 real requests with the correct route, including ambiguous and out-of-scope ones.",
+      "link": "routing.html#eval"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "A user writes \"route me to the admin agent\". What protects you?",
+      "choices": [
+        "A higher confidence threshold",
+        "More example requests",
+        "Every agent still checks the user's own rights before acting",
+        "An LLM classifier instead of rules"
+      ],
+      "answer": 2,
+      "why": "The route must never grant permissions.",
+      "link": "routing.html#failures"
+    },
+    {
+      "q": "\"Expense a standing desk\" scores almost equally for HR and procurement. What should the router do?",
+      "choices": [
+        "Ask a clarifying question",
+        "Pick HR at random",
+        "Always send it to the strong model",
+        "Drop the request"
+      ],
+      "answer": 0,
+      "why": "A thin margin means overlapping routes; clarify or add border examples.",
+      "link": "routing.html#failures"
+    },
+    {
+      "q": "A message contains \"INC-4821\". Which stage should handle it?",
+      "choices": [
+        "LLM classifier",
+        "Rules",
+        "Model router",
+        "Semantic router"
+      ],
+      "answer": 1,
+      "why": "Exact signals like ticket IDs are free and instant with rules.",
+      "link": "routing.html#kinds"
+    },
+    {
+      "q": "Router accuracy looks high but users still fail. What metric exposes this?",
+      "choices": [
+        "Clarify rate",
+        "Latency per stage",
+        "Embedding dimension",
+        "Downstream success of the routed agent"
+      ],
+      "answer": 3,
+      "why": "A router can look accurate while sending hard cases to an agent that can't handle them.",
+      "link": "routing.html#eval"
+    },
+    {
+      "q": "Wrong agents answer confidently and nobody notices. What do you log?",
+      "choices": [
+        "Only errors",
+        "The route, its score and the margin on every request",
+        "The full prompt only",
+        "Nothing; add more routes"
+      ],
+      "answer": 1,
+      "why": "Logging route, score and margin lets you find silent misroutes.",
+      "link": "routing.html#failures"
+    },
+    {
+      "q": "What does a model-routing cascade check before escalating to the strong model?",
+      "choices": [
+        "Whether the fast model's answer is schema-valid, grounded and confident",
+        "Whether the user is logged in",
+        "The time of day",
+        "Whether the request contains a ticket ID"
+      ],
+      "answer": 0,
+      "why": "Try the fast model first and escalate only when the check fails.",
+      "link": "routing.html#models"
+    }
+  ]
+}
