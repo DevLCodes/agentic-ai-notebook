@@ -28,5 +28,14 @@
   "eval-rubrics",
   "testing",
   "agent-memory",
-  "numbers"
+  "numbers",
+  "enterprise-search",
+  "support-agent",
+  "coding-agent",
+  "ads-assistant",
+  "ask-your-data",
+  "finsight",
+  "oncall-assistant",
+  "review-insights",
+  "three-way-match"
 ]

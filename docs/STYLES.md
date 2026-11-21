@@ -45,7 +45,7 @@ Each topic page can have a deck of flashcards and quiz questions at `system-desi
 
 - 8 to 12 cards and 5 to 8 questions per page. Check every answer against the page itself, not memory.
 - Every `link` points at a real section `id` on a system-design page. Wrong choices should be plausible, and the right answer should not always sit in the same position (the engine shuffles choices anyway).
-- Add the slug to `system-design/decks/index.json`. The hub reads that list so it never requests a deck that doesn't exist, and shows topics in the order of `topics.html`. Topics without a deck stay hidden, so adding a deck means one JSON file plus one line in the list.
+- Add the slug to `system-design/decks/index.json`. The hub reads that list so it never requests a deck that doesn't exist, and shows topics in the order of `topics.html`, followed by a Designs group for the walkthroughs on `designs.html` (`a.card.walk`). Design decks use scenario questions ("latency doubled after adding a reranker; what do you check first?") and cards for the design's key numbers and decisions. Topics without a deck stay hidden, so adding a deck means one JSON file plus one line in the list.
 - `check.py` validates every deck: the keys, card and question counts, four distinct choices, the answer index, that every link resolves to a section id, and that `index.json` lists exactly the deck files.
 
 **The engine** (`study.js`, no dependencies) exposes `StudyEngine.load(url)` and `StudyEngine.mount(element, deck, "cards" | "quiz")`. It injects its own CSS built on the `:root` tokens, so it works on any field-manual page.
