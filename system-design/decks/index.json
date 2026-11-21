@@ -6,6 +6,7 @@
   "search-types",
   "vector-databases",
   "access-control",
+  "agent-operations",
   "retrieval-weights",
   "after-retrieval",
   "citations",

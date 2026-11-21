@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Run, monitor and maintain agents · Agentic System Designs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="description" content="Running agents in production: traces and spans, metrics, SLOs and burn-rate alerts, tamper-evident audit logs (hash chains, anchoring, WORM storage), drift, safe model changes and incident runbooks. With labs.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+</style>
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+</style><style>
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .chunks { display: grid; gap: 8px; max-height: 470px; overflow: auto; padding-right: 4px; }
+  .chunk { min-width: 0; padding: 8px 11px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--c-kb); border-radius: 8px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .chunk:nth-child(even) { border-left-color: var(--c-ingest); }
+  .chunk.ans { box-shadow: 0 0 0 2px var(--c-serve); }
+  .chunk .ch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chunk .pfx { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--c-kb); }
+  .chunk .ov { background: var(--track); border-radius: 3px; }
+  .chunk mark { background: #ffe9b3; border-radius: 3px; padding: 0 2px; }
+  .chunk table { width: auto; font-size: 13px; margin: 4px 0; }
+  .chunk td { padding: 2px 10px 2px 0; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; }
+  .badge.bad { color: var(--c-dlq); border-color: var(--c-dlq); background: var(--t-dlq); }
+  .badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: #e3f3ea; }
+  .badge.info { color: var(--c-kb); border-color: var(--c-kb); background: var(--t-kb); }
+  .bars { display: grid; gap: 8px; margin: 4px 0 0; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 46px; gap: 10px; align-items: center; font-size: 14px; }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: var(--track); }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; background: var(--c-kb); transition: width .3s; }
+  .bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--c-dlq); }
+  .bar-row .v { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+  .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 13px; }
+  .stages li { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+  .stages li.hit { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .stages li.skip { text-decoration: line-through; }
+  .rlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: r; }
+  .rlist li { counter-increment: r; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+  .rlist li::before { content: counter(r); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .rlist li.rel { border-color: var(--c-ok); background: #f0f8f3; }
+  .rlist button { font: 600 12px var(--font-body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .rlist li.rel button { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
+  .say { border-left: 3px solid var(--c-serve); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 16px; font-size: 15.5px; }
+  .say p:last-child { margin: 0; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · operations</p><h1>Run, monitor and maintain agents</h1><p class="lead">What keeps an agent healthy after launch: traces of every step, metrics with SLOs and burn-rate alerts, audit logs an auditor will accept, drift checks and safe model changes, and a runbook for the bad day.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#telemetry">Traces: see every step</a></li><li><a href="#metrics">Metrics, SLOs and alerts</a></li><li><a href="#slo-lab">Try it: error budget</a></li><li><a href="#audit">Audit logs that hold up</a></li><li><a href="#chain-lab">Try it: tamper with a log</a></li><li><a href="#drift">Drift and maintenance</a></li><li><a href="#model-change">Changing the model safely</a></li><li><a href="#incidents">Incidents and runbooks</a></li><li><a href="#failure">Failure modes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="glance"><h2>At a glance</h2>
+<p class="lead">Launch is the start of an agent's life, not the end. Models get updated, users ask new things, tools change their APIs, and one day someone asks you to prove what the agent did six months ago.</p>
+<p>Think of an airliner. The <strong>instruments</strong> in the cockpit say whether the flight is healthy right now. The <strong>flight data recorder</strong> keeps every control input so engineers can replay a problem. The <strong>sealed black box</strong> is built so nobody can quietly edit it after a crash. And a <strong>maintenance schedule</strong> replaces parts before they fail. An agent in production needs the same four things, and they are different systems with different rules.</p>
+<div class="table"><table><thead><tr><th>Piece</th><th>Question it answers</th><th>Who reads it</th><th>Rules</th></tr></thead><tbody>
+<tr><td><strong>Traces</strong> (the flight recorder)</td><td>What exactly happened in this run, step by step?</td><td>Engineers debugging</td><td>Sampled, redacted, kept days to weeks</td></tr>
+<tr><td><strong>Metrics and alerts</strong> (the instruments)</td><td>Is the agent healthy right now, and is it getting worse?</td><td>On-call, dashboards</td><td>Aggregated numbers, kept months</td></tr>
+<tr><td><strong>Audit log</strong> (the black box)</td><td>Who did what, when, with which version, and can we prove it was not changed?</td><td>Auditors, legal, security</td><td>Complete, append-only, tamper-evident, kept years</td></tr>
+<tr><td><strong>Maintenance</strong> (the schedule)</td><td>Has anything drifted, and is the next change safe?</td><td>The owning team</td><td>Pinned versions, evals and canaries for every change</td></tr>
+</tbody></table></div>
+<div class="note"><p><strong>The most common mix-up:</strong> treating application logs as the audit log. Logs are for engineers, so they are sampled, trimmed and editable. An audit log is evidence, so it must be complete and provably unchanged. Keep them as separate systems.</p></div></section>
+
+<section id="telemetry"><h2>Traces: see every step</h2>
+<p>An agent run is a tree of steps: a model call decides to search, a tool runs, the model reads the result, a guardrail checks the answer. A <strong>trace</strong> records the whole tree for one run, and each step is a <strong>span</strong> with a start time, a duration and attributes. One trace ID follows the run across every service and every agent, so a slow or wrong answer can be traced to the exact step that caused it.</p>
+<figure class="fig"><svg viewBox="0 0 722 214" class="dg" role="img" aria-label="A trace waterfall: one agent run with spans for planning, a retrieval tool, a slow API tool call, a second model call and a guardrail check">
+<text x="10" y="18" class="cap">TRACE 7f3a · ONE AGENT RUN · 6.4 S</text>
+<line x1="200" y1="30" x2="200" y2="204" class="rule"/><line x1="710" y1="30" x2="710" y2="204" class="rule"/>
+<text x="200" y="208" class="sm" text-anchor="middle" dy="0">0 s</text><text x="710" y="208" class="sm" text-anchor="end">6.4 s</text>
+<text x="10" y="50" class="small b">agent.run</text><rect x="200" y="38" width="510" height="18" rx="4" class="k-serve"/>
+<text x="22" y="76" class="small">llm.plan</text><rect x="200" y="64" width="72" height="18" rx="4" class="k-model"/><text x="280" y="77" class="sm">0.9 s · 1.2k tokens</text>
+<text x="22" y="102" class="small">tool.search_kb</text><rect x="272" y="90" width="40" height="18" rx="4" class="k-kb"/><text x="320" y="103" class="sm">0.5 s · 8 docs</text>
+<text x="22" y="128" class="small">tool.crm_lookup</text><rect x="312" y="116" width="270" height="18" rx="4" class="k-dlq"/><text x="447" y="129" class="sm" text-anchor="middle">3.4 s · retried once · timeout</text>
+<text x="22" y="154" class="small">llm.answer</text><rect x="582" y="142" width="104" height="18" rx="4" class="k-model"/><text x="580" y="173" class="sm" text-anchor="end">1.3 s · 2.9k tokens</text>
+<text x="22" y="190" class="small">guardrail.output</text><rect x="686" y="178" width="24" height="18" rx="4" class="k-gov"/><text x="680" y="191" class="sm" text-anchor="end">0.2 s · pass</text>
+</svg><figcaption>A waterfall view makes the problem obvious: the CRM tool, not the model, used half the run. Without spans you would only know the run took 6.4 seconds.</figcaption></figure>
+<h3>What to record on each span</h3>
+<div class="table"><table><thead><tr><th>Span</th><th>Attributes worth keeping</th></tr></thead><tbody>
+<tr><td>Agent run (root)</td><td>Trace ID, user or tenant ID, agent name and version, prompt version, outcome (answered, escalated, refused, failed)</td></tr>
+<tr><td>Model call</td><td>Model name and exact version, input and output tokens, time to first token, finish reason, cost</td></tr>
+<tr><td>Tool call</td><td>Tool name, arguments (redacted), status, retries, latency, size of the result</td></tr>
+<tr><td>Retrieval</td><td>Query, document IDs and scores returned, index version</td></tr>
+<tr><td>Guardrail</td><td>Which check, pass or block, and the reason</td></tr>
+</tbody></table></div>
+<ul class="plain">
+<li><strong>Use a standard.</strong> OpenTelemetry has semantic conventions for generative AI spans (model, token counts, operation), so traces work in any backend you choose later.</li>
+<li><strong>Sample smartly.</strong> Keep every trace that failed, was slow or got bad feedback, and a few per cent of the healthy ones. Tail-based sampling decides after the run ends, when you know which kind it was.</li>
+<li><strong>Redact before export.</strong> Prompts and tool results carry personal data. Mask it in the collector, before traces leave your network, and keep full payloads only where access is controlled. See <a href="testing.html#safety">safety and PII</a>.</li>
+</ul></section>
+
+<section id="metrics"><h2>Metrics, SLOs and alerts</h2>
+<p>Traces explain one run; metrics summarise millions. Classic services watch latency, errors, traffic and saturation. An agent needs those plus three more, because an agent can be fast, error-free and still wrong or expensive.</p>
+<div class="table"><table><thead><tr><th>Family</th><th>Metrics</th><th>Why it matters for agents</th></tr></thead><tbody>
+<tr><td>Latency</td><td>Time to first token, end-to-end p50 and p95, steps per run</td><td>A loop that takes 12 steps instead of 4 is a latency and a cost bug</td></tr>
+<tr><td>Errors</td><td>Tool failures and timeouts, model API errors, malformed outputs, guardrail blocks</td><td>Tools fail far more often than models</td></tr>
+<tr><td>Traffic and saturation</td><td>Requests per second, queue depth, GPU use, KV cache use, rate-limit headroom</td><td>Saturation predicts the next outage; see <a href="llm-serving.html">LLM serving</a></td></tr>
+<tr><td>Quality</td><td>Online eval score on sampled traces, task success, escalation rate, thumbs down</td><td>The agent can degrade with zero errors; see <a href="testing.html#monitor">production monitoring</a></td></tr>
+<tr><td>Cost</td><td>Tokens per task, cost per resolved task, cache hit rate</td><td>A prompt change can double cost silently</td></tr>
+<tr><td>Safety</td><td>Prompt-injection detections, PII caught in outputs, refusals, actions needing approval</td><td>These are the incidents that reach the news</td></tr>
+</tbody></table></div>
+<h3>SLOs and error budgets</h3>
+<p>A <strong>service level objective (SLO)</strong> is a target for a metric over a window, such as "99.5% of runs finish successfully within 10 seconds over 30 days". The gap to 100% is the <strong>error budget</strong>: the failures you are allowed. While budget is left, ship changes; when it runs out, freeze risky changes and fix reliability.</p>
+<div class="formula">error budget = (1 − SLO) × runs in the window&nbsp;&nbsp;&nbsp;&nbsp;burn rate = observed error rate ÷ (1 − SLO)</div>
+<p>A burn rate of 1 spends the budget exactly over the window. Alerting on raw error rate pages people for blips; alerting on <strong>burn rate</strong> pages only when the budget is really at risk. The usual pattern, from Google's SRE practice, is a fast alert (burn rate above about 14 over the last hour, which spends 2% of a 30-day budget in that hour) and a slow ticket (burn rate above about 1 over several days). Quality and safety SLOs, such as "online groundedness above 0.9", use the same arithmetic.</p></section>
+
+<section id="slo-lab"><h2>Try it: error budget</h2>
+<p>Set an SLO and the error rate you see right now. The lab shows how fast the budget burns and whether an on-call engineer should be woken up.</p>
+<div class="lab" id="slolab">
+  <div class="lab-row"><span class="lab-k">SLO</span><span class="seg" role="group" aria-label="SLO">
+    <button data-slo="0.99" aria-pressed="false">99%</button><button data-slo="0.995" aria-pressed="true">99.5%</button><button data-slo="0.999" aria-pressed="false">99.9%</button></span></div>
+  <div class="lab-row">
+    <label for="slo-err">Error rate in the last hour <input type="range" id="slo-err" min="0" max="100" value="12"><output id="slo-err-o"></output></label>
+  </div>
+  <div class="metrics" id="slo-m"></div>
+  <p class="lab-out" id="slo-out"></p>
+</div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Illustrative: a 30-day window with 1 million runs. Thresholds follow the common multi-window pattern (page at a burn rate of about 14.4, ticket at about 1).</p></section>
+
+<section id="audit"><h2>Audit logs that hold up</h2>
+<p>An agent that reads records, sends emails or moves money must leave evidence of what it did. Picture a practice-exam case: the agent's audit trail lives in a PostgreSQL table that administrators can update. An external auditor rejects it, because <strong>nothing proves the entries were not changed after the fact</strong>. Adding more access controls does not fix that: whoever holds the highest privilege can still edit rows, and the auditor has to take their word for it.</p>
+<p>The property the auditor wants is <strong>tamper evidence</strong>: any change, deletion or insertion after the fact can be detected by someone who does not trust the administrators. That takes an append-only, hash-chained log, anchored or stored somewhere the administrators can't rewrite.</p>
+<h3>How a hash chain works</h3>
+<p>Each entry stores a cryptographic hash of its own content together with the previous entry's hash. Change one old entry and its hash no longer matches, and neither does every entry after it. It works like a row of numbered, wax-sealed envelopes where each seal also stamps the previous seal's number.</p>
+<div class="formula">h<sub>i</sub> = SHA-256( h<sub>i−1</sub> ‖ timestamp<sub>i</sub> ‖ actor<sub>i</sub> ‖ action<sub>i</sub> ‖ payload<sub>i</sub> )</div>
+<figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Four log entries, each holding the hash of the previous entry; the newest hash is copied to an external anchor that administrators cannot change">
+<rect x="10" y="30" width="140" height="74" rx="9" class="k-gov"/><text x="80" y="52" class="b small" text-anchor="middle">#1041</text><text x="80" y="70" class="sm" text-anchor="middle">prev: 9c1e…</text><text x="80" y="88" class="sm mono" text-anchor="middle">hash: 4b7a…</text>
+<rect x="180" y="30" width="140" height="74" rx="9" class="k-gov"/><text x="250" y="52" class="b small" text-anchor="middle">#1042</text><text x="250" y="70" class="sm" text-anchor="middle">prev: 4b7a…</text><text x="250" y="88" class="sm mono" text-anchor="middle">hash: e03d…</text>
+<rect x="350" y="30" width="140" height="74" rx="9" class="k-gov"/><text x="420" y="52" class="b small" text-anchor="middle">#1043</text><text x="420" y="70" class="sm" text-anchor="middle">prev: e03d…</text><text x="420" y="88" class="sm mono" text-anchor="middle">hash: 71fa…</text>
+<path d="M150 67 H176" class="wire hot" marker-end="url(#ah)"/><path d="M320 67 H346" class="wire hot" marker-end="url(#ah)"/>
+<rect x="560" y="22" width="152" height="90" rx="9" class="k-cross"/><text x="636" y="46" class="b small" text-anchor="middle">External anchor</text><text x="636" y="64" class="sm" text-anchor="middle">signed head: 71fa…</text><text x="636" y="80" class="sm" text-anchor="middle">WORM bucket, timestamp</text><text x="636" y="96" class="sm" text-anchor="middle">service or auditor copy</text>
+<path d="M490 67 H556" class="wire dash" marker-end="url(#ah)"/><text x="523" y="58" class="sm" text-anchor="middle">periodic</text>
+<text x="250" y="134" class="sm" text-anchor="middle">change #1041 and every later hash stops matching</text>
+</svg><figcaption>The chain links entries together; the anchor fixes the newest link somewhere the log's administrators cannot reach.</figcaption></figure>
+<div class="note"><p><strong>The catch interviewers look for:</strong> a hash chain alone stops casual edits, not a determined administrator, who could rewrite an entry and recompute every hash after it. Close the gap by publishing the head hash outside their control: sign it with a key they don't hold, write it to WORM storage, get a trusted timestamp, or send it to the auditor. Then a recomputed chain no longer matches the anchor. Try both cases in the lab below.</p></div>
+<h3>Options compared</h3>
+<div class="table"><table><thead><tr><th>Approach</th><th>Stops</th><th>Does not stop</th></tr></thead><tbody>
+<tr><td>Access controls only (roles, MFA)</td><td>Outsiders and most staff</td><td>Anyone with admin rights; and you can't prove nothing changed</td></tr>
+<tr><td>Append-only table (revoke UPDATE and DELETE, triggers)</td><td>Accidental edits by the application</td><td>A superuser who drops the trigger or edits the files</td></tr>
+<tr><td>Hash chain</td><td>Silent edits of single entries; makes changes detectable</td><td>Recomputing the whole chain, unless the head is anchored</td></tr>
+<tr><td>Hash chain plus signed or anchored checkpoints</td><td>Recomputation; proves order and completeness up to each checkpoint</td><td>Entries never written in the first place (log at the source)</td></tr>
+<tr><td>WORM storage (write once, read many) in compliance mode</td><td>Deletion and overwrite by anyone, root included, until retention ends</td><td>Wrong data written at the start</td></tr>
+<tr><td>Merkle-tree transparency log</td><td>All of the above, plus cheap proofs that one entry is included</td><td>More moving parts to run</td></tr>
+</tbody></table></div>
+<h3>What an agent's audit entry holds</h3>
+<ul class="plain">
+<li><strong>Who:</strong> the human principal, the agent's identity, and any delegated credential it used.</li>
+<li><strong>What and with which version:</strong> agent version, prompt version, model name and version, tools available.</li>
+<li><strong>Inputs and evidence:</strong> the request, retrieved document IDs, and each tool call with its arguments and result. Store large or personal payloads elsewhere and log their hash and a pointer, so the entry still proves what was used.</li>
+<li><strong>Decisions:</strong> guardrail and policy outcomes, human approvals or rejections, and the final output or action.</li>
+<li><strong>When:</strong> a timestamp from a trusted, synchronised clock, and a sequence number so gaps show.</li>
+</ul>
+<p>Write the entry from the platform that executes tools, not from the model's own narration: the model's account of what it did is not evidence. Keep the log in a separate account or project from the application, so the team that runs the agent cannot also delete its history. Reading the log needs access controls too, because it contains everything the agent saw; see <a href="access-control.html">Access control</a>.</p></section>
+
+<section id="chain-lab"><h2>Try it: tamper with a log</h2>
+<p>Five audit entries are chained together. Tamper with them as an attacker would and watch the verifier. Turn the external anchor on and off to see why it matters.</p>
+<div class="lab" id="chainlab">
+  <div class="lab-row"><span class="lab-k">Attack</span><span class="seg" role="group" aria-label="Attack">
+    <button data-atk="none" aria-pressed="true">No change</button><button data-atk="edit" aria-pressed="false">Edit entry 3</button><button data-atk="delete" aria-pressed="false">Delete entry 4</button><button data-atk="rehash" aria-pressed="false">Edit 3 and recompute hashes</button></span></div>
+  <div class="lab-row"><label for="chain-anchor"><input type="checkbox" id="chain-anchor" checked> Head hash anchored outside the admins' reach</label></div>
+  <pre><code id="chain-log"></code></pre>
+  <p class="lab-out" id="chain-out"></p>
+</div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">The demo uses a short 32-bit hash so it fits on screen; real logs use SHA-256 or stronger, and sign checkpoints.</p></section>
+
+<section id="drift"><h2>Drift and maintenance</h2>
+<p>Even if you change nothing, an agent's world changes around it. <strong>Drift</strong> is a gradual shift in inputs or behaviour that slowly moves the agent away from what you tested.</p>
+<div class="table"><table><thead><tr><th>What drifts</th><th>Example</th><th>How you notice</th></tr></thead><tbody>
+<tr><td>Inputs</td><td>A product launch brings questions the golden set never covered</td><td>Topic and intent mix, embedding clusters, retrieval scores falling</td></tr>
+<tr><td>The model</td><td>The provider updates a model behind an alias</td><td>Output length, refusal rate and tool-call mix shift on one day</td></tr>
+<tr><td>Tools and APIs</td><td>A partner API renames a field; the tool starts returning nulls</td><td>Tool error rate, empty results, contract tests in CI</td></tr>
+<tr><td>Knowledge</td><td>Policies change but the index still holds the old PDF</td><td>Freshness lag and stale citations; see <a href="knowledge-freshness.html">Fresh Knowledge Base</a></td></tr>
+<tr><td>Cost and load</td><td>Longer conversations raise tokens per task</td><td>Cost per resolved task, context length percentiles</td></tr>
+</tbody></table></div>
+<h3>Maintenance habits</h3>
+<ul class="plain">
+<li><strong>Pin everything.</strong> Use exact model snapshots instead of moving aliases, keep prompts in a versioned registry, and record every version on the trace and the audit entry.</li>
+<li><strong>Every change is a release.</strong> A new prompt, model, tool or index runs the golden-set regression, then shadow or canary traffic, with a one-click rollback. See <a href="testing.html#release">shadow, canary and A/B</a>.</li>
+<li><strong>Close the loop.</strong> Failed and down-voted traces go to a review queue, the real failures become golden-set cases, and CI blocks the next change that breaks them.</li>
+<li><strong>Keep a calendar.</strong> Model deprecation dates, certificate and key rotation, re-embedding when the embedding model changes, and log retention deadlines.</li>
+</ul></section>
+
+<section id="model-change"><h2>Changing the model safely</h2>
+<p>The riskiest routine change is the model itself: a new version, a smaller model, or the same model quantized to save memory. Treat each as a new release, even when "the weights are the same, only smaller".</p>
+<ul class="plain">
+<li><strong>Quantizing to raise throughput.</strong> Going from 16-bit to 8-bit halves weight memory, which frees room for KV cache and bigger batches. It is post-training work, with no retraining, but accuracy can drop on fragile tasks, so validate before rollout. Worked through in <a href="quantization.html#case-13b">the 13B throughput case</a>.</li>
+<li><strong>Moving to the edge.</strong> A model that must run offline on a small device has a hard latency and memory budget. The usual fix is an optimised engine in FP16 with INT8 where calibration shows it is safe, then accuracy validation on real cases. See <a href="nvidia-architecture.html#edge">the edge deployment case</a>.</li>
+<li><strong>Swapping versions.</strong> Re-run the golden set, compare cost and latency, shadow real traffic, and canary with automatic rollback on SLO burn.</li>
+</ul>
+<div class="note"><p>Whatever the change, the decision rule is the same: <strong>measure on your own tasks, compare against the current version, roll out gradually, and keep the old version ready.</strong></p></div></section>
+
+<section id="incidents"><h2>Incidents and runbooks</h2>
+<p>When an alert fires, the first job is to stop the harm, not to find the root cause. Agents need a few levers that ordinary services lack, and they should exist before the incident.</p>
+<ol class="plain">
+<li><strong>Detect:</strong> a burn-rate alert, a safety metric spike, or a user report linked to a trace ID.</li>
+<li><strong>Mitigate:</strong> roll back the last prompt or model version; disable one tool with a feature flag; switch to read-only mode, where the agent can answer but not act; route to humans; or fall back to a smaller, stable model. A kill switch stops all autonomous actions at once.</li>
+<li><strong>Diagnose:</strong> open the failing traces, compare with healthy ones, and check what changed (deploys, provider status, tool APIs).</li>
+<li><strong>Recover and learn:</strong> fix, add the failing cases to the golden set, write a blameless postmortem, and check the audit log for actions that need to be undone or reported.</li>
+</ol>
+<p>Protect against cascading failures too: put circuit breakers and timeouts on every tool, cap steps and tokens per run, and make tool actions <a href="glossary.html#idempotent">idempotent</a> so retries cannot repeat a payment.</p></section>
+
+<section id="failure"><h2>Failure modes</h2>
+<div class="table"><table><thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Auditor rejects the logs as evidence</td><td>Editable table, no tamper evidence</td><td>Append-only, hash-chained entries with anchored checkpoints or WORM storage</td></tr>
+<tr><td>Answers got worse with no errors and no deploy</td><td>Model alias updated, or input drift</td><td>Pin model versions; online evals on sampled traces; drift dashboards</td></tr>
+<tr><td>On-call is paged for every blip</td><td>Alerts on raw error rate</td><td>Burn-rate alerts against an SLO, fast and slow windows</td></tr>
+<tr><td>"It was slow" but nobody knows where</td><td>No spans for tool calls</td><td>One trace per run; spans for every model, tool and retrieval step</td></tr>
+<tr><td>Customer data appears in the tracing vendor</td><td>Payloads exported unredacted</td><td>Redact in the collector; keep full payloads in an access-controlled store</td></tr>
+<tr><td>Quantized model shipped; edge cases broke</td><td>Validated on averages only</td><td>Eval on your own fragile tasks, then canary with rollback</td></tr>
+<tr><td>Rollback impossible during an incident</td><td>Prompt edited in place, no versions</td><td>Versioned prompt registry; feature flags per tool; a kill switch</td></tr>
+</tbody></table></div></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="note"><p>"I'd run the agent with four separate systems. Traces: one trace per run with spans for every model call, tool call, retrieval and guardrail, using OpenTelemetry conventions, redacted in the collector and tail-sampled so every failure is kept. Metrics: latency, errors and saturation, plus quality from online evals, cost per resolved task and safety signals, with SLOs and burn-rate alerts instead of raw thresholds. An audit log: written by the platform that runs tools, append-only and hash-chained, with the head hash signed or written to WORM storage outside the admins' account, so an auditor can verify nothing changed. And maintenance: pinned model and prompt versions, drift dashboards, and every change, including quantization or a model swap, through golden-set regression, canary and rollback. For incidents I'd have a kill switch, per-tool flags and a read-only mode ready before launch."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Where you meet it</th></tr></thead><tbody>
+<tr><td>Agent tracing</td><td>OpenTelemetry GenAI semantic conventions; Langfuse, LangSmith, Arize Phoenix, Datadog LLM Observability</td></tr>
+<tr><td>Metrics and alerts</td><td>Prometheus and Grafana; the metrics endpoints of vLLM, Triton and NVIDIA NIM; SLO tooling such as Sloth or Nobl9</td></tr>
+<tr><td>Immutable storage</td><td>Amazon S3 Object Lock (compliance mode), Azure immutable blob storage, Google Cloud Storage bucket lock</td></tr>
+<tr><td>Tamper-evident logs</td><td>Transparency logs such as Trillian and Sigstore Rekor; RFC 3161 trusted timestamps; signed checkpoints</td></tr>
+<tr><td>Database audit</td><td>pgAudit for PostgreSQL records statements, but on its own is not tamper-evident</td></tr>
+<tr><td>Runtime guardrails</td><td>NVIDIA NeMo Guardrails, Guardrails AI, provider moderation APIs</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Further reading: Google, <a href="https://sre.google/workbook/alerting-on-slos/">Alerting on SLOs</a>.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="testing.html">Testing and rollout</a></li><li><a href="evals.html">Evals</a></li><li><a href="access-control.html">Access control</a></li><li><a href="multi-agent.html">Multi-agent coordination</a></li><li><a href="quantization.html">Quantization</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="glossary.html#hash-chain">Glossary: hash chain</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function seg(root, attr, fn) {
+    root.querySelectorAll('[data-' + attr + ']').forEach(function (b) {
+      b.addEventListener('click', function () {
+        root.querySelectorAll('[data-' + attr + ']').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        fn(b.getAttribute('data-' + attr));
+      });
+    });
+  }
+  function metric(n, l, small) { return '<div class="metric"><span class="n">' + n + '</span><span class="l">' + l + '</span>' + (small ? '<small>' + small + '</small>' : '') + '</div>'; }
+
+  // ---- error budget ----
+  var slo = 0.995, RUNS = 1000000, HOURS = 720;
+  function sloLab() {
+    var err = +$('slo-err').value / 10; // percent, 0 to 10
+    $('slo-err-o').textContent = err.toFixed(1) + '%';
+    var budget = Math.round((1 - slo) * RUNS);
+    var burn = Math.round((err / 100) / (1 - slo) * 100) / 100;
+    var hourShare = burn / HOURS; // share of 30-day budget spent per hour
+    var hoursLeft = burn > 0 ? HOURS / burn : Infinity;
+    var left = !isFinite(hoursLeft) ? 'never' : hoursLeft >= 48 ? Math.round(hoursLeft / 24) + ' days' : hoursLeft.toFixed(1) + ' h';
+    $('slo-m').innerHTML =
+      metric(budget.toLocaleString('en-US'), 'Failures allowed', 'per 30 days') +
+      metric(burn.toFixed(1) + '×', 'Burn rate', '1× spends it exactly in 30 days') +
+      metric((hourShare * 100).toFixed(1) + '%', 'Budget spent per hour') +
+      metric(left, 'Budget gone in', 'at this rate');
+    var out;
+    if (burn >= 14.4) out = '<strong>Page now.</strong> At ' + burn.toFixed(1) + '× the whole month\'s budget is gone in ' + left + '. Mitigate first: roll back the last change, disable the failing tool, or fall back.';
+    else if (burn >= 6) out = '<strong>Page soon if it lasts.</strong> A burn of ' + burn.toFixed(1) + '× over six hours would spend 5% of the budget; a second, longer window confirms it is not a blip.';
+    else if (burn > 1) out = '<strong>Open a ticket.</strong> Burning faster than sustainable (' + burn.toFixed(1) + '×), but nobody needs waking. Slow risky releases until it is fixed.';
+    else out = '<strong>Healthy.</strong> Below 1× the budget lasts the month. Spare budget is permission to ship changes.';
+    if (slo === 0.999 && err >= 1) out += ' A tighter SLO makes the same error rate far more urgent.';
+    $('slo-out').innerHTML = out;
+  }
+  $('slo-err').addEventListener('input', sloLab);
+  seg($('slolab'), 'slo', function (v) { slo = +v; sloLab(); });
+  sloLab();
+
+  // ---- hash chain ----
+  function fnv(s) { var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return ('0000000' + h.toString(16)).slice(-8); }
+  var BASE = [
+    '09:14:02 agent=billing-v7 user=ana   tool=lookup_invoice id=INV-381',
+    '09:14:05 agent=billing-v7 user=ana   tool=issue_refund amount=$49',
+    '09:20:11 agent=billing-v7 user=raj   tool=issue_refund amount=$1,200 approved_by=lee',
+    '09:31:40 agent=billing-v7 user=raj   tool=update_email to=raj@new.example',
+    '09:33:02 agent=billing-v7 user=admin config=disable_approvals'
+  ];
+  function build(entries) { var prev = '00000000', out = []; entries.forEach(function (e) { var h = fnv(prev + '|' + e.text); out.push({ text: e.text, n: e.n, prev: prev, hash: h }); prev = h; }); return out; }
+  var ORIGINAL = build(BASE.map(function (t, i) { return { text: t, n: i + 1 }; }));
+  var ANCHOR = ORIGINAL[ORIGINAL.length - 1].hash;
+  var atk = 'none';
+  function chain() {
+    var rows = ORIGINAL.map(function (r) { return { text: r.text, n: r.n, prev: r.prev, hash: r.hash }; });
+    if (atk === 'edit') rows[2].text = rows[2].text.replace('$1,200', '$120');
+    if (atk === 'delete') rows.splice(3, 1);
+    if (atk === 'rehash') { rows[2].text = rows[2].text.replace('$1,200', '$120'); rows = build(rows); }
+    var anchored = $('chain-anchor').checked, prev = '00000000', firstBad = null, lines = [], expectN = 1, gap = null;
+    rows.forEach(function (r) {
+      var ok = r.prev === prev && fnv(r.prev + '|' + r.text) === r.hash;
+      if (r.n !== expectN && gap === null) gap = expectN;
+      expectN = r.n + 1;
+      if (!ok && firstBad === null) firstBad = r.n;
+      lines.push((ok ? 'ok   ' : 'FAIL ') + '#' + r.n + '  ' + r.text + '\n          prev=' + r.prev + '  hash=' + r.hash);
+      prev = r.hash;
+    });
+    var head = rows[rows.length - 1].hash;
+    lines.push('\nhead hash now   ' + head + (anchored ? '\nanchored head   ' + ANCHOR + (head === ANCHOR ? '  (match)' : '  (MISMATCH)') : '\nanchored head   none'));
+    $('chain-log').textContent = lines.join('\n');
+    var out;
+    if (atk === 'none') out = '<strong>Verified.</strong> Every entry\'s hash matches its content and the previous hash' + (anchored ? ', and the head matches the external anchor.' : '.');
+    else if (atk === 'edit') out = '<strong>Detected at entry ' + firstBad + '.</strong> The refund was changed from $1,200 to $120, so its stored hash no longer matches its content, and the chain breaks from there.';
+    else if (atk === 'delete') out = '<strong>Detected.</strong> Entry ' + (firstBad || gap) + ' points at a previous hash that no longer exists, and the sequence number jumps from 3 to 5.';
+    else if (anchored) out = '<strong>Detected by the anchor.</strong> The attacker rebuilt a chain that is internally consistent, but its head ' + head + ' does not match the anchored ' + ANCHOR + ' that they could not change.';
+    else out = '<strong>Not detected.</strong> The attacker edited entry 3 and recomputed every hash after it, so the chain verifies. Without a head hash stored outside the admins\' reach, a hash chain proves nothing against someone who controls the whole log.';
+    $('chain-out').innerHTML = out;
+  }
+  seg($('chainlab'), 'atk', function (v) { atk = v; chain(); });
+  $('chain-anchor').addEventListener('change', chain);
+  chain();
+})();
+</script>
+<script src="progress.js"></script>
+</body>
+</html>
