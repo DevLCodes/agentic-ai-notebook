@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Agent memory: what to remember and how to use it · Agentic System Designs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="description" content="Agent memory design: short-term, profile, episodic and procedural memory; extracting and checking facts at session end; loading relevant memories within a token budget; privacy, deletion and cross-user isolation; and how to evaluate memory.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -157,16 +158,66 @@
   .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
   .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
   .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { font-weight: 500; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
+  .metric { padding: 8px 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .metric .n { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .metric small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px; }
+  .cw-bar { height: 14px; border-radius: 7px; background: var(--track); overflow: hidden; margin: 4px 0 0; }
+  .cw-bar i { display: block; height: 100%; background: var(--c-kb); transition: width .25s; }
+  .cw-bar i.warn { background: var(--c-serve); } .cw-bar i.over { background: var(--c-dlq); }
 </style>
 
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .stage3d .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .ctl3 input[type=range] { width: 140px; accent-color: var(--accent); }
+  .ctl3 output { font-family: var(--font-mono); font-size: 12.5px; min-width: 5ch; }
+  .l3.cap b { color: var(--ink); }
+</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
-<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Agent memory: what to remember and how to use it</h1><p class="lead">How an assistant remembers across sessions: memory types, a write path with checks in code, a read path with a token budget, user control, and evals.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#picture">The whole picture</a></li><li><a href="#types">Types of memory</a></li><li><a href="#write">Write path: what to keep</a></li><li><a href="#read">Read path: what goes in the prompt</a></li><li><a href="#privacy">User control and privacy</a></li><li><a href="#evals">Evals and metrics</a></li><li><a href="#mistakes">Common mistakes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#picture">The whole picture</a></li><li><a href="#types">Types of memory</a></li><li><a href="#stores">Memory stores compared</a></li><li><a href="#context-window">Where the context window lives</a></li><li><a href="#durable">Surviving restarts</a></li><li><a href="#write">Write path: what to keep</a></li><li><a href="#read">Read path: what goes in the prompt</a></li><li><a href="#privacy">User control and privacy</a></li><li><a href="#evals">Evals and metrics</a></li><li><a href="#mistakes">Common mistakes</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="picture"><h2>The whole picture</h2><p>A model remembers nothing between calls. "Memory" is data your system stores and puts back into the prompt. The design is two paths: a <strong>read path</strong> that decides which memories go into each prompt, and a <strong>write path</strong> that decides what is worth keeping.</p><figure class="fig"><svg viewBox="0 0 722 312" class="dg" role="img" aria-label="Read path: user turn, memory loader filtered by user id reading the session, profile and episodic stores, pack within 500 tokens, model, reply. Write path: session end, extract facts with a small model, check in code, write to the profile and episodic stores with a TTL"><text x="10" y="22" class="cap">Read path (every turn)</text><rect x="10" y="34" width="120" height="46" rx="8" class="k-user"/><text x="70" y="61.5" class="small b" text-anchor="middle">User turn</text><path d="M130 57 L148 57" class="wire" marker-end="url(#ah)"/><rect x="150" y="34" width="120" height="46" rx="8" class="k-gov"/><text x="210" y="53" class="small b" text-anchor="middle">Memory loader</text><text x="210" y="69" class="sm" text-anchor="middle">filter by user_id</text><path d="M270 57 L288 57" class="wire" marker-end="url(#ah)"/><rect x="290" y="34" width="120" height="46" rx="8" class="k-kb"/><text x="350" y="53" class="small b" text-anchor="middle">Pack</text><text x="350" y="69" class="sm" text-anchor="middle">≤ 500 tokens</text><path d="M410 57 L428 57" class="wire" marker-end="url(#ah)"/><rect x="430" y="34" width="120" height="46" rx="8" class="k-model"/><text x="490" y="61.5" class="small b" text-anchor="middle">Model</text><path d="M550 57 L568 57" class="wire" marker-end="url(#ah)"/><rect x="570" y="34" width="120" height="46" rx="8" class="k-serve"/><text x="630" y="61.5" class="small b" text-anchor="middle">Reply</text><rect x="40" y="140" width="160" height="46" rx="8" class="k-src"/><text x="120" y="159" class="small b" text-anchor="middle">Session store</text><text x="120" y="175" class="sm" text-anchor="middle">short-term · hours</text><rect x="280" y="140" width="160" height="46" rx="8" class="k-src"/><text x="360" y="159" class="small b" text-anchor="middle">Profile store</text><text x="360" y="175" class="sm" text-anchor="middle">preferences · key-value</text><rect x="520" y="140" width="160" height="46" rx="8" class="k-src"/><text x="600" y="159" class="small b" text-anchor="middle">Episodic store</text><text x="600" y="175" class="sm" text-anchor="middle">past issues · vectors</text><path d="M120 140 L196 82" class="wire dash" marker-end="url(#ah)"/><path d="M360 140 L214 82" class="wire dash" marker-end="url(#ah)"/><path d="M600 140 L226 82" class="wire dash" marker-end="url(#ah)"/><text x="190" y="242" class="cap">Write path (session end)</text><rect x="10" y="254" width="150" height="46" rx="8" class="k-user"/><text x="85" y="273" class="small b" text-anchor="middle">Session end</text><text x="85" y="289" class="sm" text-anchor="middle">or &quot;remember this&quot;</text><path d="M160 277 L188 277" class="wire" marker-end="url(#ah)"/><rect x="190" y="254" width="150" height="46" rx="8" class="k-model"/><text x="265" y="273" class="small b" text-anchor="middle">Extract facts</text><text x="265" y="289" class="sm" text-anchor="middle">small model</text><path d="M340 277 L368 277" class="wire" marker-end="url(#ah)"/><rect x="370" y="254" width="150" height="46" rx="8" class="k-gov"/><text x="445" y="273" class="small b" text-anchor="middle">Check (code)</text><text x="445" y="289" class="sm" text-anchor="middle">consent · PII · conflicts</text><path d="M520 277 L548 277" class="wire" marker-end="url(#ah)"/><rect x="550" y="254" width="150" height="46" rx="8" class="k-kb"/><text x="625" y="273" class="small b" text-anchor="middle">Write</text><text x="625" y="289" class="sm" text-anchor="middle">upsert · TTL</text><path d="M110 186 L85 252" class="wire dash" marker-end="url(#ah)"/><path d="M600 254 L380 188" class="wire" marker-end="url(#ah)"/><path d="M640 254 L620 188" class="wire" marker-end="url(#ah)"/></svg><figcaption>Reads happen every turn and are cheap; writes happen once per session and go through checks in code. Budgets are illustrative.</figcaption></figure></section><section id="types"><h2>Types of memory</h2>
 <div class="table"><table><thead><tr><th>Type</th><th>Holds</th><th>Where it lives</th><th>How it is read</th><th>Lifetime</th></tr></thead><tbody>
 <tr><td>Short-term (working)</td><td>This conversation: turns, tool results, open task</td><td>Session store such as Redis / Memorystore or Firestore, keyed by session id</td><td>Recent turns in full; older turns replaced by a running summary once over budget</td><td>Hours</td></tr>
@@ -174,7 +225,136 @@
 <tr><td>Episodic</td><td>Past issues and outcomes as short dated summaries: "Mar 3: refund for order 812, resolved"</td><td>Vector store with a user id filter (Vertex AI Vector Search, AlloyDB / pgvector)</td><td>Top 3 by similarity to the current question, with a recency boost</td><td>Months, set by policy</td></tr>
 <tr><td>Procedural</td><td>How to do things: playbooks, "check the plan before suggesting upgrades"</td><td>Versioned prompts and tool descriptions, owned by the team</td><td>Always in the system prompt</td><td>Until the next release</td></tr>
 </tbody></table></div>
-<p>Managed options exist (for example Vertex AI Agent Engine Memory Bank, LangGraph stores, Mem0), but the decisions below are the same whichever you use.</p></section><section id="write"><h2>Write path: what to keep</h2>
+<p>Managed options exist (for example Vertex AI Agent Engine Memory Bank, LangGraph stores, Mem0), but the decisions below are the same whichever you use.</p></section><section id="stores"><h2>Memory stores compared</h2>
+<p class="lead">"Memory" covers several very different data structures. Each one answers a different kind of question, so most real agents combine two or three.</p>
+<p>Picture a support agent talking to a customer who has written in five times this year. It needs this conversation (a buffer or summary), facts about the customer (a profile or graph), and what happened last time (episodes it can search). The table names each store; the sections under it explain how they work.</p>
+<div class="table"><table><thead><tr><th>Store</th><th>Holds</th><th>Read by</th><th>Good at</th><th>Weak at</th></tr></thead><tbody>
+<tr><td><strong>Conversation buffer</strong></td><td>Every turn, verbatim</td><td>Send it all</td><td>Perfect recall of this session</td><td>Grows until it overflows the window; cost grows every turn</td></tr>
+<tr><td><strong>Buffer window</strong></td><td>The last k turns</td><td>Send the last k</td><td>Fixed cost, recent detail</td><td>Forgets anything older than k turns</td></tr>
+<tr><td><strong>Summary</strong></td><td>A running summary the model rewrites</td><td>Send the summary</td><td>Long sessions in few tokens</td><td>Lossy; details and exact numbers fade; extra model call</td></tr>
+<tr><td><strong>Summary + buffer</strong></td><td>Summary of old turns plus recent turns in full</td><td>Send both</td><td>The usual production default</td><td>Still lossy for old detail</td></tr>
+<tr><td><strong>Key-value / profile</strong></td><td>Named facts: language, plan, preferences</td><td>Load by user id</td><td>Small, exact, easy to edit and delete</td><td>Only facts you decided to extract</td></tr>
+<tr><td><strong>Knowledge graph</strong> (entity memory)</td><td>Entities and relations: (customer)-[owns]->(order 812)</td><td>Look up an entity, walk its edges</td><td>Multi-hop questions, facts that change, "who is related to what"</td><td>Extraction is error-prone; schema and dedup work</td></tr>
+<tr><td><strong>Vector store</strong> (semantic memory)</td><td>Text chunks with embeddings</td><td>Similarity search, filtered by user id</td><td>"Anything like this before?" over lots of fuzzy text</td><td>No exact facts, weak on time, can return near-misses</td></tr>
+<tr><td><strong>Episodic</strong></td><td>Dated summaries of past sessions and outcomes</td><td>Search by similarity plus recency</td><td>Learning from what happened last time</td><td>Needs good summaries and expiry</td></tr>
+<tr><td><strong>Procedural</strong></td><td>How to do things: instructions, playbooks, examples</td><td>Always in the system prompt</td><td>Consistent behaviour</td><td>Changes need a release and evals</td></tr>
+<tr><td><strong>Relational / event log</strong></td><td>Orders, tickets, actions taken, in tables</td><td>Tool calls with SQL or an API</td><td>Exact, auditable, already the source of truth</td><td>Only what the schema captures</td></tr>
+</tbody></table></div>
+<h3>Conversation buffer, window and summary</h3>
+<p>These three manage <a href="#context-window">short-term memory</a> inside the context window. A <strong>buffer</strong> keeps every turn and resends it all, so call 50 pays for turns 1 to 49 again. A <strong>buffer window</strong> keeps only the last k turns (say 10), which caps the cost but drops the customer's order number from turn 3. A <strong>summary</strong> asks a small model to rewrite a running summary every few turns; it holds a long session in a few hundred tokens but blurs exact values. <strong>Summary plus buffer</strong> combines them: once the buffer passes a token budget, the oldest turns are folded into the summary and the recent turns stay verbatim. Pin facts that must stay exact (IDs, amounts, decisions) in a structured "state" block instead of trusting the summary.</p>
+<div class="formula">buffer:          tokens(call n) ≈ system + n × turn            grows forever
+window (k):      tokens(call n) ≈ system + k × turn            flat, forgets
+summary+buffer:  tokens(call n) ≈ system + summary + k × turn  flat, lossy for old turns</div>
+<h3>Knowledge graph memory</h3>
+<p>A model extracts entities and relations from each turn and writes them as nodes and edges: <code>(Priya)-[manages]->(Team Atlas)</code>, <code>(order 812)-[status]->(refunded)</code>. On a new turn, the agent finds the entities mentioned and loads their neighbourhood. Graphs shine for multi-hop questions ("which of Priya's team's open tickets mention billing?") and for facts that change, because an edge can be updated or given a validity period instead of piling up contradictory text. Temporal graph memories such as Zep's Graphiti keep when each fact was true. The cost is extraction: the model must resolve "she", "Priya" and "P. Sharma" to one node, and wrong edges are harder to spot than wrong text.</p>
+<h3>Vector memory</h3>
+<p>Each memory (a turn, a fact, a session summary) is embedded and stored in a <a href="vector-databases.html">vector database</a>. At read time the current question is embedded and the nearest memories come back, filtered by user id. It is the most flexible store and needs no schema, but similarity is not truth: "I like Python" and "I stopped using Python" are close vectors. Add metadata (date, type, source) so you can filter and boost by recency, and dedupe before writing. See <a href="vector-search.html">Vector search</a> for how retrieval works.</p>
+<h3>Episodic memory</h3>
+<p>An episode is one past interaction, stored as a short dated summary with its outcome: "3 Mar: refund for order 812 approved after photo; customer happy". It is usually kept in a vector store with date and outcome fields, and read by similarity with a recency boost. The point is learning from experience: the agent sees that the last attempt failed and why. Keep episodes short, set an expiry, and never store raw transcripts with personal data you don't need.</p>
+<h3>Choosing a mix</h3>
+<div class="table"><table><thead><tr><th>Agent</th><th>Short-term</th><th>Long-term</th></tr></thead><tbody>
+<tr><td>FAQ chatbot, one session</td><td>Buffer window</td><td>None</td></tr>
+<tr><td>Support agent</td><td>Summary + buffer, pinned order IDs</td><td>Profile + episodic + the order database via tools</td></tr>
+<tr><td>Personal assistant</td><td>Summary + buffer</td><td>Profile + vector memory of notes</td></tr>
+<tr><td>Account manager across a company</td><td>Summary + buffer</td><td>Knowledge graph of people, accounts and deals + episodic</td></tr>
+</tbody></table></div>
+<p>Whatever the mix, the <a href="#write">write path</a> decides what is worth keeping and the <a href="#read">read path</a> decides what fits in the prompt. Products include LangChain and LangGraph memory classes and stores, Mem0, Letta (MemGPT), Zep and Graphiti, and Vertex AI Memory Bank.</p></section>
+<section id="context-window"><h2>Where short-term memory lives: the context window</h2>
+<p class="lead">"Short-term memory lives in the context window" is true, but the context window is not a place. It is a limit. The conversation itself lives in three places at different moments.</p>
+<p>The <strong>context window</strong> is the maximum number of tokens a model can attend to in one request: system prompt, tool definitions, every message so far, every tool result, and the reply it is writing. A 200k-token window means the input plus the output of one call must fit in 200,000 tokens. Nothing is stored "in" it between calls.</p>
+<figure class="fig"><svg viewBox="0 0 722 210" class="dg" role="img" aria-label="Your app keeps the messages list, sends all of it on every call; the serving GPU turns those tokens into a KV cache while generating; the reply is appended to the messages list; a prompt cache may keep the KV entries for a few minutes">
+<text x="10" y="20" class="cap">Your app (between calls)</text>
+<rect x="10" y="32" width="200" height="128" rx="10" class="k-serve"/>
+<text x="110" y="56" class="b small" text-anchor="middle">messages list</text>
+<text x="22" y="80" class="sm">system prompt + tools</text><text x="22" y="98" class="sm">turn 1 … turn n</text><text x="22" y="116" class="sm">tool results</text><text x="22" y="134" class="sm">summary of older turns</text>
+<text x="110" y="182" class="sm" text-anchor="middle">this is the short-term memory</text>
+<path d="M210 70 H300" class="wire hot" marker-end="url(#ah)"/><text x="255" y="62" class="sm" text-anchor="middle">whole list,</text><text x="255" y="90" class="sm" text-anchor="middle">every call</text>
+<text x="310" y="20" class="cap">One request (the context window)</text>
+<rect x="306" y="32" width="190" height="76" rx="10" class="box"/>
+<text x="401" y="58" class="b small" text-anchor="middle">≤ window tokens</text><text x="401" y="78" class="sm" text-anchor="middle">input + output</text><text x="401" y="96" class="sm" text-anchor="middle">checked by the API</text>
+<path d="M496 70 H562" class="wire hot" marker-end="url(#ah)"/>
+<text x="566" y="20" class="cap">GPU, during the call</text>
+<rect x="566" y="32" width="146" height="76" rx="10" class="k-model"/>
+<text x="639" y="58" class="b small" text-anchor="middle">KV cache</text><text x="639" y="78" class="sm" text-anchor="middle">keys + values per</text><text x="639" y="94" class="sm" text-anchor="middle">token, per layer</text>
+<rect x="566" y="128" width="146" height="44" rx="10" class="ghost"/><text x="639" y="148" class="sm" text-anchor="middle">prompt cache: KV kept</text><text x="639" y="164" class="sm" text-anchor="middle">~5 min for reuse</text>
+<path d="M639 108 V124" class="wire dash" marker-end="url(#ah)"/>
+<path d="M600 108 C560 190 300 200 214 140" class="wire dash" marker-end="url(#ah)"/><text x="420" y="196" class="sm" text-anchor="middle">reply appended to the list</text>
+</svg><figcaption>The words live in your app. The window is the size limit on one request. The KV cache is the GPU's working copy of those tokens while it generates.</figcaption></figure>
+<div class="table"><table><thead><tr><th></th><th>What it is</th><th>Where it lives</th><th>How long</th></tr></thead><tbody>
+<tr><td><strong>Messages list</strong></td><td>The conversation as text and tool results</td><td>Your app or harness (in memory, or a session store and <a href="#durable">checkpointer</a>)</td><td>As long as you keep it</td></tr>
+<tr><td><strong>Context window</strong></td><td>The token limit for one request, input plus output</td><td>A property of the model and API, not storage</td><td>Applies per call</td></tr>
+<tr><td><strong>KV cache</strong></td><td>Attention keys and values for every token being processed</td><td>GPU memory on the serving machine</td><td>One request, unless reused</td></tr>
+<tr><td><strong>Prompt (prefix) cache</strong></td><td>A saved KV cache for a prompt prefix you send again</td><td>The provider's or your serving stack's GPU or host memory</td><td>Minutes (Anthropic's default is 5), then evicted</td></tr>
+</tbody></table></div>
+<p><strong>So is the context window the KV cache?</strong> No, but they are tied together. The model is stateless: on every call you resend the whole messages list, the server runs it through the model, and the <a href="llm-serving.html#kv">KV cache</a> holds a key and value vector for every token in every layer so each new output token costs one step instead of re-reading the prompt. The KV cache is how the window is held on the GPU <em>during</em> a request, and it grows linearly with the tokens in the window: about 128 KiB per token for Llama 3.1 8B in FP16, so a full 128k-token window needs about 16 GiB. That is why the window has a limit at all, and why long contexts cost more. Prompt caching keeps the KV for a repeated prefix (system prompt, tools, earlier turns) so the next call skips recomputing it; it saves time and money but changes nothing about what the model can remember.</p>
+<div class="formula">tokens per call = system + tools + all kept turns + tool results + output ≤ window
+KV bytes ≈ tokens × 2 × layers × KV heads × head dim × bytes per value</div>
+<h3>Try it: fill the window</h3>
+<div class="lab" id="cwlab">
+  <div class="lab-row">
+    <label for="cw-turns">Turns so far <input type="range" id="cw-turns" min="1" max="120" value="30"><output id="cw-turns-o"></output></label>
+    <label for="cw-tool">Tool-result tokens per turn <input type="range" id="cw-tool" min="0" max="8000" step="250" value="2000"><output id="cw-tool-o"></output></label>
+  </div>
+  <div class="lab-row"><span class="lab-k">Window</span><span class="seg" role="group" aria-label="Context window">
+    <button data-win="32000" aria-pressed="false">32k</button><button data-win="128000" aria-pressed="true">128k</button><button data-win="200000" aria-pressed="false">200k</button></span>
+    <label for="cw-sum"><input type="checkbox" id="cw-sum"> Summarise all but the last 10 turns</label></div>
+  <div class="cw-bar" aria-hidden="true"><i id="cw-fill"></i></div>
+  <div class="metrics" id="cw-m"></div>
+  <p class="lab-out" id="cw-out"></p>
+</div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Illustrative: 3,000 tokens of system prompt and tools, 400 tokens per user and assistant turn, 1,000 reserved for the reply, a 1,500-token running summary, and the Llama 3.1 8B KV size above. Real tokenizers and models differ.</p>
+<p>When the list outgrows the window, the API rejects the call, or a harness silently drops the oldest turns. Manage it on purpose: keep recent turns in full, replace older ones with a running summary, store big tool results outside the context and keep a reference, and move durable facts to <a href="#types">profile or episodic memory</a>. In a <a href="multi-agent.html#state">multi-agent system</a>, each worker has its own window, which is the main reason to split work across agents.</p></section>
+<section id="durable"><h2>Surviving restarts: checkpointers</h2>
+<p class="lead">Short-term memory has to outlive the process holding it. Save the agent's state after every step to a store outside the pod, name each conversation with a thread id, and any pod can resume it. This is called durable execution.</p>
+<p>An agent turn can take many steps: call the model, run a tool, call the model again. If the pod crashes, is redeployed or scales down mid-turn, state kept only in memory is gone, and the user starts over. A <strong>checkpointer</strong> saves the full graph state (messages, tool results, the current step) after every step. A <strong>thread id</strong>, such as <code>user-4471</code>, names the conversation so any process can load its latest checkpoint.</p>
+<figure class="fig3d" id="restart3d">
+<div class="stage3d" role="img" aria-label="Three conversation steps run on pod 1, the pod restarts, and the conversation resumes or is lost depending on where state was saved"><p class="hint3">3D · drag to turn · the restart replays</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN.</p></div>
+<div class="ctl3"><span class="k">Checkpointer</span><button data-cp="memory" aria-pressed="true">In memory</button><button data-cp="sqlite" aria-pressed="false">SQLite file</button><button data-cp="postgres" aria-pressed="false">Postgres or Redis</button></div>
+<div class="ctl3"><span class="k">Deployment</span><button data-dep="one" aria-pressed="true">One pod</button><button data-dep="fleet" aria-pressed="false">Three pods behind a load balancer</button><button data-thread aria-pressed="true">thread_id: on</button></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>Coloured cubes are the conversation's steps. Steps 1 to 3 run on pod 1, then pod 1 restarts. Watch whether steps 1 to 3 come back for step 4, or vanish and turn the rest red.</figcaption>
+</figure>
+<h3>In LangGraph</h3>
+<p>LangChain's prebuilt agent, <code>create_agent</code> from <code>langchain.agents</code>, builds a model-plus-tools agent that runs on LangGraph and takes a checkpointer directly. The older <code>create_react_agent</code> from <code>langgraph.prebuilt</code> is deprecated.</p>
+<pre><code>from langchain.agents import create_agent
+from langgraph.checkpoint.postgres import PostgresSaver
+
+with PostgresSaver.from_conn_string(DB_URL) as checkpointer:
+    checkpointer.setup()                       # creates the checkpoint tables once
+    agent = create_agent(
+        model,
+        tools=[lookup_order, issue_refund],
+        checkpointer=checkpointer,             # state saved after every step
+    )
+    agent.invoke(
+        {"messages": [{"role": "user", "content": "Where is my order?"}]},
+        config={"configurable": {"thread_id": "user-4471"}},   # same id resumes
+    )</code></pre>
+<p>Call it again with the same <code>thread_id</code>, from any process that uses the same database, and the agent sees the whole conversation so far. The same checkpoints power human-in-the-loop pauses: the graph stops before a risky tool, and resumes when a person approves.</p>
+<h3>Choosing a checkpointer</h3>
+<p>Pick the cheapest store that meets your durability need.</p>
+<div class="table"><table><thead><tr><th>Checkpointer</th><th>Survives a restart?</th><th>Shared across pods?</th><th>Use for</th></tr></thead><tbody>
+<tr><td><code>InMemorySaver</code> (also <code>MemorySaver</code>)</td><td>No</td><td>No</td><td>Tests and notebooks only</td></tr>
+<tr><td><code>SqliteSaver</code>, <code>AsyncSqliteSaver</code></td><td>Yes</td><td>No: a local file</td><td>A single server or a local tool</td></tr>
+<tr><td><code>PostgresSaver</code>, <code>RedisSaver</code>, <code>AsyncMongoDBSaver</code></td><td>Yes</td><td>Yes</td><td>A fleet of replicas where any pod can resume any conversation</td></tr>
+</tbody></table></div>
+<h3>Async serving</h3>
+<p>A high-throughput agent server is almost always async, so one process can keep many model and tool calls in flight while it waits. Use the async checkpointer classes, whose methods are <code>aput</code>, <code>aget</code> and <code>alist</code> instead of <code>put</code>, <code>get</code> and <code>list</code>, and call the agent with <code>ainvoke</code> or <code>astream</code>.</p>
+<h3>Gotcha: async tool fan-out</h3>
+<p>When one model step asks for several tool calls, LangGraph's prebuilt <code>ToolNode</code> runs them differently depending on how you call it:</p>
+<ul class="plain">
+<li><strong>Sync</strong> (<code>invoke</code>): runs the calls in a thread pool that respects <code>max_concurrency</code> from the run config.</li>
+<li><strong>Async</strong> (<code>ainvoke</code>): starts every call at once with <code>asyncio.gather</code> and ignores <code>max_concurrency</code>.</li>
+</ul>
+<p>We confirmed this in the <code>langgraph-prebuilt</code> 1.1.1 source. So if a step requests ten tool calls that each hit your self-hosted model endpoint, all ten land together. That can spike the server's queue or trigger a cold scale-up. Bound the fan-out yourself:</p>
+<pre><code>import asyncio
+gpu_slots = asyncio.Semaphore(4)               # at most 4 concurrent calls to the endpoint
+
+async def summarize(doc: str) -> str:
+    async with gpu_slots:
+        return await llm.ainvoke(f"Summarize: {doc}")</code></pre>
+<p>Limiting how many tools the model may call in one step also helps.</p>
+</section><section id="write"><h2>Write path: what to keep</h2>
 <div class="table"><table><thead><tr><th>Decision</th><th>Default</th></tr></thead><tbody>
 <tr><td>When</td><td>At session end, asynchronously, not on every turn. An explicit "remember that…" writes immediately.</td></tr>
 <tr><td>What</td><td>A small model extracts stable preferences, unresolved issues and outcomes. Skip one-off chatter, secrets and anything the user did not state about themselves.</td></tr>
@@ -214,6 +394,48 @@
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
 
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { mountRestart } from '../assets/gpu3d.js';
+mountRestart(document.getElementById('restart3d'));
+</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var win = 128000, SYS = 3000, TURN = 400, OUT = 1000, SUM = 1500, KV = 128 * 1024, KEEP = 10;
+  function k(n) { return n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n); }
+  function m(n, l, s) { return '<div class="metric"><span class="n">' + n + '</span><span class="l">' + l + '</span>' + (s ? '<small>' + s + '</small>' : '') + '</div>'; }
+  function run() {
+    var t = +$('cw-turns').value, tool = +$('cw-tool').value, sum = $('cw-sum').checked;
+    $('cw-turns-o').textContent = t; $('cw-tool-o').textContent = k(tool);
+    var kept = sum ? Math.min(t, KEEP) : t;
+    var tokens = SYS + kept * (TURN + tool) + (sum && t > KEEP ? SUM : 0) + OUT;
+    var pct = tokens / win * 100, gib = tokens * KV / Math.pow(1024, 3);
+    var fill = $('cw-fill'); fill.style.width = Math.min(100, pct) + '%'; fill.className = pct > 100 ? 'over' : pct > 80 ? 'warn' : '';
+    $('cw-m').innerHTML = m(k(tokens), 'Tokens per call', Math.round(pct) + '% of ' + k(win)) + m(gib.toFixed(1) + ' GiB', 'KV cache for this call', 'on the serving GPU') + m(kept + (sum && t > KEEP ? ' + summary' : ''), 'Turns sent in full');
+    var o;
+    if (pct > 100) o = '<strong>Over the window.</strong> The API rejects this call, or the harness drops the oldest turns without telling the model. ' + (sum ? 'Cut tool results down or store them outside the context.' : 'Summarise older turns.');
+    else if (pct > 80) o = '<strong>Nearly full.</strong> Quality drops before the hard limit as early details get less attention. Summarise or offload tool results now.';
+    else o = '<strong>Fits.</strong> Every call still resends all ' + k(tokens) + ' tokens; prompt caching makes the repeated prefix cheaper, not smaller.';
+    $('cw-out').innerHTML = o;
+  }
+  ['cw-turns', 'cw-tool', 'cw-sum'].forEach(function (id) { $(id).addEventListener('input', run); });
+  document.querySelectorAll('#cwlab [data-win]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#cwlab [data-win]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      win = +b.getAttribute('data-win'); run();
+    });
+  });
+  run();
+})();
+</script>
 <script src="progress.js"></script>
 </body>
 </html>
