@@ -1,0 +1,147 @@
+{
+  "title": "ML basics in 15 minutes",
+  "page": "ml-basics.html",
+  "cards": [
+    {
+      "front": "Supervised vs unsupervised",
+      "back": "Supervised learns from past examples with the right answer (labels) and predicts something specific. Unsupervised finds structure in data with no labels.",
+      "link": "ml-basics.html#map"
+    },
+    {
+      "front": "Regression vs classification",
+      "back": "Regression predicts a number, like delivery time. Classification predicts a category, like spam or not.",
+      "link": "ml-basics.html#supervised"
+    },
+    {
+      "front": "Choosing a classifier threshold",
+      "back": "Lower it to catch more cases (higher recall, more false alarms); raise it to be surer (higher precision, more misses). Pick it from the cost of each mistake.",
+      "link": "ml-basics.html#score"
+    },
+    {
+      "front": "Random forest vs gradient-boosted trees",
+      "back": "A forest trains hundreds of trees on random rows and features and lets them vote. Boosting builds trees one after another, each fixing the previous errors, and is usually most accurate on tabular data.",
+      "link": "ml-basics.html#trees"
+    },
+    {
+      "front": "k-means vs HDBSCAN",
+      "back": "k-means needs you to choose the number of clusters. HDBSCAN finds the number itself and leaves outliers out.",
+      "link": "ml-basics.html#unsupervised"
+    },
+    {
+      "front": "Overfitting vs underfitting",
+      "back": "Overfitting is great on training data and poor on new data, because the model memorised. Underfitting is poor on both, because the model is too simple.",
+      "link": "ml-basics.html#training"
+    },
+    {
+      "front": "Leakage",
+      "back": "A feature that would not be known at prediction time, such as account closed date for churn. Results look great offline and fail in production.",
+      "link": "ml-basics.html#training"
+    },
+    {
+      "front": "ROC-AUC vs PR-AUC",
+      "back": "ROC-AUC measures how well scores separate classes across thresholds (0.5 random, 1.0 perfect). PR-AUC is better when positives are rare.",
+      "link": "ml-basics.html#eval"
+    },
+    {
+      "front": "Cohen's kappa",
+      "back": "Agreement between two raters labelling the same items; about 0.7 or more is good. Low agreement means unclear guidelines.",
+      "link": "ml-basics.html#labels"
+    },
+    {
+      "front": "Cold start",
+      "back": "A new user or item has no history. Fall back to content features, popular or rule-based defaults, or a zero-shot LLM, then switch to the learned model as data builds up.",
+      "link": "ml-basics.html#labels"
+    },
+    {
+      "front": "Data drift vs concept drift",
+      "back": "Data drift: the inputs change. Concept drift: the same input now means something else. Detect data drift from feature distributions and concept drift from performance on fresh labels.",
+      "link": "ml-basics.html#monitor"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Fraud is 2% of transactions. A model scores 98% accuracy. What's wrong with reporting that?",
+      "choices": [
+        "Nothing; 98% is excellent",
+        "Predicting \"not fraud\" every time also scores 98%",
+        "Accuracy can't be computed on imbalanced data",
+        "It should be reported as RMSE"
+      ],
+      "answer": 1,
+      "why": "With class imbalance, judge by precision, recall or PR-AUC, not accuracy.",
+      "link": "ml-basics.html#training"
+    },
+    {
+      "q": "Missing fraud is very expensive. How should you set the threshold?",
+      "choices": [
+        "Low, to raise recall",
+        "High, to raise precision",
+        "Exactly 0.5",
+        "It doesn't matter if AUC is high"
+      ],
+      "answer": 0,
+      "why": "A low threshold catches more cases at the cost of more false alarms.",
+      "link": "ml-basics.html#score"
+    },
+    {
+      "q": "You want to discover new complaint topics in app reviews with no labels. What do you do?",
+      "choices": [
+        "Train a logistic regression",
+        "Use gradient-boosted trees",
+        "Embed the reviews and cluster them",
+        "Compute RMSE"
+      ],
+      "answer": 2,
+      "why": "Clustering embeddings finds groups; an LLM can then name each cluster.",
+      "link": "ml-basics.html#unsupervised"
+    },
+    {
+      "q": "After a pricing change, \"too expensive\" reviews mean something new and accuracy on fresh labels drops. What is this?",
+      "choices": [
+        "Data drift",
+        "Leakage",
+        "Underfitting",
+        "Concept drift"
+      ],
+      "answer": 3,
+      "why": "The relationship between input and label changed, which is concept drift.",
+      "link": "ml-basics.html#monitor"
+    },
+    {
+      "q": "Which is the best first model for churn prediction on tabular features?",
+      "choices": [
+        "A large LLM",
+        "Gradient-boosted trees or a random forest",
+        "k-means",
+        "PCA"
+      ],
+      "answer": 1,
+      "why": "Tabular data with labels points to trees, compared against a baseline.",
+      "link": "ml-basics.html#trees"
+    },
+    {
+      "q": "You're predicting next quarter's sales. How should you split the data?",
+      "choices": [
+        "Randomly",
+        "By customer name",
+        "By time",
+        "No split; use cross-validation only"
+      ],
+      "answer": 2,
+      "why": "Split by time when predicting the future, so the test set really is unseen.",
+      "link": "ml-basics.html#training"
+    },
+    {
+      "q": "Text with fixed labels at very high volume. What's the usual setup?",
+      "choices": [
+        "Send every request to a large LLM",
+        "Rules only",
+        "An agent with tools",
+        "A small classifier on embeddings, with the LLM for low-confidence cases"
+      ],
+      "answer": 3,
+      "why": "Often the classifier is trained on LLM-made labels (distillation).",
+      "link": "ml-basics.html#llm"
+    }
+  ]
+}

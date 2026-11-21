@@ -1,0 +1,130 @@
+{
+  "title": "Batching: static, dynamic and in-flight",
+  "page": "batching.html",
+  "cards": [
+    {
+      "front": "Why batching is almost free",
+      "back": "For each token the GPU reads every weight from memory. Serving 16 requests in one pass reads the same weights, and the extra maths is cheap, so throughput rises many times over.",
+      "link": "batching.html#why"
+    },
+    {
+      "front": "The core batching design question",
+      "back": "When may a waiting request join a batch? Static, dynamic and in-flight batching give three different answers.",
+      "link": "batching.html#why"
+    },
+    {
+      "front": "Static batching",
+      "back": "Collect a fixed number of requests, run them together and return everything when the last one finishes. Good for offline jobs, bad for live traffic.",
+      "link": "batching.html#static"
+    },
+    {
+      "front": "Reducing waste in static batches",
+      "back": "Wasted slots grow with the spread of lengths in a batch, so sort the job by length before batching.",
+      "link": "batching.html#static"
+    },
+    {
+      "front": "Provider batch API vs GPU batching",
+      "back": "A provider's batch API is a job queue at about half price for jobs that can wait up to a day; the provider still schedules the GPUs however it likes.",
+      "link": "batching.html#static"
+    },
+    {
+      "front": "Dynamic batching",
+      "back": "Wait a short set time after the first request, gather others, then run what you have; run early if the batch fills. Suits fixed-size work like embedders and rerankers.",
+      "link": "batching.html#dynamic"
+    },
+    {
+      "front": "Dynamic batching's knob",
+      "back": "The maximum wait, usually a few milliseconds or less. Longer waits form bigger batches but add up to that wait to every request.",
+      "link": "batching.html#dynamic"
+    },
+    {
+      "front": "In-flight (continuous) batching",
+      "back": "Schedules one generation step at a time: after every step finished requests leave and queued ones take their slots, so short answers don't wait for long ones.",
+      "link": "batching.html#inflight"
+    },
+    {
+      "front": "Chunked prefill",
+      "back": "Long prompts are processed in chunks so one big prefill doesn't stall everyone else's next token.",
+      "link": "batching.html#inflight"
+    },
+    {
+      "front": "What usually caps the batch size?",
+      "back": "KV cache memory, not compute: every active request holds its context there. Quantizing weights or the KV cache frees room for more requests.",
+      "link": "batching.html#limits"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "You need to score a million documents overnight. Which scheduler fits?",
+      "choices": [
+        "Static batching",
+        "Dynamic batching",
+        "In-flight batching",
+        "No batching"
+      ],
+      "answer": 0,
+      "why": "Static batching suits offline jobs where everything is available up front and no user is waiting.",
+      "link": "batching.html#static"
+    },
+    {
+      "q": "Why is dynamic batching a poor fit for LLM generation?",
+      "choices": [
+        "It cannot use GPUs",
+        "It never waits for a batch to fill",
+        "Requests finish at different steps, so the batch waits for its longest answer",
+        "It needs a paged KV cache"
+      ],
+      "answer": 2,
+      "why": "Like static batching, a dynamic batch still holds slots until its longest answer ends.",
+      "link": "batching.html#dynamic"
+    },
+    {
+      "q": "In-flight batching depends on which piece of memory management?",
+      "choices": [
+        "Weight-only quantization",
+        "A paged KV cache",
+        "Pipeline parallelism",
+        "A provider batch API"
+      ],
+      "answer": 1,
+      "why": "Requests join and leave every step, so the KV cache must grow and free per request without fragmenting memory.",
+      "link": "batching.html#inflight"
+    },
+    {
+      "q": "A RAG agent has an embedder, a reranker and an LLM. What's the usual setup?",
+      "choices": [
+        "Static batching for all three",
+        "In-flight for all three",
+        "Dynamic for the LLM, in-flight for the embedder",
+        "Dynamic for embedder and reranker, in-flight for the LLM"
+      ],
+      "answer": 3,
+      "why": "One system often uses two schedulers: dynamic for fixed-size models and in-flight for generation.",
+      "link": "batching.html#choose"
+    },
+    {
+      "q": "A few long-context requests slow down every user's next token. What helps?",
+      "choices": [
+        "Chunked prefill",
+        "A longer dynamic wait",
+        "Static batching",
+        "Sorting by length"
+      ],
+      "answer": 0,
+      "why": "Long prompts make prefill heavy; chunking it keeps decode steps flowing for everyone else.",
+      "link": "batching.html#limits"
+    },
+    {
+      "q": "Raising the dynamic batching max wait from 2 ms to 20 ms mostly does what?",
+      "choices": [
+        "Cuts latency for every request",
+        "Forms bigger batches but adds up to 20 ms per request",
+        "Lets requests join mid-batch",
+        "Frees KV cache memory"
+      ],
+      "answer": 1,
+      "why": "A longer wait trades added latency for bigger batches and more throughput.",
+      "link": "batching.html#dynamic"
+    }
+  ]
+}

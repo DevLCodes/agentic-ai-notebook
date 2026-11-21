@@ -208,6 +208,8 @@
   .rm-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: inline-block; position: relative; }
   .rm-item.v { border-color: var(--accent); }
   .rm-item.v .rm-check { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 3px, transparent 3.5px); }
+  .rm-item.q { border-color: var(--accent); }
+  .rm-item.q .rm-check { border-color: var(--accent); background: var(--accent); }
   .rm-item.d { border-color: var(--c-ok); background: #eef7f1; }
   .rm-item.d .rm-check { border-color: var(--c-ok); background: var(--c-ok); }
   .rm-item.d .rm-check::after { content: ""; position: absolute; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
@@ -299,9 +301,9 @@
   <section class="rm" id="roadmap" style="margin-top:0" aria-labelledby="rm-title">
     <div class="rm-head"><h2 id="rm-title">Your roadmap</h2><span class="rm-overall" id="rm-overall">0 of 0 done</span></div>
     <div class="rm-bar" role="progressbar" aria-labelledby="rm-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="rm-bar"><span></span></div>
-    <div class="rm-tools"><a class="rm-next" id="rm-next" href="knowledge-base.html">Start: Knowledge base →</a><p class="rm-note">Pages you open are marked visited. Tick the circle when you have finished one.</p><button type="button" class="rm-reset" id="rm-reset">Reset progress</button></div>
+    <div class="rm-tools"><a class="rm-next" id="rm-next" href="knowledge-base.html">Start: Knowledge base →</a><p class="rm-note">Pages you open are marked visited. Finishing a page's Check yourself marks it quizzed. Tick the circle when you have finished one.</p><button type="button" class="rm-reset" id="rm-reset">Reset progress</button></div>
     <ol class="rm-stages" id="rm-stages"></ol>
-    <ul class="rm-legend" aria-hidden="true"><li><span class="rm-item"><span class="rm-check"></span></span>Not started</li><li><span class="rm-item v"><span class="rm-check"></span></span>Visited</li><li><span class="rm-item d"><span class="rm-check"></span></span>Done</li></ul>
+    <ul class="rm-legend" aria-hidden="true"><li><span class="rm-item"><span class="rm-check"></span></span>Not started</li><li><span class="rm-item v"><span class="rm-check"></span></span>Visited</li><li><span class="rm-item q"><span class="rm-check"></span></span>Quizzed</li><li><span class="rm-item d"><span class="rm-check"></span></span>Done</li></ul>
     <p class="rm-note" style="margin-top:10px">Progress is saved in a cookie in this browser only. Nothing is sent anywhere.</p>
   </section>
   </div>
@@ -330,7 +332,7 @@
   ];
   var P = window.ASDProgress, list = document.getElementById('rm-stages');
   if (!P || !list) return;
-  var LABEL = { '': 'not started', v: 'visited', d: 'done' };
+  var LABEL = { '': 'not started', v: 'visited', q: 'quizzed', d: 'done' };
 
   function render() {
     var state = P.all(), total = 0, done = 0, next = null;

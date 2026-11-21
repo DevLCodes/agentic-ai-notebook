@@ -1,0 +1,147 @@
+{
+  "title": "Quantization",
+  "page": "quantization.html",
+  "cards": [
+    {
+      "front": "Quantization in one line",
+      "back": "Store each weight as the nearest mark on a coarser ruler, so it takes fewer bits: a smaller, faster model at a rounding cost you measure.",
+      "link": "quantization.html#idea"
+    },
+    {
+      "front": "Why low-bit weights still work",
+      "back": "Each output adds up thousands of weights so small errors partly cancel, and most weights sit close to zero where a good ruler covers them finely.",
+      "link": "quantization.html#idea"
+    },
+    {
+      "front": "Why one outlier hurts",
+      "back": "A single large weight stretches a shared scale so small weights round to zero. Real 4-bit methods use a scale per group of 64 to 128 weights.",
+      "link": "quantization.html#lab"
+    },
+    {
+      "front": "Symmetric round-to-nearest",
+      "back": "scale = max|w| / 127 (or 7 for 4-bit), q = round(w / scale), and at run time w′ = q × scale.",
+      "link": "quantization.html#how"
+    },
+    {
+      "front": "Why a \"4-bit\" model uses more than 4 bits",
+      "back": "Each group stores a 16-bit scale; with groups of 128 that adds about 0.13 bits, so 4-bit models use about 4.1 to 4.5 bits per weight.",
+      "link": "quantization.html#how"
+    },
+    {
+      "front": "Why quantization makes decoding faster",
+      "back": "Each token reads every weight from memory and reading is the slow part, so halving the bytes nearly doubles single-user speed and frees room for KV cache.",
+      "link": "quantization.html#why"
+    },
+    {
+      "front": "FP8 (E4M3)",
+      "back": "An 8-bit float with 4 exponent and 3 mantissa bits. Its marks are dense near zero, which suits weights; used for weights, activations and KV cache on GPUs that support it.",
+      "link": "quantization.html#formats"
+    },
+    {
+      "front": "W4A16",
+      "back": "4-bit weights with 16-bit activations: weight-only quantization, the lowest-risk option because the maths still runs in 16-bit.",
+      "link": "quantization.html#what"
+    },
+    {
+      "front": "GPTQ vs AWQ",
+      "back": "GPTQ quantizes weights one at a time and adjusts the rest to cancel the error. AWQ finds the weights that matter most from activations and protects them with per-channel scaling.",
+      "link": "quantization.html#methods"
+    },
+    {
+      "front": "Post-training quantization (PTQ)",
+      "back": "Every method except QAT: runs on a finished model in minutes to hours with at most a few hundred calibration examples.",
+      "link": "quantization.html#methods"
+    },
+    {
+      "front": "Quantization rule of thumb",
+      "back": "8-bit is close to lossless for most tasks, 4-bit with GPTQ or AWQ loses a little (more on small models), and below 4 bits quality drops quickly.",
+      "link": "quantization.html#quality"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "In 8-bit symmetric quantization, the group's largest weight is 0.98. What is the scale?",
+      "choices": [
+        "0.98 / 7",
+        "0.98 / 127",
+        "0.98 × 127",
+        "0.98 / 255"
+      ],
+      "answer": 1,
+      "why": "The scale is max|w| divided by the largest 8-bit integer, 127, giving 0.00772.",
+      "link": "quantization.html#how"
+    },
+    {
+      "q": "Many users with long contexts are filling the GPU. What do you quantize first?",
+      "choices": [
+        "The KV cache",
+        "Activations only",
+        "Nothing; switch to 2-bit weights",
+        "The embedding table"
+      ],
+      "answer": 0,
+      "why": "KV cache quantization saves memory per token of context, so more users or longer contexts fit.",
+      "link": "quantization.html#when"
+    },
+    {
+      "q": "Which tasks tend to break first after quantization?",
+      "choices": [
+        "Short factual lookups",
+        "Simple classification",
+        "Maths, long contexts, code and strict formats",
+        "Greeting messages"
+      ],
+      "answer": 2,
+      "why": "Multi-step reasoning, long contexts, code, non-English text and strict output formats are the fragile cases.",
+      "link": "quantization.html#quality"
+    },
+    {
+      "q": "Which method moves outliers from activations into weights so both fit in 8 bits?",
+      "choices": [
+        "GPTQ",
+        "AWQ",
+        "Round-to-nearest",
+        "SmoothQuant"
+      ],
+      "answer": 3,
+      "why": "SmoothQuant enables W8A8 by shifting activation outliers into the weights.",
+      "link": "quantization.html#methods"
+    },
+    {
+      "q": "You must run a large model on one GPU or a laptop. What do you choose?",
+      "choices": [
+        "FP32",
+        "4-bit weights (AWQ, GPTQ or GGUF Q4)",
+        "BF16 with tensor parallelism",
+        "FP8 KV cache only"
+      ],
+      "answer": 1,
+      "why": "4-bit weights cut memory to about a quarter of BF16.",
+      "link": "quantization.html#when"
+    },
+    {
+      "q": "Quality must not move at all. What's the right call?",
+      "choices": [
+        "Stay at 16-bit and add GPUs or use a smaller model",
+        "FP8 with careful scaling",
+        "AWQ 4-bit",
+        "Quantization-aware training"
+      ],
+      "answer": 0,
+      "why": "Every quantization has some quality cost, so stay at 16-bit if nothing may change.",
+      "link": "quantization.html#when"
+    },
+    {
+      "q": "Why do weights-and-activations formats like W8A8 need careful scaling?",
+      "choices": [
+        "Weights have no zero point",
+        "Activations have outliers",
+        "Tensor cores need 16-bit inputs",
+        "Scales cannot be stored per group"
+      ],
+      "answer": 1,
+      "why": "Activation outliers stretch the scale, so W8A8 and FP8 need care that weight-only does not.",
+      "link": "quantization.html#what"
+    }
+  ]
+}

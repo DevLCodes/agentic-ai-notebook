@@ -227,7 +227,7 @@
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Reasoning and planning patterns</h1><p class="lead">Five ways an agent gets from goal to answer (CoT, ReAct, tree of thoughts, plan-and-execute, reflection), plus expected value for decisions under uncertainty.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#lab">See them think</a></li><li><a href="#cot">Chain-of-thought</a></li><li><a href="#react">ReAct</a></li><li><a href="#tot">Tree of thoughts</a></li><li><a href="#plan">Plan-and-execute</a></li><li><a href="#reflect">Reflection and re-planning</a></li><li><a href="#uncertainty">Reasoning under uncertainty</a></li><li><a href="#choose">Which one to choose</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#lab">See them think</a></li><li><a href="#cot">Chain-of-thought</a></li><li><a href="#react">ReAct</a></li><li><a href="#tot">Tree of thoughts</a></li><li><a href="#search">Heuristic search</a></li><li><a href="#plan">Plan-and-execute</a></li><li><a href="#reflect">Reflection and re-planning</a></li><li><a href="#uncertainty">Reasoning under uncertainty</a></li><li><a href="#choose">Which one to choose</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="glance"><h2>At a glance</h2>
 <div class="table"><table><thead><tr><th>Pattern</th><th>Shape</th><th>LLM calls</th><th>Best at</th><th>Weak at</th></tr></thead><tbody>
 <tr><td><strong>Chain-of-thought</strong></td><td>Straight line of steps</td><td>1</td><td>Maths, logic, multi-step answers from facts already in the prompt</td><td>Facts it doesn't know; one bad step spoils the rest</td></tr>
@@ -290,13 +290,55 @@ Answer: Hold: billed 40, received 35.</code></pre>
 </ul></section>
 
 <section id="tot"><h2>Tree of thoughts</h2>
-<p><strong>Explore several chains:</strong> propose candidate next thoughts → evaluator scores partial solutions → search (BFS, DFS or beam) keeps good branches and backtracks from dead ends.</p>
+<p><strong>Explore several chains:</strong> propose candidate next thoughts → evaluator scores partial solutions → search (BFS, DFS or beam) keeps good branches and backtracks from dead ends. <a href="#search">Heuristic search</a> below shows how it picks a branch.</p>
 <figure class="fig"><svg viewBox="0 0 640 210" class="dg" role="img" aria-label="Tree of thoughts: branches scored, weak ones pruned, the best path kept"><rect x="250" y="8" width="80" height="32" rx="8" class="k-user"/><text x="290" y="29" class="small" text-anchor="middle">Goal</text><path d="M290 40 L110 76" class="wire"/><path d="M290 40 L290 76" class="wire hot"/><path d="M290 40 L470 76" class="wire"/><rect x="70" y="76" width="80" height="32" rx="8" class="k-dlq"/><text x="110" y="97" class="small" text-anchor="middle">A · 0.2</text><path d="M154 86 L166 98 M166 86 L154 98" class="xmark"/><rect x="250" y="76" width="80" height="32" rx="8" class="k-model"/><text x="290" y="97" class="small" text-anchor="middle">B · 0.8</text><rect x="430" y="76" width="80" height="32" rx="8" class="k-model"/><text x="470" y="97" class="small" text-anchor="middle">C · 0.6</text><path d="M290 108 L210 144" class="wire hot"/><path d="M290 108 L370 144" class="wire"/><path d="M470 108 L520 144" class="wire"/><rect x="170" y="144" width="80" height="32" rx="8" class="k-ingest"/><text x="210" y="165" class="small" text-anchor="middle">B1 · 0.9 ✓</text><rect x="330" y="144" width="80" height="32" rx="8" class="k-dlq"/><text x="370" y="165" class="small" text-anchor="middle">B2 · 0.3</text><path d="M414 154 L426 166 M426 154 L414 166" class="xmark"/><rect x="480" y="144" width="80" height="32" rx="8" class="k-dlq"/><text x="520" y="165" class="small" text-anchor="middle">C1 · dead end</text><text x="10" y="200" class="sm">propose candidates → score partial solutions → prune weak (red) → backtrack from dead ends · calls ≈ branches × depth</text><text x="40" y="160" class="cap">depth 2</text></svg><figcaption>Branch, score, prune, backtrack. The highlighted path wins; red branches were cut.</figcaption></figure>
 <ul class="plain">
 <li><strong>Evidence:</strong> Game of 24, GPT-4: CoT 4% → ToT 74% (Yao et al., 2023).</li>
 <li><strong>Use when:</strong> an early wrong choice ruins everything and partial progress can be scored: puzzles, constraint solving, scheduling.</li>
 <li><strong>Watch out:</strong> branches × depth calls; rarely worth it for ordinary questions or tool tasks.</li>
 </ul></section>
+
+<section id="search"><h2>Heuristic search: how the tree picks a branch</h2>
+<p class="lead">You can't afford to expand every branch, so you guess which ones are closest to an answer and expand those first. That guess is the heuristic.</p>
+<p>A sat-nav doesn't try every road in the country. It prefers roads that point towards the destination, because "straight-line distance left" is a cheap, decent guess. Tree of thoughts works the same way. Some terms:</p>
+<ul class="plain">
+<li><strong>Node:</strong> one partial solution, such as "4 + 6 = 10, numbers left: 10, 2, 7".</li>
+<li><strong>Expand:</strong> ask the model for the next few thoughts from a node. Each expansion costs model calls.</li>
+<li><strong>Frontier:</strong> the nodes found so far but not yet expanded.</li>
+<li><strong>Heuristic, h(n):</strong> a score for how promising node n looks. A model prompted to rate it ("sure, likely or impossible to reach 24", as in the tree of thoughts paper), or code: tests passed, constraints met.</li>
+<li><strong>Cost so far, g(n):</strong> what reaching n has already cost, such as steps or tokens.</li>
+</ul>
+<p>The search strategy decides which frontier node to expand next. The heuristic decides how good that choice is.</p>
+
+<h3>Try it: search a tree of thoughts</h3>
+<p>Three candidate thoughts at each step, three steps deep, one answer among 27 endings. Each scored thought is one model call. Switch the scorer to misleading: it rates the wrong first step highest.</p>
+<div class="lab" id="hslab">
+  <div class="lab-row"><span class="lab-k">Strategy</span><span class="seg" role="group" aria-label="Search strategy">
+    <button data-hs="greedy" aria-pressed="true">Greedy</button><button data-hs="beam" aria-pressed="false">Beam, width 2</button><button data-hs="best" aria-pressed="false">Best-first</button><button data-hs="bfs" aria-pressed="false">Breadth-first</button></span></div>
+  <div class="lab-row"><span class="lab-k">Scorer</span><span class="seg" role="group" aria-label="Heuristic quality">
+    <button data-hq="good" aria-pressed="true">Good</button><button data-hq="bad" aria-pressed="false">Misleading</button></span></div>
+  <div class="fig" style="margin:0"><svg id="hs-svg" class="dg" viewBox="0 0 722 200" role="img" aria-label="A tree of thoughts, showing which thoughts the chosen search scored and expanded, and whether it reached the answer"></svg></div>
+  <p class="lab-out" id="hs-out" aria-live="polite"></p>
+</div>
+
+<h3>The strategies</h3>
+<div class="table"><table><thead><tr><th>Strategy</th><th>Expands next</th><th>Cost</th><th>Fails when</th></tr></thead><tbody>
+<tr><td>Greedy</td><td>The best child of the current node only; never goes back. ReAct behaves this way.</td><td>Lowest: branches × depth</td><td>One wrong score early, and it is stuck in a dead branch</td></tr>
+<tr><td>Beam search, width k</td><td>The k best nodes at each level</td><td>About k times greedy</td><td>The right branch ranks below k at some level. Width is the knob: wider costs more and fails less</td></tr>
+<tr><td>Best-first</td><td>The best-scoring node anywhere on the frontier, so it backtracks on its own</td><td>Low with a good scorer; grows as the scorer gets worse</td><td>The scorer is poor, and it wanders through many promising-looking dead ends</td></tr>
+<tr><td>A*</td><td>Best-first on g(n) + h(n): cost so far plus estimated cost left</td><td>Like best-first</td><td>Same as best-first. It prefers short plans</td></tr>
+<tr><td>Breadth-first, depth-first</td><td>Ignore the score: every node level by level, or one branch to the bottom and back</td><td>Highest; breadth-first grows as branches<sup>depth</sup></td><td>The tree is big: 5 options per step for 6 steps is 19,530 nodes</td></tr>
+<tr><td>Monte Carlo tree search (MCTS)</td><td>A node that balances a high average result with being rarely tried; plays it out to the end and feeds the result back up the tree</td><td>Many full playouts</td><td>There is no end result to score. LATS (Zhou et al., 2023) uses it for agents, with real tool results and self-reflection as the signal</td></tr>
+</tbody></table></div>
+<p>A* is guaranteed to find the cheapest path only if h never overestimates the cost left. A model's score gives no such guarantee, so with LLMs treat A* as "best-first that prefers short plans", not as optimal.</p>
+
+<h3>The search is only as good as the scorer</h3>
+<ul class="plain">
+<li><strong>Prefer a real check:</strong> tests that pass, a constraint solver, a calculator, a schema. They're cheap per call and they don't flatter.</li>
+<li><strong>If the model scores,</strong> ask for coarse labels (sure, likely, impossible) rather than 1 to 10, and take a vote of 2 or 3 samples. Models tend to rate their own ideas too kindly.</li>
+<li><strong>Cap the budget:</strong> a beam width of 2 to 5, a depth limit, a maximum number of expansions, and stop at the first answer that passes a real check.</li>
+</ul>
+<p>Decoders use beam search too, keeping the k most likely token sequences. It's the same algorithm with tokens as nodes and probability as the score.</p></section>
 
 <section id="plan"><h2>Plan-and-execute</h2>
 <p><strong>Split thinking from doing:</strong> a strong planner writes all steps once; a cheap executor (small model or code) runs them; the planner may write the final answer.</p>
@@ -358,7 +400,7 @@ Answer: Hold: billed 40, received 35.</code></pre>
 <div class="table"><table><thead><tr><th>Strategy</th><th>How it decides</th><th>Needs</th><th>Breaks when</th><th>Storm example</th></tr></thead><tbody>
 <tr><td><strong>Deductive</strong></td><td>Conclusions that must be true from rules + facts</td><td>Certain, complete facts</td><td>A fact is unknown or only likely</td><td>"Closed → reroute" never fires</td></tr>
 <tr><td><strong>Rule-based threshold</strong></td><td>If-then rules, fixed cutoffs</td><td>Stable conditions, good thresholds</td><td>Costs change, so the right cutoff moves</td><td>"Above 50%" keeps route at 40%: wrong</td></tr>
-<tr><td><strong>Heuristic search / pruning</strong></td><td>Rule of thumb scores options, drops weak ones (best-first, beam, A*)</td><td>Big option space, decent scoring guess</td><td>Bad guess, or it's one bet not a search</td><td>Two options: nothing to search</td></tr>
+<tr><td><strong><a href="#search">Heuristic search / pruning</a></strong></td><td>Rule of thumb scores options, drops weak ones (best-first, beam, A*)</td><td>Big option space, decent scoring guess</td><td>Bad guess, or it's one bet not a search</td><td>Two options: nothing to search</td></tr>
 <tr><td><strong>Probabilistic (decision-theoretic)</strong></td><td>Probability-weighted cost, best expected value</td><td>Probabilities and costs, even rough</td><td>Badly calibrated probabilities, or risk matters more than the average</td><td>$20k expected vs $12k → reroute ✓</td></tr>
 </tbody></table></div>
 <p>They combine: heuristic search shortlists routes, rules drop illegal ones, deduction where facts are certain, expected value picks among the rest.</p>
@@ -414,7 +456,7 @@ Answer: Hold: billed 40, received 35.</code></pre>
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names are examples, not endorsements.</p></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="agent-memory.html">Agent memory</a></li><li><a href="routing.html">Routing</a></li><li><a href="confidence-scoring.html">Confidence scoring</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#react">Glossary: ReAct</a></li></ul></section></article>
+<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="agent-memory.html">Agent memory</a></li><li><a href="routing.html">Routing</a></li><li><a href="confidence-scoring.html">Confidence scoring</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#react">Glossary: ReAct</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
@@ -509,6 +551,99 @@ mountReasoning(document.getElementById('reason3d'));
   [rp, rr].forEach(function (el) { el.addEventListener('input', rf); }); rf();
 })();
 </script>
+<script>
+(() => {
+  const root = document.getElementById('hslab');
+  if (!root) return;
+  const NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('hs-svg'), out = document.getElementById('hs-out');
+  const el = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; return n; };
+  const st = { s: 'greedy', q: 'good' };
+  const GOAL = '102';            // the one ending that works: second, first, third
+  const NAMES = { greedy: 'Greedy', beam: 'Beam, width 2', best: 'Best-first', bfs: 'Breadth-first' };
+  // scores for partial thoughts; endings are checked for real (1 = answer, 0 = dead end)
+  const SC = {
+    good: { '0': .5, '1': .9, '2': .2, '00': .3, '01': .2, '02': .1, '10': .85, '11': .4, '12': .3, '20': .2, '21': .1, '22': .1 },
+    bad:  { '0': .8, '1': .6, '2': .3, '00': .7, '01': .65, '02': .2, '10': .75, '11': .4, '12': .3, '20': .2, '21': .1, '22': .1 }
+  };
+  const kids = p => [p + '0', p + '1', p + '2'];
+  const score = (p, q) => p.length === 3 ? (p === GOAL ? 1 : 0) : SC[q][p];
+
+  function run(s, q) {
+    const scored = [], expanded = new Set(['']);
+    let found = false;
+    const take = list => { for (const c of list) { scored.push(c); if (c === GOAL) { found = true; return true; } } return false; };
+    const best = list => list.slice().sort((a, b) => score(b, q) - score(a, q));
+    if (s === 'greedy') {
+      let cur = '';
+      while (cur.length < 3) { const ks = kids(cur); if (take(ks)) break; if (cur.length === 2) break; cur = best(ks)[0]; expanded.add(cur); }
+    } else if (s === 'beam') {
+      let level = [''];
+      for (let d = 0; d < 3 && !found; d++) {
+        const next = [];
+        for (const p of level) { const ks = kids(p); next.push(...ks); if (take(ks)) break; }
+        if (found || d === 2) break;
+        level = best(next).slice(0, 2); level.forEach(p => expanded.add(p));
+      }
+    } else if (s === 'best') {
+      let frontier = [''];
+      while (frontier.length && !found) {
+        frontier = best(frontier); const p = frontier.shift(); expanded.add(p);
+        const ks = kids(p); if (take(ks)) break;
+        if (ks[0].length < 3) frontier.push(...ks);
+      }
+    } else {
+      let level = [''];
+      for (let d = 0; d < 3 && !found; d++) {
+        const next = []; for (const p of level) { expanded.add(p); const ks = kids(p); next.push(...ks); if (take(ks)) break; }
+        level = next;
+      }
+    }
+    return { scored, expanded, found };
+  }
+
+  // layout: leaves 26px apart, parents centred over their children
+  const pos = {};
+  for (let i = 0; i < 27; i++) { const p = i.toString(3).padStart(3, '0'); pos[p] = [22 + i * 26, 150]; }
+  for (const len of [2, 1, 0]) {
+    const all = len === 0 ? [''] : Array.from({ length: 3 ** len }, (_, i) => i.toString(3).padStart(len, '0'));
+    all.forEach(p => { const xs = kids(p).map(c => pos[c][0]); pos[p] = [(xs[0] + xs[2]) / 2, 24 + len * 42]; });
+  }
+  const NODES = Object.keys(pos);
+
+  function render() {
+    const r = run(st.s, st.q), seen = new Set(r.scored);
+    svg.textContent = '';
+    const onPath = p => r.found && GOAL.startsWith(p);
+    NODES.forEach(p => { if (!p) return; const par = p.slice(0, -1);
+      svg.appendChild(el('line', { x1: pos[par][0], y1: pos[par][1], x2: pos[p][0], y2: pos[p][1], class: 'wire', style: onPath(p) ? 'stroke:var(--c-ok);stroke-width:2.5' : seen.has(p) ? '' : 'opacity:.35' }));
+    });
+    NODES.forEach(p => {
+      const [x, y] = pos[p], leaf = p.length === 3;
+      let cls = 'k-user', op = seen.has(p) || !p ? 1 : .35;
+      if (!p || r.expanded.has(p)) cls = 'k-model';
+      else if (seen.has(p)) cls = leaf ? (p === GOAL ? 'k-ingest' : 'k-dlq') : 'k-kb';
+      svg.appendChild(el('circle', { cx: x, cy: y, r: leaf ? 7 : 10, class: cls, style: 'opacity:' + op }));
+      if (p && !leaf && seen.has(p)) svg.appendChild(el('text', { x, y: y + 24, class: 'sm', 'text-anchor': 'middle' }, score(p, st.q).toFixed(2).replace(/^0/, '')));
+    });
+    svg.appendChild(el('text', { x: pos[GOAL][0], y: 176, class: r.found ? 'okt' : 'sm', 'text-anchor': 'middle' }, 'answer'));
+    svg.appendChild(el('text', { x: 10, y: 196, class: 'sm' }, 'Purple: expanded. Blue: scored, not expanded. Red: checked, dead end. Green: the answer. Faded: never looked at.'));
+    const n = r.scored.length, g = run(st.s, 'good').scored.length;
+    let why;
+    if (st.s === 'bfs') why = 'It ignores the scores and checks every thought level by level. It always finds the answer, at the highest cost. With 5 options per step and 6 steps that would be 19,530 nodes.';
+    else if (st.q === 'good') why = st.s === 'greedy' ? 'A good scorer points the right way at every step, so one path is enough. This is the cheapest search.'
+      : st.s === 'beam' ? 'It also works, but keeps a second branch it turned out not to need. With a good scorer, width only adds cost.'
+      : 'With a good scorer the best node is always the right one, so it costs the same as greedy.';
+    else why = st.s === 'greedy' ? 'The scorer rated the wrong first step highest. Greedy never goes back, so it is stuck in a dead branch. ReAct fails the same way.'
+      : st.s === 'beam' ? 'The right first step was only second best, and a width of 2 kept it alive. A width of 1 is greedy and would have failed.'
+      : 'It followed the high scores into dead ends, then backtracked to the next-best thought anywhere in the tree. It found the answer, at ' + (n / g).toFixed(0) + '× the cost with a good scorer.';
+    out.textContent = NAMES[st.s] + ': ' + n + ' thoughts scored (one model call each), ' + (r.found ? 'answer found. ' : 'no answer. ') + why;
+  }
+  root.querySelectorAll('[data-hs]').forEach(b => b.addEventListener('click', () => { st.s = b.dataset.hs; root.querySelectorAll('[data-hs]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  root.querySelectorAll('[data-hq]').forEach(b => b.addEventListener('click', () => { st.q = b.dataset.hq; root.querySelectorAll('[data-hq]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  render();
+})();
+</script>
 <script src="progress.js"></script>
+<script src="check-yourself.js"></script>
 </body>
 </html>
