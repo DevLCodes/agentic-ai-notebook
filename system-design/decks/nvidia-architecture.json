@@ -1,0 +1,152 @@
+{
+  "title": "NVIDIA inference architecture",
+  "page": "nvidia-architecture.html",
+  "cards": [
+    {
+      "front": "NVIDIA stack in three layers",
+      "back": "NIM packages the model, Triton schedules requests, and TensorRT-LLM runs the maths on the GPUs, all on top of CUDA.",
+      "link": "nvidia-architecture.html#stack"
+    },
+    {
+      "front": "NIM",
+      "back": "A prebuilt container with a model, engines for several GPU types and precisions, and an OpenAI-compatible API. At start-up it detects the GPUs and picks a matching profile.",
+      "link": "nvidia-architecture.html#nim"
+    },
+    {
+      "front": "Why an OpenAI-compatible NIM helps agents",
+      "back": "Swapping a hosted model for a self-hosted one changes a base URL, not code.",
+      "link": "nvidia-architecture.html#nim"
+    },
+    {
+      "front": "Triton Inference Server",
+      "back": "NVIDIA's general model server: many framework backends over HTTP and gRPC, with queuing, batching, model instances and Prometheus metrics.",
+      "link": "nvidia-architecture.html#triton"
+    },
+    {
+      "front": "Triton dynamic batching settings",
+      "back": "preferred_batch_size and max_queue_delay_microseconds in config.pbtxt; it groups requests that arrive together, for fixed-size models like embedders.",
+      "link": "nvidia-architecture.html#triton"
+    },
+    {
+      "front": "Concurrent model execution",
+      "back": "instance_group runs several instances on one GPU, each with its own CUDA stream so work overlaps. It helps small models that can't fill the GPU alone.",
+      "link": "nvidia-architecture.html#triton"
+    },
+    {
+      "front": "Triton ensemble",
+      "back": "Chains models into one server-side pipeline, such as tokenizer, model, detokenizer, with no client round trips. BLS does the same with Python control flow.",
+      "link": "nvidia-architecture.html#triton"
+    },
+    {
+      "front": "TensorRT-LLM engine",
+      "back": "Compiled for a specific GPU type, precision, parallelism and max batch and sequence length, so an H100 engine won't run on an L40S.",
+      "link": "nvidia-architecture.html#trtllm"
+    },
+    {
+      "front": "CUDA streams",
+      "back": "Work in one stream runs in order; work in different streams can overlap, such as copying the next batch while the current one computes.",
+      "link": "nvidia-architecture.html#cuda"
+    },
+    {
+      "front": "NCCL",
+      "back": "Handles GPU-to-GPU communication for tensor parallelism, over NVLink inside a node and InfiniBand or Ethernet between nodes.",
+      "link": "nvidia-architecture.html#cuda"
+    },
+    {
+      "front": "FP8 on an A100",
+      "back": "Ampere has no FP8 tensor cores, so an FP8 checkpoint saves memory but gives no speed-up. Ada, Hopper and Blackwell run FP8 fast.",
+      "link": "nvidia-architecture.html#gpus"
+    },
+    {
+      "front": "NeMo Curator vs Evaluator",
+      "back": "Curator deduplicates and filters training data on GPUs. Evaluator runs benchmarks, LLM-as-judge and custom evals against a model.",
+      "link": "nvidia-architecture.html#nemo"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Bursty, variable-length LLM traffic. What's the NVIDIA answer?",
+      "choices": [
+        "Triton dynamic batching",
+        "More Triton instances",
+        "In-flight batching with a paged KV cache in TensorRT-LLM",
+        "A Triton ensemble"
+      ],
+      "answer": 2,
+      "why": "Output lengths vary too much for request-level batches, so Triton hands batching to TensorRT-LLM.",
+      "link": "nvidia-architecture.html#exam"
+    },
+    {
+      "q": "A small embedding model leaves the GPU mostly idle. What do you add?",
+      "choices": [
+        "More Triton instances (concurrent execution)",
+        "Tensor parallelism",
+        "Speculative decoding",
+        "NeMo Curator"
+      ],
+      "answer": 0,
+      "why": "Several instances with their own CUDA streams overlap work on one GPU.",
+      "link": "nvidia-architecture.html#exam"
+    },
+    {
+      "q": "You need to deduplicate a fine-tuning dataset. Which tool?",
+      "choices": [
+        "NeMo Evaluator",
+        "NeMo Retriever",
+        "NeMo Guardrails",
+        "NeMo Curator"
+      ],
+      "answer": 3,
+      "why": "Curator does exact, fuzzy and semantic deduplication plus quality and PII filters.",
+      "link": "nvidia-architecture.html#nemo"
+    },
+    {
+      "q": "You deploy an FP8 checkpoint on A100s to cut cost. What happens?",
+      "choices": [
+        "It runs about twice as fast",
+        "Memory drops but there's no speed-up",
+        "It fails to load",
+        "Quality is guaranteed unchanged"
+      ],
+      "answer": 1,
+      "why": "Ampere's lowest tensor-core precision is INT8, so FP8 saves memory only.",
+      "link": "nvidia-architecture.html#gpus"
+    },
+    {
+      "q": "A TensorRT-LLM engine built on H100s is copied to L40S servers. Result?",
+      "choices": [
+        "It runs, only slower",
+        "It runs after a NIM restart",
+        "It won't run; engines are tied to a GPU architecture",
+        "It falls back to FP32"
+      ],
+      "answer": 2,
+      "why": "NIM hides this by shipping several engines and choosing one at start-up.",
+      "link": "nvidia-architecture.html#trtllm"
+    },
+    {
+      "q": "Which NeMo tool keeps an agent on topic and its tool calls safe, written in Colang?",
+      "choices": [
+        "NeMo Guardrails",
+        "NeMo Agent Toolkit",
+        "Morpheus",
+        "NeMo Retriever"
+      ],
+      "answer": 0,
+      "why": "Guardrails provides input, dialog, retrieval, execution and output rails.",
+      "link": "nvidia-architecture.html#nemo"
+    },
+    {
+      "q": "Which GPU generation is the first with FP4 tensor cores?",
+      "choices": [
+        "Ampere",
+        "Ada Lovelace",
+        "Hopper",
+        "Blackwell"
+      ],
+      "answer": 3,
+      "why": "Blackwell (B200, GB200) lists FP4 as its lowest tensor-core precision.",
+      "link": "nvidia-architecture.html#gpus"
+    }
+  ]
+}
