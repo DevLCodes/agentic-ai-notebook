@@ -16,7 +16,7 @@
   "backfills",
   "multi-agent",
   "reasoning-patterns",
-  "llm-serving",
+  "model-fitting",
   "batching",
   "quantization",
   "open-weight-models",

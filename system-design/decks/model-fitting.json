@@ -1,61 +1,61 @@
 {
-  "title": "LLM serving",
-  "page": "llm-serving.html",
+  "title": "LLM serving on GPUs",
+  "page": "model-fitting.html",
   "cards": [
     {
       "front": "What fills GPU memory when serving an LLM?",
       "back": "The model weights, which are fixed, and the KV cache, which grows with every token of every active request.",
-      "link": "llm-serving.html#memory"
+      "link": "model-fitting.html#memory"
     },
     {
       "front": "Weights memory formula",
       "back": "weights ≈ parameters × bytes per parameter. An 8B model is about 16 GB in BF16 and 8 GB in FP8, before any KV cache.",
-      "link": "llm-serving.html#memory"
+      "link": "model-fitting.html#memory"
     },
     {
       "front": "Does mixture-of-experts save memory?",
       "back": "No. A 120B MoE with about 12B active parameters needs memory for 120B and compute for about 12B. MoE saves compute per token, not memory.",
-      "link": "llm-serving.html#memory"
+      "link": "model-fitting.html#memory"
     },
     {
       "front": "KV cache",
       "back": "Keeps the keys and values of earlier tokens so each new token costs one step instead of reprocessing the whole prefix. The price is memory that grows with every token.",
-      "link": "llm-serving.html#kv"
+      "link": "model-fitting.html#kv"
     },
     {
       "front": "KV bytes per token",
       "back": "2 × layers × KV heads × head dim × bytes per value. For Llama 3.1 8B in FP16 that is 128 KiB per token, so an 8,000-token conversation holds about 1 GiB.",
-      "link": "llm-serving.html#kv"
+      "link": "model-fitting.html#kv"
     },
     {
       "front": "Paged KV cache",
       "back": "Like virtual memory: a block table maps each sequence to the blocks it owns, so nobody reserves the longest possible sequence and more requests fit at once.",
-      "link": "llm-serving.html#kv"
+      "link": "model-fitting.html#kv"
     },
     {
       "front": "Prefix caching",
       "back": "Requests that share a prefix, such as a common system prompt, reuse its KV blocks instead of computing them again.",
-      "link": "llm-serving.html#kv"
+      "link": "model-fitting.html#kv"
     },
     {
       "front": "Tensor vs pipeline parallelism",
       "back": "Tensor splits every layer across GPUs and needs heavy GPU-to-GPU traffic, so keep it in one node. Pipeline puts different layers on different GPUs, with less traffic but idle stages.",
-      "link": "llm-serving.html#parallelism"
+      "link": "model-fitting.html#tensor"
     },
     {
       "front": "When to add replicas instead of tensor parallelism",
       "back": "Use tensor parallelism when the model doesn't fit on one GPU, and replicas when it fits but you need more throughput.",
-      "link": "llm-serving.html#parallelism"
+      "link": "model-fitting.html#tensor"
     },
     {
       "front": "Time to first token (TTFT)",
       "back": "The prompt processing (prefill) time. It grows with prompt length and is helped by prefix caching and shorter prompts.",
-      "link": "llm-serving.html#metrics"
+      "link": "model-fitting.html#metrics"
     },
     {
       "front": "Speculative decoding",
       "back": "A small draft model proposes tokens and the big model checks several at once, which speeds up memory-bound decoding for one user.",
-      "link": "llm-serving.html#metrics"
+      "link": "model-fitting.html#metrics"
     }
   ],
   "quiz": [
@@ -69,7 +69,7 @@
       ],
       "answer": 1,
       "why": "Each active request's KV cache grows with its tokens; fix it with a paged or 8-bit KV cache, a lower max sequence length or more GPUs.",
-      "link": "llm-serving.html#levers"
+      "link": "model-fitting.html#levers"
     },
     {
       "q": "Single-user tokens per second are slow. Which lever does NOT target it?",
@@ -81,7 +81,7 @@
       ],
       "answer": 3,
       "why": "Replicas add throughput across users; per-user decoding is memory-bound and helped by speculative decoding, quantization and tensor parallelism.",
-      "link": "llm-serving.html#levers"
+      "link": "model-fitting.html#levers"
     },
     {
       "q": "Roughly how much KV cache do 40 conversations of 8,000 tokens need on Llama 3.1 8B in FP16?",
@@ -93,7 +93,7 @@
       ],
       "answer": 2,
       "why": "At 128 KiB per token each conversation holds about 1 GiB, so 40 of them hold more than the model's own 16 GB of weights.",
-      "link": "llm-serving.html#kv"
+      "link": "model-fitting.html#kv"
     },
     {
       "q": "Which metric does prefix caching mainly improve?",
@@ -105,7 +105,7 @@
       ],
       "answer": 0,
       "why": "TTFT is prefill time, and prefix caching skips recomputing a shared prompt prefix.",
-      "link": "llm-serving.html#metrics"
+      "link": "model-fitting.html#metrics"
     },
     {
       "q": "A 120B model in FP8 runs on four 80 GB GPUs with tensor parallelism. About how much is left for the KV cache?",
@@ -117,7 +117,7 @@
       ],
       "answer": 2,
       "why": "320 GB total minus about 120 GB of FP8 weights leaves about 200 GB.",
-      "link": "llm-serving.html#interview"
+      "link": "model-fitting.html#interview"
     },
     {
       "q": "Quality dropped right after an engine upgrade with FP8. What do you do first?",
@@ -129,7 +129,7 @@
       ],
       "answer": 1,
       "why": "Quantization or engine changes can move quality, so rerun the eval set and roll back.",
-      "link": "llm-serving.html#levers"
+      "link": "model-fitting.html#levers"
     },
     {
       "q": "Which parallelism suits a mixture-of-experts model but risks uneven load?",
@@ -141,7 +141,7 @@
       ],
       "answer": 3,
       "why": "Expert parallelism places experts on different GPUs; popular experts load some GPUs more than others.",
-      "link": "llm-serving.html#parallelism"
+      "link": "model-fitting.html#tensor"
     }
   ]
 }

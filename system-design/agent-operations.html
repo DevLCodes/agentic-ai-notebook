@@ -287,7 +287,7 @@
 <div class="table"><table><thead><tr><th>Family</th><th>Metrics</th><th>Why it matters for agents</th></tr></thead><tbody>
 <tr><td>Latency</td><td>Time to first token, end-to-end p50 and p95, steps per run</td><td>A loop that takes 12 steps instead of 4 is a latency and a cost bug</td></tr>
 <tr><td>Errors</td><td>Tool failures and timeouts, model API errors, malformed outputs, guardrail blocks</td><td>Tools fail far more often than models</td></tr>
-<tr><td>Traffic and saturation</td><td>Requests per second, queue depth, GPU use, KV cache use, rate-limit headroom</td><td>Saturation predicts the next outage; see <a href="llm-serving.html">LLM serving</a></td></tr>
+<tr><td>Traffic and saturation</td><td>Requests per second, queue depth, GPU use, KV cache use, rate-limit headroom</td><td>Saturation predicts the next outage; see <a href="model-fitting.html#metrics">LLM serving</a></td></tr>
 <tr><td>Quality</td><td>Online eval score on sampled traces, task success, escalation rate, thumbs down</td><td>The agent can degrade with zero errors; see <a href="testing.html#monitor">production monitoring</a></td></tr>
 <tr><td>Cost</td><td>Tokens per task, cost per resolved task, cache hit rate</td><td>A prompt change can double cost silently</td></tr>
 <tr><td>Safety</td><td>Prompt-injection detections, PII caught in outputs, refusals, actions needing approval</td><td>These are the incidents that reach the news</td></tr>

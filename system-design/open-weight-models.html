@@ -307,7 +307,7 @@
 <li><strong>Tensor parallelism</strong>: a model too big for one GPU is split across several in one node, with fast GPU-to-GPU links between them.</li>
 <li><strong>Speculative decoding</strong>: a small draft model proposes tokens that the big model verifies in one pass.</li>
 </ul>
-<p>Ollama or llama.cpp suit one developer. To serve many users, use vLLM or SGLang behind an OpenAI-compatible endpoint, so application code doesn’t change when you swap the model. Scale on queue depth and time to first token, not CPU. For the serving internals in depth, see <a href="llm-serving.html">LLM serving</a> and <a href="nvidia-architecture.html">a vendor inference stack</a>.</p></section>
+<p>Ollama or llama.cpp suit one developer. To serve many users, use vLLM or SGLang behind an OpenAI-compatible endpoint, so application code doesn’t change when you swap the model. Scale on queue depth and time to first token, not CPU. For the serving internals in depth, see <a href="model-fitting.html">LLM serving</a> and <a href="nvidia-architecture.html">a vendor inference stack</a>.</p></section>
 <section id="route"><h2>API, hosted open-weight or your own GPUs</h2>
 <p>There are three routes, not two. Bedrock, Vertex AI Model Garden, Azure AI Foundry, Together, Fireworks and Groq run open-weight models for you and charge per token.</p>
 <div class="table"><table><thead><tr><th>Requirement</th><th>Closed API</th><th>Hosted open-weight</th><th>Self-hosted</th></tr></thead><tbody>
@@ -358,7 +358,7 @@
 <tr><td>Retrieval models</td><td>BAAI bge and bge-reranker, intfloat e5, Nomic Embed, mixedbread mxbai, served with sentence-transformers, FastEmbed or TEI</td></tr>
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
-<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="routing.html">Routing</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="evals.html">Evals</a></li><li><a href="https://devlcodes.github.io/classic-system-designs/numbers.html">Numbers to know</a></li></ul></section></article>
+<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="model-fitting.html">LLM serving on GPUs</a></li><li><a href="routing.html">Routing</a></li><li><a href="embeddings.html">Embeddings</a></li><li><a href="reranking.html">Reranking</a></li><li><a href="evals.html">Evals</a></li><li><a href="https://devlcodes.github.io/classic-system-designs/numbers.html">Numbers to know</a></li></ul></section></article>
 </div>
 
 </main>
