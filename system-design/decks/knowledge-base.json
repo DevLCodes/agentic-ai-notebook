@@ -1,0 +1,135 @@
+{
+  "title": "Knowledge base",
+  "page": "knowledge-base.html",
+  "cards": [
+    {
+      "front": "What a knowledge base is",
+      "back": "Everything the assistant may search: source documents, cleaned and chunked copies, their metadata and the indexes built over them.",
+      "link": "knowledge-base.html#what"
+    },
+    {
+      "front": "Why keep every layer",
+      "back": "Each layer is rebuildable from the one before, so you can change parsing or chunking without re-downloading millions of files through rate-limited APIs.",
+      "link": "knowledge-base.html#what"
+    },
+    {
+      "front": "Knowledge base vs fine-tuning",
+      "back": "Knowledge base: facts that change, need citations or have access rules. Fine-tuning: format, tone, vocabulary, a narrow repeated task.",
+      "link": "knowledge-base.html#vs"
+    },
+    {
+      "front": "Agent memory is for…",
+      "back": "What one user said or prefers across sessions, not shared company knowledge.",
+      "link": "knowledge-base.html#vs"
+    },
+    {
+      "front": "Parse structure, not just text",
+      "back": "Keep headings, lists and tables: they drive chunking and give each chunk its heading path.",
+      "link": "knowledge-base.html#parsing"
+    },
+    {
+      "front": "Deduplicate documents",
+      "back": "Hash normalised content so five copies of a policy become one document with five locations; otherwise duplicates fill the top results.",
+      "link": "knowledge-base.html#parsing"
+    },
+    {
+      "front": "Recursive chunking",
+      "back": "Split on sections, then paragraphs, then sentences until under the size limit. The sensible default for mixed content.",
+      "link": "knowledge-base.html#chunking"
+    },
+    {
+      "front": "Default chunk size",
+      "back": "300 to 800 tokens with 10 to 20% overlap, each prefixed with its title and heading path so it stands alone.",
+      "link": "knowledge-base.html#chunking"
+    },
+    {
+      "front": "Minimum chunk metadata",
+      "back": "doc_id, chunk_id, version, source and URL, title and heading path, updated_at, author, space, type, region or language, allowed_principals and embedding_model_version.",
+      "link": "knowledge-base.html#metadata"
+    },
+    {
+      "front": "Push plus pull",
+      "back": "Webhooks for speed, a periodic reconciliation crawl for correctness; process each changed doc as a unit and delete chunks from old versions.",
+      "link": "knowledge-base.html#freshness"
+    },
+    {
+      "front": "Three knowledge base health numbers",
+      "back": "Ingestion lag (edit to searchable), documents failing to parse, and coverage (source docs vs catalog docs).",
+      "link": "knowledge-base.html#freshness"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "A company wants an assistant that answers from policies that change monthly and must cite sources. Which approach?",
+      "choices": [
+        "Fine-tuning on the policies",
+        "A knowledge base (RAG)",
+        "Agent memory",
+        "A bigger model"
+      ],
+      "answer": 1,
+      "why": "RAG fits facts that change, need citations or have access rules.",
+      "link": "knowledge-base.html#vs"
+    },
+    {
+      "q": "Why is fine-tuning on company documents a poor way to add knowledge?",
+      "choices": [
+        "It bakes in facts that go stale and ignores permissions",
+        "It can't learn vocabulary",
+        "It is always cheaper than RAG",
+        "It requires a vector database"
+      ],
+      "answer": 0,
+      "why": "Fine-tuning is for style and narrow tasks, not fresh, permissioned facts.",
+      "link": "knowledge-base.html#vs"
+    },
+    {
+      "q": "Which chunking strategy is the sensible default for mixed content?",
+      "choices": [
+        "Fixed size with no overlap",
+        "Semantic",
+        "One chunk per document",
+        "Recursive"
+      ],
+      "answer": 3,
+      "why": "Recursive splitting respects structure while keeping chunks under the limit.",
+      "link": "knowledge-base.html#chunking"
+    },
+    {
+      "q": "Why prefix each chunk with \"Leave policy > India > Parental leave\"?",
+      "choices": [
+        "To make chunks longer",
+        "To satisfy the tokenizer",
+        "So the chunk stands alone with its context",
+        "To hide it from keyword search"
+      ],
+      "answer": 2,
+      "why": "The heading path gives an isolated chunk its context.",
+      "link": "knowledge-base.html#chunking"
+    },
+    {
+      "q": "Which metadata field makes permission filtering possible?",
+      "choices": [
+        "chunk_index",
+        "allowed_principals",
+        "embedding_model_version",
+        "author"
+      ],
+      "answer": 1,
+      "why": "The access control list is stored on each chunk as allowed_principals.",
+      "link": "knowledge-base.html#metadata"
+    },
+    {
+      "q": "Why keep the raw downloaded copies?",
+      "choices": [
+        "To re-parse or re-chunk without hitting source APIs again",
+        "Because vector stores need them",
+        "To train the embedding model",
+        "They are required for citations UI"
+      ],
+      "answer": 0,
+      "why": "Every layer rebuilds from the one before it.",
+      "link": "knowledge-base.html#what"
+    }
+  ]
+}

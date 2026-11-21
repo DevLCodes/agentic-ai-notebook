@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reasoning and planning patterns · Agentic System Designs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="description" content="Chain-of-thought, ReAct, tree of thoughts, plan-and-execute, and reflection with re-planning: how each works, what it costs and when to choose it, with a 3D scene and a pattern chooser.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  /* labs */
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+</style>
+
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .stage3d .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .ctl3 input[type=range] { width: 140px; accent-color: var(--accent); }
+  .ctl3 output { font-family: var(--font-mono); font-size: 12.5px; min-width: 5ch; }
+  .l3.cap b { color: var(--ink); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Reasoning and planning patterns</h1><p class="lead">Chain-of-thought, ReAct, tree of thoughts, plan-and-execute, and reflection with re-planning: how each makes an agent think, what it costs, and which one to pick.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#lab">See them think</a></li><li><a href="#cot">Chain-of-thought</a></li><li><a href="#react">ReAct</a></li><li><a href="#tot">Tree of thoughts</a></li><li><a href="#plan">Plan-and-execute</a></li><li><a href="#reflect">Reflection and re-planning</a></li><li><a href="#choose">Which one to choose</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="glance"><h2>At a glance</h2>
+<p class="lead">Each pattern answers one question differently: how does the agent get from a goal to an answer?</p>
+<div class="table"><table><thead><tr><th>Pattern</th><th>Shape</th><th>LLM calls</th><th>Best at</th><th>Weak at</th></tr></thead><tbody>
+<tr><td><strong>Chain-of-thought</strong></td><td>A straight line of reasoning steps</td><td>1</td><td>Maths, logic, multi-step questions the model can answer from what it knows</td><td>Facts it doesn't know; one wrong step spoils the rest</td></tr>
+<tr><td><strong>ReAct</strong></td><td>A loop: think, act, observe</td><td>One per step</td><td>Tasks that need tools or fresh facts, where the path isn't known in advance</td><td>Greedy step-by-step choices; can loop; context grows each step</td></tr>
+<tr><td><strong>Tree of thoughts</strong></td><td>A tree: branch, score, prune, backtrack</td><td>Many (branches × depth)</td><td>Puzzles and plans where an early choice decides everything</td><td>Cost and latency; needs a way to score partial solutions</td></tr>
+<tr><td><strong>Plan-and-execute</strong></td><td>A plan, then a list of steps run in order</td><td>1 big call, then cheap steps</td><td>Long tasks with known steps; cost control; human approval of the plan</td><td>Rigid when the world changes mid-plan</td></tr>
+<tr><td><strong>Reflection and re-planning</strong></td><td>A retry loop: attempt, check, reflect, retry</td><td>2–3× the base pattern</td><td>Outputs that can be checked, such as code with tests or JSON with a schema</td><td>Self-critique with no real check can confirm its own mistakes</td></tr>
+</tbody></table></div>
+<p>They combine. A common production agent plans with a strong model, runs each step as a short ReAct loop, and reflects when a check fails.</p></section>
+
+<section id="lab"><h2>See them think</h2>
+<p>Pick a pattern to watch the gold token trace how it reasons, or answer the questions underneath and the scene switches to the pattern that fits.</p>
+<figure class="fig3d" id="reason3d">
+<div class="stage3d" role="img" aria-label="Each reasoning pattern drawn as a 3D graph, with a token tracing its steps"><p class="hint3">3D · drag to turn</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN.</p></div>
+<div class="ctl3"><span class="k">Pattern</span><button data-pat="cot" aria-pressed="true">Chain-of-thought</button><button data-pat="react" aria-pressed="false">ReAct</button><button data-pat="tot" aria-pressed="false">Tree of thoughts</button><button data-pat="plan" aria-pressed="false">Plan-and-execute</button><button data-pat="reflect" aria-pressed="false">Reflection</button></div>
+<p class="out3" aria-live="polite"></p>
+<div class="ctl3"><span class="k">Which fits my task?</span><button data-q="tools" aria-pressed="false">Needs tools or fresh data</button><button data-q="known" aria-pressed="false">Steps are known up front</button><button data-q="search" aria-pressed="false">Early choices decide everything</button><button data-q="check" aria-pressed="false">Output can be checked</button></div>
+<p class="out3" data-pick aria-live="polite">Toggle the questions that are true for your task.</p>
+<figcaption>Purple spheres: the model thinking. Orange boxes: tool calls or executor steps. Teal: observations. Green: the answer, or the winning path. Red: a failed check or a pruned branch.</figcaption>
+</figure></section>
+
+<section id="cot"><h2>Chain-of-thought</h2>
+<p>Ask the model to reason step by step before it answers. Writing the steps out gives it room to work: each step is conditioned on the ones before, so multi-step problems come out right far more often than with a direct answer.</p>
+<pre><code>Q: A PO is for 40 units at $12. 35 arrived. The invoice bills 40 at $12.50.
+   Think step by step, then give the amount to approve.
+A: Received 35 units. The PO price is $12. 35 × $12 = $420.
+   The invoice asks for 40 × $12.50 = $500, so $80 is disputed.
+   Approve $420.</code></pre>
+<ul class="plain">
+<li><strong>Variants:</strong> few-shot (show worked examples), zero-shot ("let's think step by step"), and <a href="confidence-scoring.html">self-consistency</a> (sample several chains and take the majority answer).</li>
+<li><strong>Reasoning models</strong> do this internally: they spend hidden reasoning tokens before answering, so you rarely need to ask for it explicitly.</li>
+<li><strong>Use it when:</strong> the answer needs several steps of logic or arithmetic over information already in the prompt.</li>
+<li><strong>Watch out:</strong> it can't fetch facts, so it reasons confidently from wrong ones. Longer outputs cost tokens and time.</li>
+</ul></section>
+
+<section id="react"><h2>ReAct</h2>
+<p>ReAct (reason plus act) interleaves thinking with tool use. The model writes a thought, picks an action, reads the observation that comes back, and repeats until it can answer. Modern tool-calling APIs and agent loops are ReAct in practice.</p>
+<pre><code>Thought: I need the PO for invoice INV-7781.
+Action: get_po(invoice="INV-7781")
+Observation: PO-5520, 40 units at $12.00
+Thought: Now check what was received.
+Action: get_receipts(po="PO-5520")
+Observation: 35 units received on 3 Nov
+Thought: The invoice bills 40; only 35 arrived. Hold for 5 units.
+Answer: Hold: quantity billed exceeds quantity received by 5.</code></pre>
+<ul class="plain">
+<li><strong>Use it when:</strong> the agent needs tools or live data, and the next step depends on what the last step found.</li>
+<li><strong>Watch out:</strong> it chooses greedily, one step at a time, with no look-ahead. It can repeat itself or wander, and every step re-sends a growing context. Cap the steps, as the three-way match agent does at 8 tool calls.</li>
+</ul></section>
+
+<section id="tot"><h2>Tree of thoughts</h2>
+<p>Instead of one chain, explore several. At each step the model proposes a few candidate next thoughts, an evaluator scores each partial solution, and a search (breadth-first, depth-first or beam) keeps the promising branches and backtracks from dead ends.</p>
+<ul class="plain">
+<li><strong>Evidence:</strong> on the Game of 24 puzzle, GPT-4 with chain-of-thought solved 4% of problems and tree of thoughts solved 74% (Yao et al., 2023).</li>
+<li><strong>Use it when:</strong> an early wrong choice ruins everything after it, and you can judge partial progress: puzzles, constraint solving, scheduling, some planning.</li>
+<li><strong>Watch out:</strong> branches × depth calls make it many times more expensive and slower. It's rarely worth it for ordinary questions or tool-driven tasks.</li>
+</ul></section>
+
+<section id="plan"><h2>Plan-and-execute</h2>
+<p>Split thinking from doing. A planner, usually a strong model, writes the full list of steps once. An executor, a cheaper model or plain code, runs each step and records the result. The planner may write the final answer from the results.</p>
+<pre><code>Plan:
+1. get_po(invoice)          3. compare_lines(po, receipts, invoice)
+2. get_receipts(po)         4. draft_resolution(differences)</code></pre>
+<ul class="plain">
+<li><strong>Why choose it:</strong> fewer calls to the expensive model, independent steps can run in parallel, and the plan is visible, so a person can approve it before anything runs.</li>
+<li><strong>Related ideas:</strong> ReWOO plans tool calls up front without observing in between, and hierarchical task network (HTN) planning breaks a goal into sub-tasks using known procedures.</li>
+<li><strong>Use it when:</strong> the task is long, its steps are mostly known in advance, and cost, parallelism or auditability matter.</li>
+<li><strong>Watch out:</strong> the plan is written before anything is observed. If step 2 reveals a surprise, a pure plan carries on regardless, which is why you add re-planning.</li>
+</ul></section>
+
+<section id="reflect"><h2>Reflection and re-planning</h2>
+<p>Add a feedback loop. After an attempt, a check judges it: unit tests, a schema validator, a rule, or a critic model. If it fails, the agent writes down what went wrong (the reflection) and tries again with that note in its context. Reflexion (Shinn et al., 2023) also keeps those notes as memory for later attempts.</p>
+<ul class="plain">
+<li><strong>Re-planning</strong> is the same idea for plans: when a step fails or an observation contradicts the plan, the planner rewrites the remaining steps instead of pressing on.</li>
+<li><strong>Use it when:</strong> first attempts are often wrong but a check can tell, such as code with tests, extraction with a schema, or a plan whose steps can fail.</li>
+<li><strong>Watch out:</strong> a model criticising itself with no outside signal can talk itself into a wrong answer. Prefer a real check, cap the retries (2 or 3), and stop when an attempt doesn't improve.</li>
+</ul></section>
+
+<section id="choose"><h2>Which one to choose</h2>
+<ol class="plain">
+<li><strong>Can the model answer from what it already has, with some reasoning?</strong> Use chain-of-thought, or a reasoning model. Add self-consistency if accuracy matters more than cost.</li>
+<li><strong>Does it need tools or fresh data, with a path you can't predict?</strong> Use ReAct, with a step limit.</li>
+<li><strong>Are the steps known up front, and the task long or costly?</strong> Use plan-and-execute, and add re-planning for when a step fails.</li>
+<li><strong>Does an early choice decide everything, and can you score partial answers?</strong> Use tree of thoughts, if the budget allows.</li>
+<li><strong>Can the output be checked?</strong> Wrap whichever pattern you chose in a reflection loop.</li>
+</ol>
+<div class="table"><table><thead><tr><th>Task</th><th>Pick</th><th>Why</th></tr></thead><tbody>
+<tr><td>Work out a refund amount from a pasted invoice</td><td>Chain-of-thought</td><td>All facts are in the prompt; it's arithmetic</td></tr>
+<tr><td>Investigate why an invoice doesn't match its PO</td><td>ReAct</td><td>Each lookup decides the next one</td></tr>
+<tr><td>Month-end close across 200 invoices, with approval</td><td>Plan-and-execute with re-planning</td><td>Known steps, parallel, auditable, recover from failures</td></tr>
+<tr><td>Build a delivery schedule under tight constraints</td><td>Tree of thoughts</td><td>Early choices constrain everything; partial schedules can be scored</td></tr>
+<tr><td>Generate code that must pass tests</td><td>ReAct plus reflection</td><td>Tests give a real check to learn from</td></tr>
+</tbody></table></div>
+<div class="note"><p><strong>Exam patterns:</strong> wrong 25% of the time on one subtle step with no retraining allowed → self-consistency plus self-verification. Known procedure → HTN or plan-and-execute. Needs live data → ReAct. Many candidate paths with a scorer → tree of thoughts. Retry after failure with a learned note → Reflexion.</p></div></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="note"><p>"I pick the cheapest pattern that solves the task. If the facts are in the prompt, chain-of-thought or a reasoning model in one call. If it needs tools and the path is unclear, a ReAct loop with a step cap. If the steps are known and the job is long, plan-and-execute: a strong model plans, cheap steps run in parallel, a person can approve the plan, and failures trigger re-planning. Tree of thoughts only when early choices decide everything and I can score partial solutions, because it multiplies cost. And whenever the output can be checked, I add a reflection loop with a real check and a retry cap."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Pattern</th><th>Where you meet it</th></tr></thead><tbody>
+<tr><td>Chain-of-thought</td><td>Prompting guides; reasoning models that think before answering (OpenAI o-series, Claude extended thinking, DeepSeek-R1, Nemotron reasoning models)</td></tr>
+<tr><td>ReAct</td><td>Tool-calling agent loops: LangChain <code>create_agent</code>, LangGraph, OpenAI Agents SDK, Claude tool use, NVIDIA NeMo Agent Toolkit ReAct agent</td></tr>
+<tr><td>Plan-and-execute</td><td>LangGraph plan-and-execute and ReWOO examples, task-planning agents in agent frameworks</td></tr>
+<tr><td>Reflection</td><td>LangGraph reflection and Reflexion examples, coding agents that run tests and retry</td></tr>
+<tr><td>Tree of thoughts</td><td>Research implementations and search-based agents (for example LATS, language agent tree search)</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="agent-memory.html">Agent memory</a></li><li><a href="routing.html">Routing</a></li><li><a href="confidence-scoring.html">Confidence scoring</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#react">Glossary: ReAct</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { mountReasoning } from '../assets/gpu3d.js';
+mountReasoning(document.getElementById('reason3d'));
+</script>
+<script src="progress.js"></script>
+</body>
+</html>

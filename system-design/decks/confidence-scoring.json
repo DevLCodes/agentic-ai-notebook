@@ -1,0 +1,152 @@
+{
+  "title": "Confidence scoring",
+  "page": "confidence-scoring.html",
+  "cards": [
+    {
+      "front": "What a confidence score is for",
+      "back": "A decision input: answer, hedge, escalate to a person, or retry with a bigger model. Useful only if calibrated and acted on.",
+      "link": "confidence-scoring.html#decide"
+    },
+    {
+      "front": "Margin #1 − #2",
+      "back": "Whether one chunk clearly wins. Fooled when two copies of the same table look like a tie.",
+      "link": "confidence-scoring.html#signals"
+    },
+    {
+      "front": "Why token logprobs aren't truth",
+      "back": "They score how likely the wording is, so fluent wording of a wrong fact still scores high.",
+      "link": "confidence-scoring.html#signals"
+    },
+    {
+      "front": "Verbalised confidence",
+      "back": "The model saying \"I'm 90% sure\". Known overconfidence makes it weak evidence on its own.",
+      "link": "confidence-scoring.html#signals"
+    },
+    {
+      "front": "Combining signals",
+      "back": "Start with a hand-weighted average; once you have a few hundred labelled outcomes, fit a logistic regression. Hard rules like a calculator mismatch run first.",
+      "link": "confidence-scoring.html#combine"
+    },
+    {
+      "front": "Self-consistency",
+      "back": "Sample the same question N times (often 5) above temperature zero. Samples agree when the model knows; they scatter when it guesses.",
+      "link": "confidence-scoring.html#consistency"
+    },
+    {
+      "front": "Semantic entropy",
+      "back": "Entropy over meaning clusters of the samples: 0 when all agree, log₂ 5 ≈ 2.32 when all 5 differ.",
+      "link": "confidence-scoring.html#consistency"
+    },
+    {
+      "front": "Calibrated means…",
+      "back": "Of all answers scored 0.7, about 70% are correct. A cosine of 0.83 is not 83% likely to be right.",
+      "link": "confidence-scoring.html#calibration"
+    },
+    {
+      "front": "ECE",
+      "back": "Expected calibration error: Σ (nᵢ / N) · |accuracyᵢ − confidenceᵢ| over score bins.",
+      "link": "confidence-scoring.html#calibration"
+    },
+    {
+      "front": "Temperature vs Platt vs isotonic",
+      "back": "Temperature divides the logit by T; Platt fits σ(a·logit + b) and can shift scores down; isotonic is most flexible but needs about a thousand labels.",
+      "link": "confidence-scoring.html#calibration"
+    },
+    {
+      "front": "Choosing the threshold",
+      "back": "A cost decision: minimise cost_wrong × wrong answered + cost_escalation × escalated, with per-segment thresholds and a hedge band.",
+      "link": "confidence-scoring.html#threshold"
+    },
+    {
+      "front": "Escalation rate suddenly drops",
+      "back": "After a new model or index, it usually means the score distribution moved, not that the system improved. Re-fit calibration.",
+      "link": "confidence-scoring.html#production"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "What should happen when confidence is in the middle band?",
+      "choices": [
+        "Always escalate to a person",
+        "Hedge: answer with a caveat or ask a clarifying question",
+        "Answer with no caveat",
+        "Drop the question"
+      ],
+      "answer": 1,
+      "why": "The middle band gets a hedge rather than a full answer or escalation.",
+      "link": "confidence-scoring.html#decide"
+    },
+    {
+      "q": "Why is a rerank logit of 7.2 not a probability?",
+      "choices": [
+        "It orders results but isn't calibrated to accuracy",
+        "It is always above 1",
+        "It is computed after generation",
+        "Rerankers output percentages already"
+      ],
+      "answer": 0,
+      "why": "Raw scores order results; calibration maps them to accuracy.",
+      "link": "confidence-scoring.html#calibration"
+    },
+    {
+      "q": "Your system is overconfident. Which calibration method can shift scores down?",
+      "choices": [
+        "Temperature scaling",
+        "Min-max normalisation",
+        "Self-consistency",
+        "Platt scaling"
+      ],
+      "answer": 3,
+      "why": "Platt's bias term b can shift scores, while temperature only stretches around 50%.",
+      "link": "confidence-scoring.html#calibration"
+    },
+    {
+      "q": "Five samples give five different answers. What is the semantic entropy?",
+      "choices": [
+        "0",
+        "1",
+        "About 2.32",
+        "5"
+      ],
+      "answer": 2,
+      "why": "log₂ 5 ≈ 2.32 is the value when all samples differ.",
+      "link": "confidence-scoring.html#consistency"
+    },
+    {
+      "q": "The calculator result doesn't match the XBRL value, but the blended score is high. What happens?",
+      "choices": [
+        "Answer, since the score is high",
+        "Escalate; hard rules beat scores",
+        "Hedge with a caveat",
+        "Retry with lower temperature"
+      ],
+      "answer": 1,
+      "why": "A calculator mismatch escalates whatever the blend says.",
+      "link": "confidence-scoring.html#threshold"
+    },
+    {
+      "q": "What decides where the answer/escalate threshold sits?",
+      "choices": [
+        "Cost of a wrong answer vs the cost of a person's time",
+        "Always 0.5",
+        "The model's verbalised confidence",
+        "The embedding dimension"
+      ],
+      "answer": 0,
+      "why": "It is selective prediction: trade coverage for accuracy by cost.",
+      "link": "confidence-scoring.html#threshold"
+    },
+    {
+      "q": "When should calibration be re-fitted?",
+      "choices": [
+        "Once at launch only",
+        "Only when users complain",
+        "Every query",
+        "After any model or index change"
+      ],
+      "answer": 3,
+      "why": "Model or index changes move the score distribution.",
+      "link": "confidence-scoring.html#calibration"
+    }
+  ]
+}

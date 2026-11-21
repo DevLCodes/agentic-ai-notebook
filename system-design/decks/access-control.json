@@ -1,0 +1,130 @@
+{
+  "title": "Access control (ACL)",
+  "page": "access-control.html",
+  "cards": [
+    {
+      "front": "Access control list (ACL)",
+      "back": "Says which principals (users, groups, service accounts) may do what with a resource. For search the only question is: may this user read this document?",
+      "link": "access-control.html#what"
+    },
+    {
+      "front": "ACL vs RBAC vs ABAC",
+      "back": "ACL: the rule lives on the resource. RBAC: on the user's roles. ABAC: a policy over attributes, such as user.region == doc.region.",
+      "link": "access-control.html#models"
+    },
+    {
+      "front": "Golden rule for an assistant's permissions",
+      "back": "Mirror the source's decision exactly: never grant more than the source would.",
+      "link": "access-control.html#models"
+    },
+    {
+      "front": "Resolving inheritance",
+      "back": "A Confluence page restriction narrows its space's permissions, so store the effective result, not the raw settings.",
+      "link": "access-control.html#normalise"
+    },
+    {
+      "front": "Groups or users on each chunk?",
+      "back": "Store group IDs and expand the user's groups at query time. Expanding groups into user lists on every chunk explodes in size and goes stale.",
+      "link": "access-control.html#normalise"
+    },
+    {
+      "front": "\"Anyone with the link\" files",
+      "back": "Treat link-shared files as private to the owner unless policy says otherwise.",
+      "link": "access-control.html#normalise"
+    },
+    {
+      "front": "Where to enforce permissions",
+      "back": "Filter inside the vector and keyword queries so ranking only sees permitted chunks, then recheck the final few chunks just before building the prompt. Never let a model decide access.",
+      "link": "access-control.html#enforce"
+    },
+    {
+      "front": "Permission changes in the pipeline",
+      "back": "Treat them as their own events that rewrite chunk metadata without re-embedding.",
+      "link": "access-control.html#freshness"
+    },
+    {
+      "front": "Fail closed",
+      "back": "When the permission recheck cannot answer, deny rather than allow.",
+      "link": "access-control.html#freshness"
+    },
+    {
+      "front": "Shared index vs one per tenant",
+      "back": "One index with filters is cheap and the default for an internal assistant. Separate indexes give hard isolation; use them for external customers and strictly regulated data.",
+      "link": "access-control.html#isolation"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "A rule says \"readable if user.region == doc.region\". Which model is that?",
+      "choices": [
+        "ACL",
+        "ABAC",
+        "RBAC",
+        "Zanzibar tuples"
+      ],
+      "answer": 1,
+      "why": "Attribute-based access control evaluates a policy over attributes.",
+      "link": "access-control.html#models"
+    },
+    {
+      "q": "Why store group IDs on chunks rather than expanded user lists?",
+      "choices": [
+        "User lists explode in size and go stale",
+        "Groups are faster to embed",
+        "Vector stores cannot hold user IDs",
+        "Users never change teams"
+      ],
+      "answer": 0,
+      "why": "Expand the user's groups at query time instead.",
+      "link": "access-control.html#normalise"
+    },
+    {
+      "q": "Where should the main permission filter live?",
+      "choices": [
+        "After retrieval, on the top 5",
+        "In the model's instructions",
+        "In the UI, by hiding links",
+        "Inside the vector and keyword queries"
+      ],
+      "answer": 3,
+      "why": "Filtering after retrieval leaves the model with scraps, and models must never decide access.",
+      "link": "access-control.html#enforce"
+    },
+    {
+      "q": "A user is removed from a sensitive group. What should the pipeline do with that document's chunks?",
+      "choices": [
+        "Re-embed every chunk of the document",
+        "Wait for the nightly full rebuild",
+        "Rewrite their ACL metadata without re-embedding",
+        "Nothing; the model will refuse"
+      ],
+      "answer": 2,
+      "why": "Permission changes are separate events that only touch metadata.",
+      "link": "access-control.html#freshness"
+    },
+    {
+      "q": "The permission recheck service times out. What should happen?",
+      "choices": [
+        "Allow, since the search filter already ran",
+        "Fail closed and deny",
+        "Let the model decide",
+        "Retry forever before answering"
+      ],
+      "answer": 1,
+      "why": "Fail closed when the recheck cannot answer.",
+      "link": "access-control.html#freshness"
+    },
+    {
+      "q": "When is a separate index per tenant worth the extra cost?",
+      "choices": [
+        "External customers and strictly regulated data",
+        "Every internal team assistant",
+        "Whenever there are more than 100 users",
+        "Never; filters are always enough"
+      ],
+      "answer": 0,
+      "why": "Separate indexes mean a filter bug cannot leak across tenants.",
+      "link": "access-control.html#isolation"
+    }
+  ]
+}
