@@ -14,5 +14,6 @@
   "knowledge-base",
   "knowledge-freshness",
   "backfills",
-  "multi-agent"
+  "multi-agent",
+  "reasoning-patterns"
 ]
