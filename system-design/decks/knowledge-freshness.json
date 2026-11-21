@@ -1,0 +1,164 @@
+{
+  "title": "Fresh knowledge base pipeline",
+  "page": "knowledge-freshness.html",
+  "cards": [
+    {
+      "front": "Freshness targets",
+      "back": "Edits searchable within 15 minutes at p99; deletes, unpublishes and permission changes within 5 minutes. Alert at 12 and 4.",
+      "link": "knowledge-freshness.html#success"
+    },
+    {
+      "front": "Why not just run the batch job more often?",
+      "back": "It takes 6 hours and its cost grows with the corpus; even 10× hardware is 36 minutes and re-embeds 40M chunks for a few hundred changes.",
+      "link": "knowledge-freshness.html#architecture"
+    },
+    {
+      "front": "The change event is a pointer",
+      "back": "It carries source, doc_id, change (upsert, delete or acl_change) and version, but no content. The worker always fetches the latest.",
+      "link": "knowledge-freshness.html#capture"
+    },
+    {
+      "front": "Partition key = doc ID",
+      "back": "All events for one doc land on one partition, so one consumer sees them in order.",
+      "link": "knowledge-freshness.html#capture"
+    },
+    {
+      "front": "Finding deletes in a source that can't push",
+      "back": "\"Modified since\" never returns deleted pages. List all page IDs every 3 minutes and diff against the registry.",
+      "link": "knowledge-freshness.html#capture"
+    },
+    {
+      "front": "Doc registry",
+      "back": "One row per doc: indexed version, chunk IDs, ACL, chunk hashes, stage timestamps and tombstones. The source of truth for what should be indexed.",
+      "link": "knowledge-freshness.html#architecture"
+    },
+    {
+      "front": "The orphan trap",
+      "back": "If chunk IDs are doc#0…doc#19 and the new version has 17 chunks, 17–19 serve stale text forever. Version the IDs and delete by version.",
+      "link": "knowledge-freshness.html#processing"
+    },
+    {
+      "front": "Hash-based embedding reuse",
+      "back": "Hash each chunk and reuse cached vectors for unchanged hashes; embed only changed chunks.",
+      "link": "knowledge-freshness.html#processing"
+    },
+    {
+      "front": "Permission change cost",
+      "back": "Update acl_groups and tenant_id on existing chunks: no re-chunking, no re-embedding, seconds.",
+      "link": "knowledge-freshness.html#deletes"
+    },
+    {
+      "front": "Tombstones",
+      "back": "The registry remembers deleted docs, so a late edit event can't bring one back.",
+      "link": "knowledge-freshness.html#deletes"
+    },
+    {
+      "front": "Scale workers on…",
+      "back": "Consumer lag, not CPU: lag tracks the freshness target. Max parallel workers equals the partition count.",
+      "link": "knowledge-freshness.html#bursts"
+    },
+    {
+      "front": "Debug a wrong answer from…",
+      "back": "The request trace: its chunk versions show at once whether to investigate the pipeline or the prompt.",
+      "link": "knowledge-freshness.html#observability"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Why does the change event carry no document content?",
+      "choices": [
+        "Kafka can't store text",
+        "Events stay tiny, and replays just fetch the current text",
+        "Content is sent in a second event",
+        "To save embedding cost"
+      ],
+      "answer": 1,
+      "why": "The worker always fetches the latest version.",
+      "link": "knowledge-freshness.html#capture"
+    },
+    {
+      "q": "A doc shrinks from 20 chunks to 17, and IDs are doc#0…doc#19. What goes wrong with plain upserts?",
+      "choices": [
+        "Chunks 17–19 keep serving stale text",
+        "All chunks are deleted",
+        "The upsert fails",
+        "Nothing; upserts handle it"
+      ],
+      "answer": 0,
+      "why": "Versioned IDs plus delete-by-version avoid orphans.",
+      "link": "knowledge-freshness.html#processing"
+    },
+    {
+      "q": "How does the wiki poller detect deletes?",
+      "choices": [
+        "A \"modified since\" query",
+        "Webhooks from the wiki",
+        "The nightly reconcile only",
+        "Diffing all page IDs against the registry every 3 minutes"
+      ],
+      "answer": 3,
+      "why": "Modified-since never returns pages that no longer exist.",
+      "link": "knowledge-freshness.html#capture"
+    },
+    {
+      "q": "A release day brings 50,000 edits. How do deletes still meet 5 minutes?",
+      "choices": [
+        "Deletes go first in the same topic",
+        "Pausing edits",
+        "A separate priority topic with reserved workers",
+        "More embedding quota"
+      ],
+      "answer": 2,
+      "why": "The priority lane keeps deletes from waiting behind edits.",
+      "link": "knowledge-freshness.html#bursts"
+    },
+    {
+      "q": "What should the worker autoscale on?",
+      "choices": [
+        "CPU usage",
+        "Consumer lag",
+        "Request QPS",
+        "Embedding latency"
+      ],
+      "answer": 1,
+      "why": "Lag tracks the freshness target.",
+      "link": "knowledge-freshness.html#bursts"
+    },
+    {
+      "q": "A doc's permissions change. What work is needed?",
+      "choices": [
+        "A metadata write to the existing chunks",
+        "Re-chunk and re-embed the doc",
+        "A full index rebuild",
+        "Nothing until the nightly job"
+      ],
+      "answer": 0,
+      "why": "ACL changes update acl_groups and tenant_id only.",
+      "link": "knowledge-freshness.html#deletes"
+    },
+    {
+      "q": "How do you roll out a new embedding model?",
+      "choices": [
+        "Re-embed chunks in place",
+        "Switch the model and watch feedback",
+        "Embed only new docs with the new model",
+        "Build a new index, gate on the golden set, swap the alias"
+      ],
+      "answer": 3,
+      "why": "Blue-green with an atomic alias swap keeps rollback easy.",
+      "link": "knowledge-freshness.html#reembed"
+    },
+    {
+      "q": "The identity lookup fails at query time. What should retrieval serve?",
+      "choices": [
+        "Everything, to avoid empty answers",
+        "Whatever the model asks for",
+        "Public content only",
+        "The last user's results"
+      ],
+      "answer": 2,
+      "why": "Fail closed.",
+      "link": "knowledge-freshness.html#deletes"
+    }
+  ]
+}

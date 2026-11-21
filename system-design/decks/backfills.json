@@ -1,0 +1,147 @@
+{
+  "title": "Backfills and re-indexing",
+  "page": "backfills.html",
+  "cards": [
+    {
+      "front": "What a backfill is",
+      "back": "Loading everything that already exists, as opposed to live changes. Run at launch, when adding a source, after data corruption, and after changing parsing, chunking or the embedding model.",
+      "link": "backfills.html#what"
+    },
+    {
+      "front": "Backfill time estimate",
+      "back": "time = documents ÷ (per-connector rate × parallel connectors). 10M ÷ (50/s × 3) ≈ 18.5 h.",
+      "link": "backfills.html#what"
+    },
+    {
+      "front": "Separate lanes",
+      "back": "Live changes and backfill use different topics and consumer groups, so the backfill can be scaled, paused or throttled alone.",
+      "link": "backfills.html#lanes"
+    },
+    {
+      "front": "Shared rate limiter",
+      "back": "A token bucket per source API keeps total calls under quota, with a reserved share for live updates.",
+      "link": "backfills.html#lanes"
+    },
+    {
+      "front": "Two-phase backfill",
+      "back": "First list every document ID into the backfill topic, saving the listing cursor after each page; then process them.",
+      "link": "backfills.html#checkpoint"
+    },
+    {
+      "front": "Idempotent processing",
+      "back": "\"Fetch latest, compare version, write if newer\", so reprocessing after a crash is harmless.",
+      "link": "backfills.html#checkpoint"
+    },
+    {
+      "front": "Dead-letter queue",
+      "back": "Documents that keep failing are parked with the error and replayed after a fix, not retried forever.",
+      "link": "backfills.html#checkpoint"
+    },
+    {
+      "front": "Backfill vs live edit race",
+      "back": "Make every index write conditional: write only if the incoming version is newer. Partitioning by doc_id only helps within a lane.",
+      "link": "backfills.html#race"
+    },
+    {
+      "front": "Before opening to users",
+      "back": "Reconcile counts per source and space, spot-check documents end to end, and run the golden-set evals.",
+      "link": "backfills.html#plan"
+    },
+    {
+      "front": "Re-embedding safely",
+      "back": "Build a new index beside the live one from stored parsed docs, dual-write live changes, compare evals, switch reads blue-green, keep the old index for rollback.",
+      "link": "backfills.html#reembed"
+    },
+    {
+      "front": "Re-embed cost",
+      "back": "chunks × average tokens per chunk × price per token. 50M × 400 = 20B tokens.",
+      "link": "backfills.html#reembed"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "10M documents, 3 connectors at 50 docs/s each. Roughly how long is the backfill?",
+      "choices": [
+        "About 1.8 hours",
+        "About 18.5 hours",
+        "About 55 hours",
+        "About 6 hours"
+      ],
+      "answer": 1,
+      "why": "10M ÷ 150/s ≈ 66,700 s ≈ 18.5 h.",
+      "link": "backfills.html#what"
+    },
+    {
+      "q": "The slow backfill fetched v3 of a doc while a live edit already wrote v4. What prevents an overwrite?",
+      "choices": [
+        "Conditional writes: only if the version is newer",
+        "Partitioning both topics by doc_id",
+        "Running the backfill at night",
+        "A bigger rate limit"
+      ],
+      "answer": 0,
+      "why": "Only the version check is safe across lanes.",
+      "link": "backfills.html#race"
+    },
+    {
+      "q": "A backfill worker crashes after three days. What makes resuming safe?",
+      "choices": [
+        "Restarting from scratch",
+        "Skipping failed docs silently",
+        "Deleting the index and retrying",
+        "A saved listing cursor, idempotent writes and committed offsets"
+      ],
+      "answer": 3,
+      "why": "Checkpoints plus idempotent processing make restarts harmless.",
+      "link": "backfills.html#checkpoint"
+    },
+    {
+      "q": "Which number must stay flat while a backfill runs?",
+      "choices": [
+        "Backfill docs per second",
+        "DLQ depth",
+        "Live ingestion lag",
+        "Total chunk count"
+      ],
+      "answer": 2,
+      "why": "The backfill must never starve live updates.",
+      "link": "backfills.html#plan"
+    },
+    {
+      "q": "You change the embedding model. How should you rebuild?",
+      "choices": [
+        "Re-embed in place in the live index",
+        "Build a new index alongside, compare evals, then switch reads",
+        "Pause the assistant for a day",
+        "Only re-embed new documents"
+      ],
+      "answer": 1,
+      "why": "Never re-index in place; switch blue-green with rollback.",
+      "link": "backfills.html#reembed"
+    },
+    {
+      "q": "Where should the re-index read documents from?",
+      "choices": [
+        "Stored parsed documents",
+        "The source APIs",
+        "The old vectors",
+        "The model's memory"
+      ],
+      "answer": 0,
+      "why": "Rebuilding from stored copies means quotas don't matter.",
+      "link": "backfills.html#reembed"
+    },
+    {
+      "q": "A document keeps failing to parse. What should happen?",
+      "choices": [
+        "Retry it forever",
+        "Drop it with no record",
+        "Stop the whole backfill",
+        "Park it in a dead-letter queue and replay after a fix"
+      ],
+      "answer": 3,
+      "why": "A DLQ keeps the job moving and the failure visible.",
+      "link": "backfills.html#checkpoint"
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "title": "Weights in retrieval",
+  "page": "retrieval-weights.html",
+  "cards": [
+    {
+      "front": "A retrieval score is…",
+      "back": "A weighted sum of signals: keyword match, meaning match, recency, field and business rules each give one number per document, and you tune only the weights.",
+      "link": "retrieval-weights.html#sum"
+    },
+    {
+      "front": "Hybrid alpha",
+      "back": "score = alpha·dense + (1 − alpha)·bm25. alpha = 1 is pure vector search and alpha = 0 is pure keyword search.",
+      "link": "retrieval-weights.html#sum"
+    },
+    {
+      "front": "Why normalise before adding scores",
+      "back": "BM25 is unbounded while cosine sits in a narrow band, so a BM25 of 18 beside a cosine of 0.84 wins every sum unless you normalise first.",
+      "link": "retrieval-weights.html#scales"
+    },
+    {
+      "front": "Min-max normalisation",
+      "back": "(s − min) / (max − min), per query and per list. One outlier squashes the rest, and near-ties get stretched to 0–1.",
+      "link": "retrieval-weights.html#scales"
+    },
+    {
+      "front": "RRF formula",
+      "back": "RRF(d) = Σ wᵢ / (k + rankᵢ(d)), with k = 60 by default. It uses ranks only, so no normalisation is needed.",
+      "link": "retrieval-weights.html#rrf"
+    },
+    {
+      "front": "Effect of k in RRF",
+      "back": "A small k makes the #1 slot in either list dominate. A large k flattens the curve, so documents that do well in both lists win.",
+      "link": "retrieval-weights.html#rrf"
+    },
+    {
+      "front": "Recency decay",
+      "back": "recency = 0.5^(age / half_life). With a 90-day half-life, a 90-day-old doc gets 0.5 and a 180-day-old one 0.25.",
+      "link": "retrieval-weights.html#boosts"
+    },
+    {
+      "front": "Filter or boost?",
+      "back": "Filters remove, boosts reorder. Filter when the question pins a value; boost for a preference. Permissions are always filters.",
+      "link": "retrieval-weights.html#boosts"
+    },
+    {
+      "front": "How to choose weights",
+      "back": "Grid search on 100–300 labelled queries, sweeping alpha 0 to 1 in 0.1 steps, scoring NDCG@10 or recall@k on a held-out split.",
+      "link": "retrieval-weights.html#tuning"
+    },
+    {
+      "front": "When to re-tune weights",
+      "back": "After any signal change: a new embedding model, chunker or BM25 analyser moves score distributions.",
+      "link": "retrieval-weights.html#tuning"
+    },
+    {
+      "front": "Learning to rank (LTR)",
+      "back": "Past a handful of signals, train a model (often LambdaMART gradient-boosted trees) on labelled pairs to learn the weights and their interactions.",
+      "link": "retrieval-weights.html#tuning"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "You add raw BM25 scores to raw cosine scores. What happens?",
+      "choices": [
+        "Cosine wins because it is closer to 1",
+        "BM25 wins nearly every query because its scale is larger",
+        "They balance out automatically",
+        "Results become random"
+      ],
+      "answer": 1,
+      "why": "BM25 is unbounded, so it dominates unless scores are normalised.",
+      "link": "retrieval-weights.html#failures"
+    },
+    {
+      "q": "With alpha = 0 in alpha·dense + (1 − alpha)·bm25, what is the search?",
+      "choices": [
+        "Pure keyword search",
+        "Pure vector search",
+        "An even 50/50 blend",
+        "Reciprocal rank fusion"
+      ],
+      "answer": 0,
+      "why": "alpha weights the dense term, so 0 leaves only BM25.",
+      "link": "retrieval-weights.html#sum"
+    },
+    {
+      "q": "Why do most engines ship RRF as the default hybrid mode?",
+      "choices": [
+        "It always beats every linear blend",
+        "It uses the raw score gap between results",
+        "It needs no ranked lists",
+        "It needs no score normalisation"
+      ],
+      "answer": 3,
+      "why": "RRF ignores raw scores and uses only ranks.",
+      "link": "retrieval-weights.html#rrf"
+    },
+    {
+      "q": "Using a 90-day half-life, what recency value does a 180-day-old filing get?",
+      "choices": [
+        "0.5",
+        "0.125",
+        "0.25",
+        "0"
+      ],
+      "answer": 2,
+      "why": "Two half-lives: 0.5 × 0.5 = 0.25.",
+      "link": "retrieval-weights.html#boosts"
+    },
+    {
+      "q": "Why is recency as a hard filter a failure mode?",
+      "choices": [
+        "It makes queries slower",
+        "Last year's document vanishes when it is the only answer",
+        "It breaks RRF",
+        "It needs a labelled set"
+      ],
+      "answer": 1,
+      "why": "Recency should be a soft decay, not a filter.",
+      "link": "retrieval-weights.html#failures"
+    },
+    {
+      "q": "You swapped the embedding model. What should happen to alpha?",
+      "choices": [
+        "Re-tune it on the labelled set",
+        "Keep it; alpha is model-independent",
+        "Set it to 0.5",
+        "Set it to 1"
+      ],
+      "answer": 0,
+      "why": "A new model changes the cosine distribution, so the best alpha moves.",
+      "link": "retrieval-weights.html#tuning"
+    },
+    {
+      "q": "How should user permissions be applied in scoring?",
+      "choices": [
+        "As a small boost",
+        "As a recency term",
+        "As part of alpha",
+        "As hard filters"
+      ],
+      "answer": 3,
+      "why": "Permissions are always filters, never boosts.",
+      "link": "retrieval-weights.html#boosts"
+    }
+  ]
+}

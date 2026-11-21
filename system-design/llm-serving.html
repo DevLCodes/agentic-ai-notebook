@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LLM serving · Agentic System Designs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="description" content="How a self-hosted LLM turns GPU memory into concurrent users: weights, KV cache and paging, quantization, static, dynamic and continuous batching, parallelism, and throughput vs latency.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -162,7 +163,7 @@
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
-<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · serving</p><h1>LLM serving</h1><p class="lead">How a self-hosted model turns GPU memory into concurrent users: weights, the KV cache, quantization, batching and parallelism. The ideas apply to any serving engine.</p></div></div>
 <div class="wrap doc">
@@ -189,13 +190,7 @@
 <p>Batching runs many requests through one read of the weights. Static batching suits offline jobs, dynamic batching suits fixed-size models like embedders, and in-flight (continuous) batching suits LLM generation, because short answers don't wait for long ones. <a href="batching.html">Batching</a> compares the three in a simulation.</p></section>
 
 <section id="parallelism"><h2>Parallelism</h2>
-<div class="table"><table><thead><tr><th>To use more GPUs</th><th>How it splits</th><th>Cost</th></tr></thead><tbody>
-<tr><td>Tensor parallelism</td><td>Every layer split across GPUs; all GPUs work on every token</td><td>Heavy GPU-to-GPU traffic, so keep it inside one fast-linked node</td></tr>
-<tr><td>Pipeline parallelism</td><td>Different layers on different GPUs, like an assembly line</td><td>Less traffic, but stages can idle; can span nodes</td></tr>
-<tr><td>Expert parallelism</td><td>MoE experts placed on different GPUs</td><td>Routing traffic between GPUs; uneven load if some experts are popular</td></tr>
-<tr><td>Replicas</td><td>Whole copies of the model behind a load balancer</td><td>Simplest way to add throughput, if one copy fits</td></tr>
-</tbody></table></div>
-<p>Use tensor parallelism when the model doesn't fit on one GPU, and replicas when it does but you need more throughput.</p></section>
+<p>A model too big for one GPU is split across several. Tensor parallelism slices every layer, so all GPUs work on every token. Pipeline parallelism gives each GPU a run of layers, like an assembly line. Replicas copy a model that already fits. <a href="model-fitting.html">Fitting a model on GPUs</a> has a lab that sizes the model and says when to quantize, split or share a GPU.</p></section>
 
 <section id="metrics"><h2>Throughput vs latency</h2>
 <ul class="plain">
@@ -227,7 +222,7 @@
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
 
-<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#kv-cache">Glossary: KV cache</a></li></ul></section></article>
+<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="model-fitting.html">Fitting a model on GPUs</a></li><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#kv-cache">Glossary: KV cache</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>

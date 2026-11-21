@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fitting a model on GPUs: shrink, split or share · Agentic System Designs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="description" content="When a model is too big, the right size, or much smaller than one GPU: quantization, tensor parallelism, pipeline parallelism, replicas and GPU sharing, with an interactive sizing lab.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
+  :root {
+    color-scheme: light;
+    --bg: #e9ecef; --paper: #f7f8f9; --ink: #1c2530; --muted: #586473; --line: #cdd4dc; --line-strong: #9aa5b1;
+    --accent: #4255d4; --accent-ink: #ffffff; --track: #d3d9e0; --code-bg: #eef1f4; --wire: #7d8996;
+    --c-ingest: #2a9d8f; --c-kb: #4d5fd8; --c-serve: #d7932a; --c-model: #e2674f; --c-gov: #b2456e; --c-cross: #4a5562; --c-dlq: #b23a3a; --c-ok: #2f8f5b;
+    --t-src: #e4e8ec; --t-ingest: #d8eeea; --t-kb: #dfe3fa; --t-serve: #f8ead2; --t-model: #fbe1da; --t-gov: #f3dde6; --t-cross: #dfe2e6; --t-dlq: #f6dddb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+  .sitebar { border-bottom: 1px solid var(--line); background: var(--paper); }
+  .sitebar .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 12px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; margin-right: auto; }
+  .sitebar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .sitebar nav a { color: var(--muted); text-decoration: none; }
+  .sitebar nav a:hover, .sitebar nav a[aria-current="page"] { color: var(--ink); }
+  .sitebar nav a[aria-current="page"] { font-weight: 600; }
+
+  .intro { padding-block: 40px 8px; display: grid; gap: 10px; max-width: 820px; }
+  .eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; text-wrap: balance; }
+  .intro .lead { font-size: 18px; margin: 0; }
+
+  .doc { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding-block: 36px 72px; }
+  .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; }
+  .toc p { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: flex; gap: 8px; padding: 3px 0; font-size: 14px; color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; color: var(--line-strong); }
+  .toc a:hover { color: var(--ink); }
+  article { min-width: 0; max-width: 760px; }
+  section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15; text-wrap: balance; }
+  h3 { margin: 26px 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.25; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; }
+  ul.plain, ol.plain { margin: 0 0 16px; padding-left: 22px; display: grid; gap: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { margin: 0 0 16px; padding: 14px 16px; background: var(--code-bg); border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .table { overflow-x: auto; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .note { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 0 0 18px; }
+  .note p:last-child { margin: 0; }
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .related a { display: inline-block; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; background: var(--paper); }
+  .related a:hover { border-color: var(--ink); }
+  .pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  footer.site { border-top: 1px solid var(--line); padding-block: 20px 40px; font-size: 13px; color: var(--muted); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* home */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 0 0 40px; padding: 0; list-style: none; }
+  .card { display: grid; gap: 8px; height: 100%; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; }
+  .card:hover { border-color: var(--ink); }
+  .card .k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: 20px; }
+  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .card svg { width: 100%; height: auto; display: block; }
+  .card.feature svg { max-width: 420px; justify-self: center; }
+  .card.feature { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .home-h { margin: 28px 0 12px; font-family: var(--font-display); font-size: 24px; }
+
+  /* glossary */
+  .gl-tools { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .gl-tools input { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .gl-letters { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 13px; }
+  .gl-letters a { padding: 2px 6px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+  .gl-letters a:hover { background: var(--paper); color: var(--ink); }
+  .gl { max-width: 860px; }
+  .gl-item { margin: 0; }
+  .gl-item { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+  .gl-item dt { font-weight: 600; }
+  .gl-item dt small { display: block; font-weight: 400; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+  .gl-item dd { margin: 0; }
+  .gl-item dd .see { font-size: 13.5px; }
+  .gl-letter { margin: 26px 0 4px; font-family: var(--font-display); font-size: 22px; scroll-margin-top: 70px; }
+
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 28px 56px; }
+    .toc { position: static; }
+    .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+    .card.feature { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .gl-item { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    h2 { font-size: 24px; }
+    .intro .lead, .lead { font-size: 16.5px; }
+  }
+
+  /* diagrams */
+  .fig { margin: 6px 0 24px; overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 600px; }
+  .fig figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .dg text { font-family: var(--font-body); font-size: 13px; fill: var(--ink); }
+  .dg .sm { font-size: 11.5px; fill: var(--muted); }
+  .dg .small { font-size: 12px; }
+  .dg .b { font-weight: 600; }
+  .dg .mono { font-family: var(--font-mono); }
+  .dg .it { font-style: italic; }
+  .dg .mute { fill: var(--muted); }
+  .dg .gov { fill: var(--c-gov); font-weight: 600; }
+  .dg .okt { fill: var(--c-ok); font-weight: 600; }
+  .dg .bad { fill: var(--c-dlq); font-weight: 600; }
+  .dg .cap { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; fill: var(--muted); }
+  .dg .big { font-family: var(--font-display); font-size: 30px; font-weight: 700; fill: var(--ink); }
+  .dg .box { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .ghost { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 5 5; }
+  .dg .track { fill: var(--track); }
+  .dg .rule { stroke: var(--line); stroke-width: 1; }
+  .dg .axis { stroke: var(--line-strong); stroke-width: 1.25; }
+  .dg .wire { fill: none; stroke: var(--wire); stroke-width: 1.4; }
+  .dg .wire.dash { stroke-dasharray: 4 4; }
+  .dg .wire.hot { stroke: var(--accent); stroke-width: 2; }
+  .dg .wire.red { stroke: var(--c-dlq); }
+  .dg .ah { fill: var(--wire); }
+  .dg .xmark { stroke: var(--c-dlq); stroke-width: 1.8; fill: none; }
+  .dg .tick { stroke: var(--c-ok); stroke-width: 2; fill: none; }
+  .dg .k-src { fill: var(--t-src); stroke: #8795a3; stroke-width: 1.5; }
+  .dg .k-ingest { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .k-kb { fill: var(--t-kb); stroke: var(--c-kb); stroke-width: 1.5; }
+  .dg .k-serve { fill: var(--t-serve); stroke: var(--c-serve); stroke-width: 1.5; }
+  .dg .k-model { fill: var(--t-model); stroke: var(--c-model); stroke-width: 1.5; }
+  .dg .k-gov { fill: var(--t-gov); stroke: var(--c-gov); stroke-width: 1.5; }
+  .dg .k-cross { fill: var(--t-cross); stroke: var(--c-cross); stroke-width: 1.5; }
+  .dg .k-dlq { fill: var(--t-dlq); stroke: var(--c-dlq); stroke-width: 1.5; }
+  .dg .k-user { fill: #ffffff; stroke: var(--line-strong); stroke-width: 1.5; }
+  .dg .f-serve { fill: var(--c-serve); } .dg .f-kb { fill: var(--c-kb); } .dg .f-model { fill: var(--c-model); } .dg .f-gov { fill: var(--c-gov); } .dg .f-ingest { fill: var(--c-ingest); } .dg .f-cross { fill: #b8c0c9; } .dg .f-dlq { fill: var(--c-dlq); } .dg .f-ok { fill: var(--c-ok); }
+  .dg .cell { fill: var(--paper); stroke: var(--line-strong); stroke-width: 1; }
+  .dg .cell.hot { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.old { fill: var(--t-kb); stroke: var(--c-kb); }
+  .dg .cell.new { fill: var(--t-ingest); stroke: var(--c-ingest); stroke-width: 1.5; }
+  .dg .cell.gone { fill: var(--paper); stroke: var(--line); }
+  .dg .dot-hr { fill: var(--c-gov); } .dg .dot-it { fill: var(--c-kb); } .dg .dot-eng { fill: var(--c-ingest); } .dg .dot-q { fill: var(--c-serve); stroke: var(--ink); stroke-width: 1.5; }
+  .dg .halo { fill: none; stroke: var(--c-serve); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .dg .zone { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  /* labs */
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .lab input[type=text] { flex: 1 1 260px; min-width: 0; font: 15px var(--font-body); padding: 8px 11px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+</style>
+
+<style>
+  .fig3d { margin: 6px 0 26px; }
+  .stage3d { position: relative; height: clamp(340px, 58vh, 540px); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #e6eaee; }
+  .stage3d canvas { display: block; }
+  .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .hint3 { position: absolute; left: 12px; top: 10px; margin: 0; z-index: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; text-align: center; font-size: 14px; color: var(--muted); }
+  .stage3d.ready .nogl { display: none; }
+  .l3 { padding: 2px 7px 3px; border-radius: 6px; background: rgba(250, 251, 252, 0.86); border: 1px solid var(--line); font-family: var(--font-body); font-size: 11.5px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .l3.q { background: var(--ink); border-color: var(--ink); color: #fff; font-size: 12px; }
+  .l3.sc { font-family: var(--font-mono); font-size: 11px; background: #fff3dc; border-color: #e3a13b; }
+  .l3.miss { background: #f6dddb; border-color: var(--c-dlq); color: var(--c-dlq); }
+  .l3.cap { background: none; border: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+  .ctl3 .k { margin-right: 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ctl3 button { font: 600 13px var(--font-body); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ctl3 button:hover { border-color: var(--ink); }
+  .ctl3 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .ctl3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .out3 { margin: 10px 0 0; padding: 10px 14px; min-height: 3.2em; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .fig3d figcaption { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .stage3d .labels3 { position: absolute; inset: 0; pointer-events: none; }
+  .ctl3 input[type=range] { width: 140px; accent-color: var(--accent); }
+  .ctl3 output { font-family: var(--font-mono); font-size: 12.5px; min-width: 5ch; }
+  .l3.cap b { color: var(--ink); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<main>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · serving</p><h1>Fitting a model on GPUs: shrink, split or share</h1><p class="lead">A model either fits on one GPU, is too big for one, or is much smaller than one. Each case has its own answer: quantize it, split it with tensor or pipeline parallelism, or share the GPU.</p></div></div>
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#three">Three situations</a></li><li><a href="#lab">Try it: fit the model</a></li><li><a href="#tensor">Tensor parallelism</a></li><li><a href="#pipeline">Pipeline parallelism</a></li><li><a href="#order">What to try first</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="three"><h2>Three situations</h2>
+<p class="lead">First work out how much memory the model needs, then compare it with one GPU.</p>
+<div class="formula">memory ≈ parameters × bytes per weight + KV cache for all active users + activations and overhead (~2 GB)</div>
+<p>A 70B model in BF16 needs 70 billion × 2 bytes = 140 GB for its weights alone. An 80 GB GPU can't hold it. Then there are three situations:</p>
+<div class="table"><table><thead><tr><th>Situation</th><th>Example</th><th>Answer</th></tr></thead><tbody>
+<tr><td><strong>Too big for one GPU</strong></td><td>70B in BF16 on 80 GB GPUs</td><td>Shrink it with <a href="quantization.html">quantization</a> if quality allows; otherwise split it across GPUs with tensor or pipeline parallelism</td></tr>
+<tr><td><strong>Fits on one GPU</strong></td><td>8B in BF16 (16 GB) on an 80 GB GPU</td><td>Run one copy per GPU and add copies (replicas) for more users. Splitting would only add communication</td></tr>
+<tr><td><strong>Much smaller than one GPU</strong></td><td>Three teams each need 15 GB on one 80 GB GPU</td><td>Share the GPU: cut it into isolated slices so one tenant can't run another out of memory (<a href="nvidia-architecture.html#sharing">GPU partitioning</a>)</td></tr>
+</tbody></table></div></section>
+
+<section id="lab"><h2>Try it: fit the model</h2>
+<p>Pick a model, a precision and a GPU, then add GPUs and choose how to split. The layers fly out of the model into the GPUs, and each glass card fills with what it holds. The line under the scene says what you'd recommend in a design review.</p>
+<figure class="fig3d" id="fit3d">
+<div class="stage3d" role="img" aria-label="A model's layers placed on GPUs: glass GPU cards fill with weights, KV cache and overhead"><p class="hint3">3D · drag to turn, scroll to zoom</p><p class="nogl">The 3D view needs WebGL and a connection, because Three.js loads from a CDN.</p></div>
+<div class="ctl3"><span class="k">Model</span><button data-model="8" aria-pressed="false">8B</button><button data-model="70" aria-pressed="true">70B</button><button data-model="405" aria-pressed="false">405B</button>
+<span class="k">Precision</span><button data-prec="2" aria-pressed="true">BF16</button><button data-prec="1" aria-pressed="false">FP8</button><button data-prec="0.55" aria-pressed="false">INT4</button>
+<span class="k">GPU</span><button data-mem="80" aria-pressed="true">80 GB</button><button data-mem="141" aria-pressed="false">141 GB</button></div>
+<div class="ctl3"><span class="k">GPUs</span><button data-n="1" aria-pressed="true">1</button><button data-n="2" aria-pressed="false">2</button><button data-n="4" aria-pressed="false">4</button><button data-n="8" aria-pressed="false">8</button><button data-n="16" aria-pressed="false">16</button>
+<span class="k">Split</span><button data-split="tp" aria-pressed="true">Tensor parallel</button><button data-split="pp" aria-pressed="false">Pipeline parallel</button></div>
+<div class="ctl3"><label class="k" for="fit-users">Users at once</label><input type="range" id="fit-users" data-users min="1" max="32" step="1" value="4"><output data-users-o>4</output>
+<button data-rec style="margin-left:auto">Show me the recommendation</button></div>
+<p class="out3" aria-live="polite"></p>
+<figcaption>Each glass card is one GPU. Coloured stripes are the model's layer groups (orange at the bottom to purple at the top), then the KV cache (blue) and activations and overhead (grey). Red above a card is memory that doesn't fit. With tensor parallel, a purple pulse sweeps up through every layer: the GPUs swap results after each one. With pipeline parallel, gold tokens climb one GPU and hop to the next, and idle GPUs go dark.</figcaption>
+</figure>
+<p>Things to try:</p>
+<ul class="plain">
+<li><strong>70B, BF16, 1 GPU:</strong> red spills out of the card, about 67 GB too much. Click FP8 and watch the stripes shrink until it fits. Then click <em>Show me the recommendation</em>.</li>
+<li><strong>Tensor vs pipeline at 4 GPUs:</strong> the fill height is the same, but look inside. Tensor parallel gives every GPU a thin slice of every colour, and the purple pulse never stops. Pipeline parallel gives each GPU two whole colours, and a single gold token leaves three GPUs dark. Raise users and the dark GPUs light up.</li>
+<li><strong>405B, BF16, 16 GPUs:</strong> a second server appears. With tensor parallel the pulse turns red and slows as it crosses the network cable. Switch to pipeline parallel between servers.</li>
+<li><strong>8B, INT4, 141 GB GPU:</strong> a sliver of colour at the bottom of a huge card. That's the case for sharing the GPU, not splitting the model.</li>
+</ul></section>
+
+<section id="tensor"><h2>Tensor parallelism</h2>
+<p>Every layer is cut into N slices, one per GPU. For each token, all GPUs compute their slice of layer 1 at the same time, combine the partial results (an all-reduce), then move to layer 2.</p>
+<figure class="fig"><svg viewBox="0 0 722 190" class="dg" role="img" aria-label="Tensor parallelism: each of four GPUs holds a quarter of every layer and they exchange results after each layer"><text x="10" y="18" class="cap">Tensor parallel, 4 GPUs: each GPU holds a quarter of every layer</text>
+<g><rect x="90" y="32" width="140" height="130" rx="10" class="box"/><text x="160" y="52" class="small b" text-anchor="middle">GPU 1</text><rect x="104" y="62" width="112" height="22" rx="4" class="k-model"/><text x="160" y="77" class="sm" text-anchor="middle">¼ of layer 1</text><rect x="104" y="90" width="112" height="22" rx="4" class="k-model"/><text x="160" y="105" class="sm" text-anchor="middle">¼ of layer 2</text><text x="160" y="132" class="sm" text-anchor="middle">… ¼ of every layer</text></g>
+<g><rect x="250" y="32" width="140" height="130" rx="10" class="box"/><text x="320" y="52" class="small b" text-anchor="middle">GPU 2</text><rect x="264" y="62" width="112" height="22" rx="4" class="k-model"/><text x="320" y="77" class="sm" text-anchor="middle">¼ of layer 1</text><rect x="264" y="90" width="112" height="22" rx="4" class="k-model"/><text x="320" y="105" class="sm" text-anchor="middle">¼ of layer 2</text><text x="320" y="132" class="sm" text-anchor="middle">… ¼ of every layer</text></g>
+<g><rect x="410" y="32" width="140" height="130" rx="10" class="box"/><text x="480" y="52" class="small b" text-anchor="middle">GPU 3</text><rect x="424" y="62" width="112" height="22" rx="4" class="k-model"/><text x="480" y="77" class="sm" text-anchor="middle">¼ of layer 1</text><rect x="424" y="90" width="112" height="22" rx="4" class="k-model"/><text x="480" y="105" class="sm" text-anchor="middle">¼ of layer 2</text><text x="480" y="132" class="sm" text-anchor="middle">… ¼ of every layer</text></g>
+<g><rect x="570" y="32" width="140" height="130" rx="10" class="box"/><text x="640" y="52" class="small b" text-anchor="middle">GPU 4</text><rect x="584" y="62" width="112" height="22" rx="4" class="k-model"/><text x="640" y="77" class="sm" text-anchor="middle">¼ of layer 1</text><rect x="584" y="90" width="112" height="22" rx="4" class="k-model"/><text x="640" y="105" class="sm" text-anchor="middle">¼ of layer 2</text><text x="640" y="132" class="sm" text-anchor="middle">… ¼ of every layer</text></g>
+<path d="M230 73 L250 73 M390 73 L410 73 M550 73 L570 73" class="wire hot"/><path d="M230 101 L250 101 M390 101 L410 101 M550 101 L570 101" class="wire hot"/><text x="10" y="182" class="sm">Blue links: results combined after every layer, for every token. That's a lot of traffic, so the GPUs need a very fast link inside one server.</text></svg><figcaption>All GPUs work on every token, so a single request gets faster. The cost is constant GPU-to-GPU traffic.</figcaption></figure>
+<ul class="plain">
+<li><strong>Use it when:</strong> the model doesn't fit on one GPU and you want low latency per request. It's the default way to split a model inside one server.</li>
+<li><strong>Limit:</strong> keep it inside one server (usually up to 8 GPUs). Between servers the network is far slower than the GPU-to-GPU link, and the per-layer traffic stalls everything.</li>
+</ul></section>
+
+<section id="pipeline"><h2>Pipeline parallelism</h2>
+<p>The layers are cut into N consecutive stages, one per GPU, like an assembly line. GPU 1 runs layers 1–20 and hands its result to GPU 2 for layers 21–40, and so on.</p>
+<figure class="fig"><svg viewBox="0 0 722 190" class="dg" role="img" aria-label="Pipeline parallelism: four GPUs each hold a quarter of the layers and pass results along a chain"><text x="10" y="18" class="cap">Pipeline parallel, 4 GPUs: each GPU holds a quarter of the layers</text>
+<rect x="30" y="40" width="140" height="70" rx="10" class="k-model"/><text x="100" y="66" class="small b" text-anchor="middle">GPU 1</text><text x="100" y="86" class="sm" text-anchor="middle">layers 1–20</text>
+<rect x="210" y="40" width="140" height="70" rx="10" class="k-model"/><text x="280" y="66" class="small b" text-anchor="middle">GPU 2</text><text x="280" y="86" class="sm" text-anchor="middle">layers 21–40</text>
+<rect x="390" y="40" width="140" height="70" rx="10" class="k-model"/><text x="460" y="66" class="small b" text-anchor="middle">GPU 3</text><text x="460" y="86" class="sm" text-anchor="middle">layers 41–60</text>
+<rect x="570" y="40" width="140" height="70" rx="10" class="k-model"/><text x="640" y="66" class="small b" text-anchor="middle">GPU 4</text><text x="640" y="86" class="sm" text-anchor="middle">layers 61–80</text>
+<path d="M170 75 L208 75" class="wire hot" marker-end="url(#ah)"/><path d="M350 75 L388 75" class="wire hot" marker-end="url(#ah)"/><path d="M530 75 L568 75" class="wire hot" marker-end="url(#ah)"/>
+<text x="10" y="140" class="sm">Only one hand-off between neighbours per stage, so it works across servers too.</text><text x="10" y="160" class="sm">With one request, three GPUs wait while one works (the "bubble"). Many requests in flight keep every stage busy.</text></svg><figcaption>Pipeline parallelism needs little traffic but adds idle time unless many requests are in flight.</figcaption></figure>
+<ul class="plain">
+<li><strong>Use it when:</strong> the model needs more GPUs than one server has, or the GPUs only have a slow link between them.</li>
+<li><strong>Limit:</strong> it doesn't speed up a single request, because each token still passes through every stage in turn. It needs many concurrent requests to fill the pipeline.</li>
+<li><strong>Combined:</strong> very large models use both, tensor parallel inside each server and pipeline parallel between servers.</li>
+</ul></section>
+
+<section id="order"><h2>What to try first</h2>
+<ol class="plain">
+<li><strong>Does it fit on one GPU</strong> with room for the KV cache your users need? Then don't split it. Add replicas for more users.</li>
+<li><strong>Would 8-bit make it fit?</strong> <a href="quantization.html">Quantize</a> to FP8 or INT8 and check your eval set. One GPU at FP8 is usually cheaper and simpler than two at BF16.</li>
+<li><strong>Still too big, or quality must not move?</strong> Use tensor parallelism inside one server, with the smallest GPU count that leaves enough KV cache.</li>
+<li><strong>Bigger than one server?</strong> Add pipeline parallelism between servers.</li>
+<li><strong>Much smaller than one GPU?</strong> Share the GPU between several models or tenants with isolated slices, or use a smaller GPU.</li>
+</ol>
+<div class="table"><table><thead><tr><th>Question</th><th>Tensor parallel</th><th>Pipeline parallel</th><th>Quantize</th><th>Share the GPU</th></tr></thead><tbody>
+<tr><td>Solves</td><td>Too big for one GPU</td><td>Too big for one server</td><td>Too big, or memory tight</td><td>Much smaller than one GPU</td></tr>
+<tr><td>Memory per GPU</td><td>÷ N</td><td>÷ N</td><td>÷ 2 (8-bit) to ÷ 4 (4-bit)</td><td>Each tenant gets a fixed slice</td></tr>
+<tr><td>Speed of one request</td><td>Faster</td><td>No faster</td><td>Faster</td><td>A slice is slower than the full GPU</td></tr>
+<tr><td>Cost</td><td>Traffic every layer; fast links needed</td><td>Idle bubbles; needs many requests</td><td>Some quality risk; run evals</td><td>Fixed slice sizes; some capacity unused</td></tr>
+</tbody></table></div></section>
+
+<section id="interview"><h2>Saying it in an interview</h2>
+<div class="note"><p>"70B in BF16 is 140 GB of weights, so it can't sit on one 80 GB GPU. If an FP8 checkpoint passes our eval set, it's 70 GB and fits on one GPU, which is the cheapest option. If quality must stay at BF16, I'd use tensor parallelism of 4 inside one 8-GPU server: about 35 GB of weights per GPU and plenty of room for KV cache. I'd only add pipeline parallelism if the model outgrew one server. And for several small models from different teams, I'd partition GPUs into isolated slices rather than give each team a whole GPU."</p></div></section>
+
+<section id="real-world"><h2>In the real world</h2>
+<div class="table"><table><thead><tr><th>Need</th><th>Real options</th></tr></thead><tbody>
+<tr><td>Tensor and pipeline parallel serving</td><td>vLLM (<code>--tensor-parallel-size</code>, <code>--pipeline-parallel-size</code>), SGLang, NVIDIA TensorRT-LLM</td></tr>
+<tr><td>Partitioning a GPU between tenants</td><td>NVIDIA MIG, MPS and time-slicing; see <a href="nvidia-architecture.html#sharing">Sharing a GPU</a></td></tr>
+<tr><td>Quantized checkpoints</td><td>FP8, AWQ and GPTQ versions on the Hugging Face Hub</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
+
+<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html#sharing">NVIDIA: sharing a GPU</a></li><li><a href="glossary.html#tensor-parallelism">Glossary: tensor parallelism</a></li></ul></section></article>
+</div>
+</main>
+<footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { mountFit } from '../assets/gpu3d.js';
+mountFit(document.getElementById('fit3d'));
+</script>
+<script src="progress.js"></script>
+<script src="check-yourself.js"></script>
+</body>
+</html>

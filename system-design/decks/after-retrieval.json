@@ -1,0 +1,130 @@
+{
+  "title": "After retrieval",
+  "page": "after-retrieval.html",
+  "cards": [
+    {
+      "front": "The seven steps after retrieval",
+      "back": "Rank, Pack, Prompt, Generate, Check, Ship, Log.",
+      "link": "after-retrieval.html#picture"
+    },
+    {
+      "front": "Rank and gate",
+      "back": "A cross-encoder reranks the top 20 and keeps the best 5. If the best score is under a threshold, don't answer: say not found, ask to clarify or widen the search.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "front": "Where the gate lives",
+      "back": "In code, not the prompt, so the model cannot guess from weak evidence.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "front": "Pack",
+      "back": "Remove duplicates, fit a token budget (about 4K), put the strongest chunk first, keep id, source and date with each chunk.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "front": "Why wrap chunks as data in the prompt",
+      "back": "Tags like <doc id=\"c12\"> let the model cite ids and are the defence against indirect prompt injection.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "front": "Generate",
+      "back": "Structured output such as {answer, citations: [ids], found}, streamed so first words arrive in about a second.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "front": "Check (in code)",
+      "back": "Every cited id was retrieved and is visible to the user, every number appears in a chunk or tool result, and a safety scan passes. On failure, regenerate once, then fall back.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "front": "Log",
+      "back": "One trace per request: query, chunk ids and versions, scores, prompt version, model, latency, cost and feedback.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "front": "Bi-encoder vs cross-encoder",
+      "back": "Bi-encoder: separate vectors, precomputed, millions → 20. Cross-encoder: reads both together, accurate but slow, 20 → 5.",
+      "link": "after-retrieval.html#encoders"
+    },
+    {
+      "front": "The 30-day refund example",
+      "back": "Embeddings rank a \"30-day free trial\" chunk highly; a cross-encoder sees it doesn't answer a refund question, scores it about 0.1 and lifts the refund policy to about 0.9.",
+      "link": "after-retrieval.html#encoders"
+    }
+  ],
+  "quiz": [
+    {
+      "q": "The best reranked chunk scores below the threshold. What should the system do?",
+      "choices": [
+        "Answer anyway from the top chunk",
+        "Say it could not find the answer, or ask a clarifying question",
+        "Lower the threshold for this query",
+        "Send all 20 chunks to the model"
+      ],
+      "answer": 1,
+      "why": "The gate stops the model guessing from weak evidence.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "q": "Why put the strongest chunk first when packing?",
+      "choices": [
+        "Models attend less to the middle of long contexts",
+        "It reduces embedding cost",
+        "Citations only work for the first chunk",
+        "Rerankers require it"
+      ],
+      "answer": 0,
+      "why": "Position matters, so the best evidence goes first.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "q": "What defends against indirect prompt injection in retrieved text?",
+      "choices": [
+        "Putting chunks before the instructions",
+        "Removing chunk ids",
+        "Raising the temperature",
+        "Wrapping chunks as tagged data after the instructions"
+      ],
+      "answer": 3,
+      "why": "Retrieved text is treated as evidence, not instructions.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "q": "Which of these is a code check after generation?",
+      "choices": [
+        "Ask the model whether it is confident",
+        "Re-embed the answer",
+        "Every cited id is a chunk that was retrieved",
+        "Check the answer length"
+      ],
+      "answer": 2,
+      "why": "Code verifies citations and numbers before anyone sees them.",
+      "link": "after-retrieval.html#steps"
+    },
+    {
+      "q": "Why not use a cross-encoder for first-stage retrieval?",
+      "choices": [
+        "It is less accurate than a bi-encoder",
+        "It runs once per (question, chunk) pair and cannot be precomputed",
+        "It cannot output a score",
+        "It only works with keyword search"
+      ],
+      "answer": 1,
+      "why": "That is why it only reranks the top 20.",
+      "link": "after-retrieval.html#encoders"
+    },
+    {
+      "q": "A check fails after generation. What is the fallback order?",
+      "choices": [
+        "Regenerate once, then fall back",
+        "Regenerate until it passes",
+        "Ship with a warning",
+        "Ask the user to verify"
+      ],
+      "answer": 0,
+      "why": "One retry, then a safe fallback.",
+      "link": "after-retrieval.html#steps"
+    }
+  ]
+}

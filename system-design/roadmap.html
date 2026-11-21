@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Roadmap · System Design</title>
+<title>Roadmap · Agentic System Designs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="description" content="A six-stage, progress-tracked roadmap through AI system design topics and worked designs.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -291,7 +292,7 @@
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
-<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html">Topics</a><a href="roadmap.html" aria-current="page">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html">Topics</a><a href="roadmap.html" aria-current="page">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
 <div class="wrap">
   <div class="page-head"><p class="crumbs"><a href="index.html">Home</a> / Roadmap</p><h1>Roadmap</h1>
@@ -310,7 +311,7 @@
 </main>
 <footer class="site"><div class="wrap">
   <div class="foot">
-    <div><a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="5" height="5" rx="1" fill="#fff"/><rect x="10" y="1" width="5" height="5" rx="1" fill="#fff" opacity=".6"/><rect x="5.5" y="10" width="5" height="5" rx="1" fill="#fff" opacity=".8"/><path d="M3.5 6v2.5h9V6M8 8.5V10" stroke="#fff" stroke-width="1.2" fill="none"/></svg></span>System Design</a><p class="about">Free, interactive system design notes for engineers building AI products: worked designs, deep dives and a roadmap. Part of the Agentic AI notebook.</p></div>
+    <div><a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.6" fill="#8f9bff"/><circle cx="8" cy="9" r="3.4" fill="#fff"/><circle cx="24" cy="9" r="3.4" fill="#fff"/><circle cx="16" cy="25" r="3.4" fill="#fff"/></svg></span>Agentic System Designs</a><p class="about">Free, interactive system design notes for engineers building AI products: worked designs, deep dives and a roadmap. Part of the Agentic AI notebook.</p></div>
     <div><h4>Learn</h4><ul><li><a href="roadmap.html">Roadmap</a></li><li><a href="study.html">Study</a></li><li><a href="topics.html">Topics</a></li><li><a href="designs.html">Designs</a></li><li><a href="glossary.html">Glossary</a></li></ul></div>
     <div><h4>Foundations</h4><ul><li><a href="https://devlcodes.github.io/classic-system-designs/">Classic system design</a></li><li><a href="https://devlcodes.github.io/classic-system-designs/numbers.html">Numbers to know</a></li><li><a href="numbers.html">AI numbers cheat sheet</a></li></ul></div>
     <div><h4>Revise</h4><ul><li><a href="fluency.html">AI fluency Q&amp;A</a></li><li><a href="metrics.html">Metrics cheat sheet</a></li></ul></div>
@@ -324,8 +325,8 @@
   var STAGES = [
     { t: 'Load the data', d: 'Get documents in, split well, and keep them fresh.', items: [['knowledge-base', 'Knowledge base'], ['chunking', 'Chunking'], ['backfills', 'Backfills and re-indexing']] },
     { t: 'Retrieve the right context', d: 'Turn questions into the few passages that matter.', items: [['embeddings', 'Embeddings'], ['vector-databases', 'Vector databases'], ['vector-search', 'Vector search'], ['search-types', 'Search types'], ['retrieval-weights', 'Weights in retrieval'], ['reranking', 'Reranking'], ['after-retrieval', 'After retrieval']] },
-    { t: 'Shape the system', d: 'Route requests, give agents memory, and choose and serve the model.', items: [['routing', 'Routing'], ['agent-memory', 'Agent memory'], ['llm-serving', 'LLM serving'], ['quantization', 'Quantization'], ['batching', 'Batching'], ['nvidia-architecture', 'NVIDIA inference architecture'], ['open-weight-models', 'Open-weight models']] },
-    { t: 'Measure and govern', d: 'Prove it works, roll it out safely, respect permissions.', items: [['evals', 'Evals'], ['eval-rubrics', 'Evals in practice'], ['testing', 'Testing and rollout'], ['citations', 'Citations'], ['confidence-scoring', 'Confidence scoring'], ['access-control', 'Access control (ACL)']] },
+    { t: 'Shape the system', d: 'Route requests, coordinate agents, give them memory, and choose and serve the model.', items: [['routing', 'Routing'], ['reasoning-patterns', 'Reasoning and planning patterns'], ['agent-memory', 'Agent memory'], ['multi-agent', 'Multi-agent coordination'], ['llm-serving', 'LLM serving'], ['quantization', 'Quantization'], ['batching', 'Batching'], ['model-fitting', 'Fitting a model on GPUs'], ['nvidia-architecture', 'NVIDIA inference architecture'], ['open-weight-models', 'Open-weight models']] },
+    { t: 'Measure and govern', d: 'Prove it works, roll it out safely, respect permissions.', items: [['evals', 'Evals'], ['eval-rubrics', 'Evals in practice'], ['testing', 'Testing and rollout'], ['agent-operations', 'Run, monitor and maintain'], ['citations', 'Citations'], ['confidence-scoring', 'Confidence scoring'], ['access-control', 'Access control (ACL)']] },
     { t: 'Put it together', d: 'Whole designs, end to end, in rising difficulty.', items: [['enterprise-search', 'Enterprise Search'], ['knowledge-freshness', 'Fresh Knowledge Base'], ['finsight', 'FinSight'], ['support-agent', 'Support Agent'], ['oncall-assistant', 'On-Call Assistant'], ['ask-your-data', 'Ask Your Data'], ['ads-assistant', 'Ads Assistant'], ['review-insights', 'App Review Insights'], ['coding-agent', 'Coding Agent'], ['three-way-match', 'Three-Way Match']] },
     { t: 'Revise for the interview', d: 'Cheat sheets and practice answers.', items: [['fluency', 'AI fluency Q&A'], ['ml-basics', 'ML basics'], ['metrics', 'Metrics cheat sheet'], ['numbers', 'Numbers cheat sheet'], ['glossary', 'Glossary']] }
   ];

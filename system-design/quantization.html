@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quantization · Agentic System Designs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="description" content="Quantization explained: rounding model weights to 8 or 4 bits, scales and groups, why it speeds up decoding, FP8, INT8 and INT4 formats, GPTQ, AWQ and SmoothQuant, and an interactive lab.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -172,16 +173,17 @@
   .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  td.pass { color: var(--c-ok); font-weight: 600; } td.fail { color: var(--c-dlq); font-weight: 600; }
 </style>
 
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
-<header class="sitebar"><div class="wrap"><a class="brand" href="index.html">System Design</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
+<header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
 <div class="wrap"><div class="intro"><p class="eyebrow">Topic · serving</p><h1>Quantization</h1><p class="lead">Storing a model's numbers with fewer bits, so it fits on fewer GPUs and answers faster, at a quality cost you measure.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#idea">The idea in one picture</a></li><li><a href="#lab">Try it: squeeze the weights</a></li><li><a href="#how">How a weight becomes an integer</a></li><li><a href="#why">Why it makes models faster</a></li><li><a href="#formats">Formats</a></li><li><a href="#what">What gets quantized</a></li><li><a href="#methods">Methods</a></li><li><a href="#quality">Checking quality</a></li><li><a href="#when">When to use which</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#idea">The idea in one picture</a></li><li><a href="#lab">Try it: squeeze the weights</a></li><li><a href="#how">How a weight becomes an integer</a></li><li><a href="#why">Why it makes models faster</a></li><li><a href="#formats">Formats</a></li><li><a href="#what">What gets quantized</a></li><li><a href="#methods">Methods</a></li><li><a href="#quality">Checking quality</a></li><li><a href="#when">When to use which</a></li><li><a href="#case-13b">Case: 13B below its throughput target</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="idea"><h2>The idea in one picture</h2>
 <p class="lead">A model is billions of numbers called weights. Quantization rounds each weight to the nearest mark on a coarser ruler, so each one takes fewer bits.</p>
 <figure class="fig"><svg viewBox="0 0 722 210" class="dg" role="img" aria-label="The same weight 0.4371 stored at 16, 8 and 4 bits: fewer marks on the ruler, smaller file, bigger rounding error"><text x="10" y="20" class="cap">One weight, 0.4371, on three rulers from −1 to 1</text>
@@ -277,6 +279,30 @@
 <tr><td>Quality must not move at all</td><td>Stay at 16-bit, and add GPUs or use a smaller model</td></tr>
 </tbody></table></div></section>
 
+<section id="case-13b"><h2>Case: a 13B agent below its throughput target</h2>
+<p>An agent's 13B-parameter model is served in FP16 on 80 GB GPUs that support FP8. Weights take about 26 GB per replica (13 billion × 2 bytes), and throughput at peak is below target. The team wants less memory and more throughput <strong>without retraining</strong>. Here is how to judge the claims people make in that meeting.</p>
+<h3>Why fewer bits raise throughput</h3>
+<p>Each GPU holds the weights once, and the rest of its memory holds the KV cache: about 0.8 MB per token for a 13B model with full attention in 16-bit, so roughly 3.3 GB for one 4,096-token conversation. The number of conversations that fit at once is the batch size, and during decoding a bigger batch means more tokens per second for nearly the same cost per step. Halving the weights from 26 GB to 13 GB hands 13 GB back to the KV cache; quantizing the KV cache to 8-bit doubles what that space holds. Each decode step also reads fewer bytes, so it runs faster on hardware with native 8-bit maths (see <a href="#why">why it makes models faster</a>).</p>
+<div class="lab" id="caselab">
+  <div class="lab-row"><span class="lab-k">Weights</span><span class="seg" role="group" aria-label="Weight format">
+    <button data-cw="16" aria-pressed="true">FP16</button><button data-cw="8" aria-pressed="false">FP8 or INT8</button><button data-cw="4" aria-pressed="false">INT4 (AWQ)</button></span></div>
+  <div class="lab-row"><span class="lab-k">KV cache</span><span class="seg" role="group" aria-label="KV cache format">
+    <button data-ck="16" aria-pressed="true">16-bit</button><button data-ck="8" aria-pressed="false">FP8</button></span></div>
+  <p class="lab-out" id="case-out"></p>
+</div>
+<p class="muted" style="font-size:13.5px;color:var(--muted)">Illustrative: one 80 GB GPU, 90% usable, 4 GB for the runtime and activations, 4,096-token conversations, 0.8 MB of 16-bit KV cache per token. Real numbers depend on the model's attention layout and the serving engine.</p>
+<h3>Which claims hold</h3>
+<div class="table"><table><thead><tr><th>Claim</th><th>Verdict</th><th>Why</th></tr></thead><tbody>
+<tr><td>8-bit weights roughly halve weight memory, freeing room for KV cache and larger batches, which raises throughput</td><td class="pass">True</td><td>26 GB becomes about 13 GB per replica; the freed memory becomes concurrent conversations</td></tr>
+<tr><td>Post-training quantization (FP8, INT8 with SmoothQuant, AWQ) works on the finished model with no retraining</td><td class="pass">True</td><td>It needs at most a few hundred calibration examples; see <a href="#methods">methods</a></td></tr>
+<tr><td>8-bit is usually close to lossless but must be validated on your own tasks</td><td class="pass">True</td><td>Averages hide drops on maths, long context, code and strict formats; see <a href="#quality">checking quality</a></td></tr>
+<tr><td>Quantization never affects accuracy</td><td class="fail">False</td><td>Rounding always adds some error; the question is whether your evals notice it</td></tr>
+<tr><td>Quantization always requires retraining</td><td class="fail">False</td><td>That is quantization-aware training, the fallback when post-training methods lose too much</td></tr>
+<tr><td>Quantizing the weights also shrinks the KV cache</td><td class="fail">False</td><td>The KV cache has its own precision setting; turn it on separately</td></tr>
+<tr><td>Always pick the fewest bits, because smaller is always faster</td><td class="fail">False</td><td>4-bit loses more quality, and weight-only 4-bit can be slower at large batches because weights are expanded before every multiply</td></tr>
+</tbody></table></div>
+<div class="note"><p><strong>The answer pattern:</strong> 8-bit post-training quantization, weights and optionally the KV cache, on hardware that runs 8-bit natively; validate on your eval set; roll out with a canary and the 16-bit model ready to roll back. The vendor-specific version of this case, with the GPU and engine named, is on <a href="nvidia-architecture.html#gpus">the vendor architecture page</a>.</p></div></section>
+
 <section id="interview"><h2>Saying it in an interview</h2>
 <div class="note"><p>"Decoding is memory-bound: every token reads all the weights. Quantizing a 70B model from BF16 to FP8 halves that from 140 GB to 70 GB, so it fits on fewer GPUs, generates faster and leaves room for KV cache. I'd use FP8 on hardware that supports it, or 4-bit AWQ with group scaling when memory is tight, quantize the KV cache for long contexts, and only roll out after the eval set shows no regression on the tasks we care about."</p></div></section>
 
@@ -289,7 +315,7 @@
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
 
-<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="batching.html">Batching</a></li><li><a href="open-weight-models.html">Open-weight models</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="glossary.html#quantization">Glossary: quantization</a></li></ul></section></article>
+<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="batching.html">Batching</a></li><li><a href="model-fitting.html">Fitting a model on GPUs</a></li><li><a href="open-weight-models.html">Open-weight models</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="glossary.html#quantization">Glossary: quantization</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
@@ -357,6 +383,20 @@
   root.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', () => { state.scale = b.dataset.s; root.querySelectorAll('[data-s]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
   outlier.addEventListener('change', render);
   render();
+})();
+</script>
+<script>
+(function () {
+  var root = document.getElementById('caselab'); if (!root) return;
+  var w = 16, k = 16, PARAMS = 13, FREE = 80 * 0.9 - 4, KVTOK = 0.8, CTX = 4096;
+  function draw() {
+    var weights = PARAMS * w / 8, perSeq = KVTOK * (k / 16) * CTX / 1000, room = FREE - weights, seqs = Math.floor(room / perSeq);
+    var base = Math.floor((FREE - 26) / (KVTOK * CTX / 1000));
+    var risk = w === 16 && k === 16 ? 'No quantization risk, and no gain.' : w === 4 ? 'Quality risk: noticeable on small models and fragile tasks; validate carefully.' : 'Quality risk: usually small at 8-bit; validate on your own eval set.';
+    document.getElementById('case-out').innerHTML = 'Weights <strong>' + weights.toFixed(1) + ' GB</strong> · KV room <strong>' + room.toFixed(1) + ' GB</strong> · ' + perSeq.toFixed(1) + ' GB per conversation · <strong>' + seqs + ' conversations at once</strong>' + (seqs > base ? ' (' + (seqs / base).toFixed(1) + '× the FP16 baseline of ' + base + ')' : '') + '. ' + risk;
+  }
+  function bind(attr, fn) { root.querySelectorAll('[data-' + attr + ']').forEach(function (b) { b.addEventListener('click', function () { root.querySelectorAll('[data-' + attr + ']').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); }); fn(+b.getAttribute('data-' + attr)); draw(); }); }); }
+  bind('cw', function (v) { w = v; }); bind('ck', function (v) { k = v; }); draw();
 })();
 </script>
 <script src="progress.js"></script>
