@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Fitting a model on GPUs: shrink, split or share · Agentic System Designs</title>
+<title>LLM serving on GPUs: fit, shrink, split or share · Agentic System Designs</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<meta name="description" content="When a model is too big, the right size, or much smaller than one GPU: quantization, tensor parallelism, pipeline parallelism, replicas and GPU sharing, with an interactive sizing lab.">
+<meta name="description" content="How a self-hosted LLM turns GPU memory into concurrent users: weights, KV cache and paging, fitting the model (quantize, tensor or pipeline parallel, share the GPU), throughput vs latency, and symptom-to-lever fixes.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   /* Layout: a slim site bar, then either a card grid (home), a sticky contents rail + reading column (articles), or a filterable term list (glossary). Light, single look. */
@@ -206,11 +206,26 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
 <header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
-<div class="wrap"><div class="intro"><p class="eyebrow">Topic · serving</p><h1>Fitting a model on GPUs: shrink, split or share</h1><p class="lead">A model either fits on one GPU, is too big for one, or is much smaller than one. Each case has its own answer: quantize it, split it with tensor or pipeline parallelism, or share the GPU.</p></div></div>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · serving</p><h1>LLM serving on GPUs: fit, shrink, split or share</h1><p class="lead">How a self-hosted model turns GPU memory into concurrent users. Weights and the KV cache fill the GPU; then you quantize, split or share it, and tune for latency or throughput.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#three">Three situations</a></li><li><a href="#lab">Try it: fit the model</a></li><li><a href="#tensor">Tensor parallelism</a></li><li><a href="#pipeline">Pipeline parallelism</a></li><li><a href="#order">What to try first</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
-  <article><section id="three"><h2>Three situations</h2>
-<p class="lead">First work out how much memory the model needs, then compare it with one GPU.</p>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#memory">Where GPU memory goes</a></li><li><a href="#kv">KV cache</a></li><li><a href="#three">Three situations</a></li><li><a href="#lab">Try it: fit the model</a></li><li><a href="#tensor">Tensor parallelism</a></li><li><a href="#pipeline">Pipeline parallelism</a></li><li><a href="#order">What to try first</a></li><li><a href="#metrics">Throughput vs latency</a></li><li><a href="#levers">Symptom to lever</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <article><section id="memory"><h2>Where GPU memory goes</h2>
+<p class="lead">Two things fill the GPU: the model weights, which are fixed, and the KV cache, which grows with every token of every active request.</p>
+<figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Four 80 GB GPUs give 320 GB; FP8 weights take about 120 GB and the rest holds the KV cache"><text x="10" y="20" class="b">4 GPUs × 80 GB = 320 GB</text><rect x="10" y="34" width="702" height="40" rx="8" class="track"/><rect x="10" y="34" width="263" height="40" rx="8" class="k-model"/><text x="141" y="59" class="small b" text-anchor="middle">Weights, FP8: ~120 GB</text><rect x="279" y="34" width="360" height="40" rx="8" class="k-kb"/><text x="459" y="59" class="small b" text-anchor="middle">KV cache: what's left after weights</text><rect x="645" y="34" width="67" height="40" rx="8" class="k-cross"/><text x="678" y="59" class="sm" text-anchor="middle">runtime</text><text x="10" y="100" class="small">The same weights in BF16 would take ~240 GB and leave little room for the KV cache.</text><text x="10" y="120" class="small">More KV cache means more concurrent requests or longer contexts.</text></svg><figcaption>Illustrative. A 120B-parameter model needs about 1 byte per parameter in FP8 and 2 bytes in BF16, plus activations and runtime overhead.</figcaption></figure>
+<div class="formula">weights ≈ parameters × bytes per parameter</div>
+<p>An 8B model takes about 16 GB in BF16 and 8 GB in FP8, before any KV cache. Whatever memory is left after the weights and runtime decides how many requests, and how long a context, you can serve at once.</p>
+<p>A mixture-of-experts model keeps all its parameters in memory but uses only a fraction per token. A 120B MoE model with about 12B active parameters needs memory for 120B and compute for about 12B. MoE saves compute per token, not memory.</p></section>
+
+<section id="kv"><h2>KV cache</h2>
+<p>To generate token 101, attention needs the keys and values of tokens 1 to 100. The KV cache keeps them, so each new token costs one step instead of reprocessing the whole prefix. The price is memory that grows with every token.</p>
+<div class="formula">KV bytes per token = 2 × layers × KV heads × head dim × bytes per value</div>
+<p>Worked example, Llama 3.1 8B in FP16: 2 × 32 layers × 8 KV heads × 128 × 2 bytes = 128 KiB per token. One 8,000-token conversation holds about 1 GiB, and 40 of them hold more than the model's own 16 GB of weights.</p>
+<h3>Paged KV cache</h3>
+<figure class="fig"><svg viewBox="0 0 722 150" class="dg" role="img" aria-label="Without paging each request reserves its maximum length; with paging blocks are handed out as sequences grow"><text x="10" y="20" class="b">Reserve the maximum</text><rect x="10" y="32" width="330" height="22" rx="4" class="cell gone"/><rect x="10" y="32" width="90" height="22" rx="4" class="k-kb"/><text x="350" y="48" class="sm">request A</text><rect x="10" y="60" width="330" height="22" rx="4" class="cell gone"/><rect x="10" y="60" width="40" height="22" rx="4" class="k-kb"/><text x="350" y="76" class="sm">request B</text><text x="10" y="104" class="sm">Grey is reserved but unused. A third request doesn't fit.</text><line x1="402" y1="10" x2="402" y2="140" class="rule"/><text x="420" y="20" class="b">Paged</text><rect x="420" y="32" width="40" height="22" rx="4" class="k-kb"/><rect x="464" y="32" width="40" height="22" rx="4" class="k-ingest"/><rect x="508" y="32" width="40" height="22" rx="4" class="k-kb"/><rect x="552" y="32" width="40" height="22" rx="4" class="k-serve"/><rect x="596" y="32" width="40" height="22" rx="4" class="k-kb"/><rect x="640" y="32" width="40" height="22" rx="4" class="k-ingest"/><rect x="420" y="60" width="40" height="22" rx="4" class="k-serve"/><rect x="464" y="60" width="40" height="22" rx="4" class="cell gone"/><rect x="508" y="60" width="40" height="22" rx="4" class="cell gone"/><text x="420" y="104" class="sm">Fixed-size blocks handed out as each sequence grows.</text><text x="420" y="122" class="sm">Blue A, green B, orange C: room for a third request.</text></svg><figcaption>Paging works like virtual memory: a block table maps each sequence to the blocks it owns.</figcaption></figure>
+<p>Paging removes the waste of reserving the longest possible sequence for every request, so more requests fit at once. Requests that share a prefix, such as a common system prompt, can reuse its blocks instead of computing them again (prefix caching).</p></section>
+
+<section id="three"><h2>Three situations</h2>
+<p class="lead">Add it up, then compare it with one GPU.</p>
 <div class="formula">memory ≈ parameters × bytes per weight + KV cache for all active users + activations and overhead (~2 GB)</div>
 <p>A 70B model in BF16 needs 70 billion × 2 bytes = 140 GB for its weights alone. An 80 GB GPU can't hold it. Then there are three situations:</p>
 <div class="table"><table><thead><tr><th>Situation</th><th>Example</th><th>Answer</th></tr></thead><tbody>
@@ -284,18 +299,42 @@
 <tr><td>Cost</td><td>Traffic every layer; fast links needed</td><td>Idle bubbles; needs many requests</td><td>Some quality risk; run evals</td><td>Fixed slice sizes; some capacity unused</td></tr>
 </tbody></table></div></section>
 
+<section id="metrics"><h2>Throughput vs latency</h2>
+<figure class="fig"><svg viewBox="0 0 722 176" class="dg" role="img" aria-label="One request over time: prefill until the first token, then one decode step per output token; throughput counts tokens across all users"><text x="10" y="18" class="cap">One request, left to right in time</text>
+<rect x="10" y="34" width="96" height="34" rx="8" class="k-src"/><text x="58" y="56" class="small b" text-anchor="middle">queue</text>
+<rect x="112" y="34" width="190" height="34" rx="8" class="k-serve"/><text x="207" y="56" class="small b" text-anchor="middle">prefill: read the prompt</text>
+<g><rect x="308" y="34" width="34" height="34" rx="6" class="k-kb"/><rect x="348" y="34" width="34" height="34" rx="6" class="k-kb"/><rect x="388" y="34" width="34" height="34" rx="6" class="k-kb"/><rect x="428" y="34" width="34" height="34" rx="6" class="k-kb"/><rect x="468" y="34" width="34" height="34" rx="6" class="k-kb"/><rect x="508" y="34" width="34" height="34" rx="6" class="k-kb"/><text x="560" y="56" class="small">… one step per token</text></g>
+<path d="M10 84 L306 84" class="wire hot" marker-end="url(#ah)"/><text x="10" y="102" class="small b">Time to first token (TTFT)</text><text x="10" y="118" class="sm">grows with prompt length · prefix caching, shorter prompts</text>
+<path d="M348 84 L382 84" class="wire hot" marker-end="url(#ah)"/><text x="348" y="102" class="small b">Time per output token</text><text x="348" y="118" class="sm">memory-bound · quantization, tensor parallel, speculative decoding</text>
+<line x1="10" y1="134" x2="712" y2="134" class="rule"/><text x="10" y="156" class="small b">Throughput</text><text x="90" y="156" class="sm">= tokens per second across all users. Bigger batches raise it until latency or memory gives out.</text></svg><figcaption>Every lever moves one of these at the cost of another. State the target first: chat cares about TTFT and p99, a batch job about throughput.</figcaption></figure>
+<p><strong>Speculative decoding:</strong> a small draft model proposes several tokens and the big model checks them in one step.</p></section>
+
+<section id="levers"><h2>Symptom to lever</h2>
+<div class="table"><table><thead><tr><th>Symptom</th><th>Likely cause</th><th>Lever</th></tr></thead><tbody>
+<tr><td>Out of memory with many users</td><td>KV cache full</td><td>Paged KV cache, 8-bit KV cache, lower max sequence length, more GPUs</td></tr>
+<tr><td>Model doesn't fit</td><td>Weights too large</td><td><a href="quantization.html">FP8 or INT4 weights</a>, <a href="#tensor">tensor parallelism</a></td></tr>
+<tr><td>Low GPU utilisation, high queue time</td><td>Requests run one at a time</td><td><a href="batching.html">Continuous batching</a> (LLM) or dynamic batching (other models)</td></tr>
+<tr><td>High p99 latency under bursts</td><td>Batch waits for long requests</td><td>Continuous batching, admission limits, autoscale replicas</td></tr>
+<tr><td>Slow time to first token</td><td>Long prompts recomputed</td><td>Prefix caching, shorter prompts</td></tr>
+<tr><td>Slow tokens per second for one user</td><td>Memory-bound decoding</td><td>Speculative decoding, quantization, tensor parallelism</td></tr>
+<tr><td>Quality dropped after an upgrade</td><td>Quantization or engine change</td><td>Rerun the eval set; roll back</td></tr>
+</tbody></table></div></section>
+
 <section id="interview"><h2>Saying it in an interview</h2>
-<div class="note"><p>"70B in BF16 is 140 GB of weights, so it can't sit on one 80 GB GPU. If an FP8 checkpoint passes our eval set, it's 70 GB and fits on one GPU, which is the cheapest option. If quality must stay at BF16, I'd use tensor parallelism of 4 inside one 8-GPU server: about 35 GB of weights per GPU and plenty of room for KV cache. I'd only add pipeline parallelism if the model outgrew one server. And for several small models from different teams, I'd partition GPUs into isolated slices rather than give each team a whole GPU."</p></div></section>
+<div class="note"><p>"70B in BF16 is 140 GB of weights, so it can't sit on one 80 GB GPU. If an FP8 checkpoint passes our eval set, it's 70 GB and fits on one GPU, which is the cheapest option. If quality must stay at BF16, I'd use tensor parallelism of 4 inside one 8-GPU server: about 35 GB of weights per GPU and plenty of room for KV cache. For bursty chat traffic: continuous batching with a paged KV cache, prefix caching for the shared system prompt, and replicas to scale. I'd only add pipeline parallelism if the model outgrew one server. And for several small models from different teams, I'd partition GPUs into isolated slices rather than give each team a whole GPU."</p></div></section>
 
 <section id="real-world"><h2>In the real world</h2>
 <div class="table"><table><thead><tr><th>Need</th><th>Real options</th></tr></thead><tbody>
+<tr><td>Production LLM serving</td><td>vLLM, SGLang, Hugging Face TGI, NVIDIA TensorRT-LLM: all use continuous batching and a paged KV cache</td></tr>
+<tr><td>Packaged serving</td><td>NVIDIA NIM, cloud model endpoints; see <a href="nvidia-architecture.html">NVIDIA inference architecture</a></td></tr>
+<tr><td>Laptop or single machine</td><td>llama.cpp, Ollama, LM Studio, with quantized GGUF models</td></tr>
 <tr><td>Tensor and pipeline parallel serving</td><td>vLLM (<code>--tensor-parallel-size</code>, <code>--pipeline-parallel-size</code>), SGLang, NVIDIA TensorRT-LLM</td></tr>
 <tr><td>Partitioning a GPU between tenants</td><td>NVIDIA MIG, MPS and time-slicing; see <a href="nvidia-architecture.html#sharing">Sharing a GPU</a></td></tr>
 <tr><td>Quantized checkpoints</td><td>FP8, AWQ and GPTQ versions on the Hugging Face Hub</td></tr>
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="llm-serving.html">LLM serving</a></li><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html#sharing">NVIDIA: sharing a GPU</a></li><li><a href="glossary.html#tensor-parallelism">Glossary: tensor parallelism</a></li></ul></section></article>
+<section id="related"><h2>Related</h2><ul class="related"><li><a href="quantization.html">Quantization</a></li><li><a href="batching.html">Batching</a></li><li><a href="nvidia-architecture.html">NVIDIA inference architecture</a></li><li><a href="nvidia-architecture.html#sharing">NVIDIA: sharing a GPU</a></li><li><a href="numbers.html">Numbers cheat sheet</a></li><li><a href="routing.html">Routing</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#kv-cache">Glossary: KV cache</a></li><li><a href="glossary.html#tensor-parallelism">Glossary: tensor parallelism</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
