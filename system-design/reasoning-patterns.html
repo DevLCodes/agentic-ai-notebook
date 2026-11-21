@@ -200,15 +200,34 @@
   .ctl3 input[type=range] { width: 140px; accent-color: var(--accent); }
   .ctl3 output { font-family: var(--font-mono); font-size: 12.5px; min-width: 5ch; }
   .l3.cap b { color: var(--ink); }
+  /* expected-value lab */
+  .formula { font-family: var(--font-mono); font-size: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; overflow-x: auto; white-space: nowrap; }
+  .lab { margin: 6px 0 26px; padding: 14px 16px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+  .lab-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 12px; }
+  .lab-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lab label { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; }
+  .lab input[type=range] { width: 150px; accent-color: var(--accent); }
+  .lab output { font-family: var(--font-mono); font-size: 12.5px; min-width: 6ch; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .chips button { font: 600 13px var(--font-body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .seg button:hover, .chips button:hover { border-color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible, .chips button:focus-visible, .lab input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lab-out { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; font-size: 14.5px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .ev-bars { display: grid; gap: 6px; margin: 4px 0 0; }
+  .ev-bar { display: grid; grid-template-columns: 9.5em 1fr 6ch; gap: 10px; align-items: center; font-size: 13.5px; }
+  .ev-bar span:nth-child(2) { height: 12px; border-radius: 6px; background: var(--line); position: relative; overflow: hidden; }
+  .ev-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 6px; }
+  .ev-bar b { font-family: var(--font-mono); font-size: 12.5px; text-align: right; font-weight: 500; }
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah" style="fill:#7d8996"/></marker></defs></svg>
 <header class="sitebar"><div class="wrap"><a class="brand" href="index.html" style="display:inline-flex;align-items:center;gap:8px"><svg class="brand-icon" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" style="flex:none"><rect width="32" height="32" rx="8" fill="#1c2530"/><path d="M16 16 L8 9 M16 16 L24 9 M16 16 L16 25" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".75"/><circle cx="16" cy="16" r="4.2" fill="#6f7ff0"/><circle cx="8" cy="9" r="3" fill="#fff"/><circle cx="24" cy="9" r="3" fill="#fff"/><circle cx="16" cy="25" r="3" fill="#fff"/></svg>Agentic System Designs</a><nav aria-label="Site"><a href="index.html">Home</a><a href="designs.html">Designs</a><a href="topics.html" aria-current="page">Topics</a><a href="roadmap.html">Roadmap</a><a href="study.html">Study</a><a href="https://devlcodes.github.io/classic-system-designs/">Classic</a><a href="glossary.html">Glossary</a></nav></div></header>
 <main>
-<div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Reasoning and planning patterns</h1><p class="lead">Chain-of-thought, ReAct, tree of thoughts, plan-and-execute, and reflection with re-planning: how each makes an agent think, what it costs, and which one to pick.</p></div></div>
+<div class="wrap"><div class="intro"><p class="eyebrow">Topic · architecture</p><h1>Reasoning and planning patterns</h1><p class="lead">Chain-of-thought, ReAct, tree of thoughts, plan-and-execute, and reflection with re-planning: how each makes an agent think, what it costs, and which one to pick. Plus reasoning under uncertainty: expected value against heuristic, rule-based and deductive reasoning.</p></div></div>
 <div class="wrap doc">
-  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#lab">See them think</a></li><li><a href="#cot">Chain-of-thought</a></li><li><a href="#react">ReAct</a></li><li><a href="#tot">Tree of thoughts</a></li><li><a href="#plan">Plan-and-execute</a></li><li><a href="#reflect">Reflection and re-planning</a></li><li><a href="#choose">Which one to choose</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
+  <nav class="toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#glance">At a glance</a></li><li><a href="#lab">See them think</a></li><li><a href="#cot">Chain-of-thought</a></li><li><a href="#react">ReAct</a></li><li><a href="#tot">Tree of thoughts</a></li><li><a href="#search">Heuristic search</a></li><li><a href="#plan">Plan-and-execute</a></li><li><a href="#reflect">Reflection and re-planning</a></li><li><a href="#uncertainty">Reasoning under uncertainty</a></li><li><a href="#choose">Which one to choose</a></li><li><a href="#interview">Saying it in an interview</a></li><li><a href="#real-world">In the real world</a></li><li><a href="#related">Related</a></li></ol></nav>
   <article><section id="glance"><h2>At a glance</h2>
 <p class="lead">Each pattern answers one question differently: how does the agent get from a goal to an answer?</p>
 <div class="table"><table><thead><tr><th>Pattern</th><th>Shape</th><th>LLM calls</th><th>Best at</th><th>Weak at</th></tr></thead><tbody>
@@ -261,12 +280,54 @@ Answer: Hold: quantity billed exceeds quantity received by 5.</code></pre>
 </ul></section>
 
 <section id="tot"><h2>Tree of thoughts</h2>
-<p>Instead of one chain, explore several. At each step the model proposes a few candidate next thoughts, an evaluator scores each partial solution, and a search (breadth-first, depth-first or beam) keeps the promising branches and backtracks from dead ends.</p>
+<p>Instead of one chain, explore several. At each step the model proposes a few candidate next thoughts, an evaluator scores each partial solution, and a search (breadth-first, depth-first or beam) keeps the promising branches and backtracks from dead ends. <a href="#search">Heuristic search</a> below shows how that choice is made.</p>
 <ul class="plain">
 <li><strong>Evidence:</strong> on the Game of 24 puzzle, GPT-4 with chain-of-thought solved 4% of problems and tree of thoughts solved 74% (Yao et al., 2023).</li>
 <li><strong>Use it when:</strong> an early wrong choice ruins everything after it, and you can judge partial progress: puzzles, constraint solving, scheduling, some planning.</li>
 <li><strong>Watch out:</strong> branches × depth calls make it many times more expensive and slower. It's rarely worth it for ordinary questions or tool-driven tasks.</li>
 </ul></section>
+
+<section id="search"><h2>Heuristic search: how the tree picks a branch</h2>
+<p class="lead">You can't afford to expand every branch, so you guess which ones are closest to an answer and expand those first. That guess is the heuristic.</p>
+<p>A sat-nav doesn't try every road in the country. It prefers roads that point towards the destination, because "straight-line distance left" is a cheap, decent guess. Tree of thoughts works the same way. Some terms:</p>
+<ul class="plain">
+<li><strong>Node:</strong> one partial solution, such as "4 + 6 = 10, numbers left: 10, 2, 7".</li>
+<li><strong>Expand:</strong> ask the model for the next few thoughts from a node. Each expansion costs model calls.</li>
+<li><strong>Frontier:</strong> the nodes found so far but not yet expanded.</li>
+<li><strong>Heuristic, h(n):</strong> a score for how promising node n looks. A model prompted to rate it ("sure, likely or impossible to reach 24", as in the tree of thoughts paper), or code: tests passed, constraints met.</li>
+<li><strong>Cost so far, g(n):</strong> what reaching n has already cost, such as steps or tokens.</li>
+</ul>
+<p>The search strategy decides which frontier node to expand next. The heuristic decides how good that choice is.</p>
+
+<h3>Try it: search a tree of thoughts</h3>
+<p>Three candidate thoughts at each step, three steps deep, one answer among 27 endings. Each scored thought is one model call. Switch the scorer to misleading: it rates the wrong first step highest.</p>
+<div class="lab" id="hslab">
+  <div class="lab-row"><span class="lab-k">Strategy</span><span class="seg" role="group" aria-label="Search strategy">
+    <button data-hs="greedy" aria-pressed="true">Greedy</button><button data-hs="beam" aria-pressed="false">Beam, width 2</button><button data-hs="best" aria-pressed="false">Best-first</button><button data-hs="bfs" aria-pressed="false">Breadth-first</button></span></div>
+  <div class="lab-row"><span class="lab-k">Scorer</span><span class="seg" role="group" aria-label="Heuristic quality">
+    <button data-hq="good" aria-pressed="true">Good</button><button data-hq="bad" aria-pressed="false">Misleading</button></span></div>
+  <div class="fig" style="margin:0"><svg id="hs-svg" class="dg" viewBox="0 0 722 200" role="img" aria-label="A tree of thoughts, showing which thoughts the chosen search scored and expanded, and whether it reached the answer"></svg></div>
+  <p class="lab-out" id="hs-out" aria-live="polite"></p>
+</div>
+
+<h3>The strategies</h3>
+<div class="table"><table><thead><tr><th>Strategy</th><th>Expands next</th><th>Cost</th><th>Fails when</th></tr></thead><tbody>
+<tr><td>Greedy</td><td>The best child of the current node only; never goes back. ReAct behaves this way.</td><td>Lowest: branches × depth</td><td>One wrong score early, and it is stuck in a dead branch</td></tr>
+<tr><td>Beam search, width k</td><td>The k best nodes at each level</td><td>About k times greedy</td><td>The right branch ranks below k at some level. Width is the knob: wider costs more and fails less</td></tr>
+<tr><td>Best-first</td><td>The best-scoring node anywhere on the frontier, so it backtracks on its own</td><td>Low with a good scorer; grows as the scorer gets worse</td><td>The scorer is poor, and it wanders through many promising-looking dead ends</td></tr>
+<tr><td>A*</td><td>Best-first on g(n) + h(n): cost so far plus estimated cost left</td><td>Like best-first</td><td>Same as best-first. It prefers short plans</td></tr>
+<tr><td>Breadth-first, depth-first</td><td>Ignore the score: every node level by level, or one branch to the bottom and back</td><td>Highest; breadth-first grows as branches<sup>depth</sup></td><td>The tree is big: 5 options per step for 6 steps is 19,530 nodes</td></tr>
+<tr><td>Monte Carlo tree search (MCTS)</td><td>A node that balances a high average result with being rarely tried; plays it out to the end and feeds the result back up the tree</td><td>Many full playouts</td><td>There is no end result to score. LATS (Zhou et al., 2023) uses it for agents, with real tool results and self-reflection as the signal</td></tr>
+</tbody></table></div>
+<p>A* is guaranteed to find the cheapest path only if h never overestimates the cost left. A model's score gives no such guarantee, so with LLMs treat A* as "best-first that prefers short plans", not as optimal.</p>
+
+<h3>The search is only as good as the scorer</h3>
+<ul class="plain">
+<li><strong>Prefer a real check:</strong> tests that pass, a constraint solver, a calculator, a schema. They're cheap per call and they don't flatter.</li>
+<li><strong>If the model scores,</strong> ask for coarse labels (sure, likely, impossible) rather than 1 to 10, and take a vote of 2 or 3 samples. Models tend to rate their own ideas too kindly.</li>
+<li><strong>Cap the budget:</strong> a beam width of 2 to 5, a depth limit, a maximum number of expansions, and stop at the first answer that passes a real check.</li>
+</ul>
+<p>Decoders use beam search too, keeping the k most likely token sequences. It's the same algorithm with tokens as nodes and probability as the score.</p></section>
 
 <section id="plan"><h2>Plan-and-execute</h2>
 <p>Split thinking from doing. A planner, usually a strong model, writes the full list of steps once. An executor, a cheaper model or plain code, runs each step and records the result. The planner may write the final answer from the results.</p>
@@ -288,6 +349,48 @@ Answer: Hold: quantity billed exceeds quantity received by 5.</code></pre>
 <li><strong>Watch out:</strong> a model criticising itself with no outside signal can talk itself into a wrong answer. Prefer a real check, cap the retries (2 or 3), and stop when an attempt doesn't improve.</li>
 </ul></section>
 
+<section id="uncertainty"><h2>Reasoning under uncertainty</h2>
+<p>The patterns above decide how an agent lays out its thinking: a line, a loop, a tree or a plan. Inside any of them, each decision also needs a way of drawing a conclusion, and that depends on what the agent knows. When the facts are certain, rules are enough. When they aren't, the agent has to weigh how likely each outcome is against what each one costs. That weighing is called <strong>probabilistic</strong> or <strong>decision-theoretic reasoning</strong>, and its everyday tool is <strong>expected value</strong>: the average cost (or gain) of an action, with each possible outcome weighted by its probability.</p>
+
+<h3 id="storm">Worked example: reroute around a storm?</h3>
+<p>A logistics agent must decide whether to reroute a shipment around a port that a storm may close. The forecast gives a <strong>40% chance of closure</strong>, and the port's sensor feed is incomplete, so the agent cannot confirm either way. Rerouting costs <strong>$12k</strong> for certain. If the agent keeps the route and the port closes, the delay costs <strong>$50k</strong>.</p>
+<div class="formula">keep route: E[cost] = 0.40 × $50k + 0.60 × $0 = $20k &nbsp;·&nbsp; reroute: E[cost] = $12k (certain) &nbsp;→&nbsp; reroute, saving $8k on average</div>
+<ul class="plain">
+<li><strong>Break-even probability:</strong> rerouting wins whenever p × $50k &gt; $12k, so whenever p &gt; 12 ÷ 50 = <strong>24%</strong>. At 40% the agent is well past it.</li>
+<li><strong>Why the other strategies miss:</strong> a rule such as "reroute if closure is more likely than not" (threshold 50%) keeps the route and accepts a $20k expected loss, because it looks at the probability but not the costs. Deduction ("if the port is closed, reroute") can't fire, because the incomplete sensors never establish that the port is closed. Heuristic pruning is for cutting down a large search, not for weighing one uncertain outcome.</li>
+<li><strong>Value of information:</strong> with a perfect forecast the agent would reroute only in the 40% of cases where the port closes, an expected cost of 0.40 × $12k = $4.8k instead of $12k. So perfect information is worth at most $12k − $4.8k = <strong>$7.2k</strong>. Paying up to that for better sensor data or a sharper forecast, before deciding, is rational; paying more is not.</li>
+<li><strong>Risk attitude:</strong> expected value assumes you are risk-neutral, meaning a sure $12k hurts exactly as much as a 24% chance of $50k. If one $50k loss would break a contract, put that penalty into the cost (a utility function) rather than overriding the arithmetic by gut feel.</li>
+</ul>
+
+<div class="lab" id="evlab">
+  <div class="lab-row"><label>Chance of closure <input type="range" id="ev-p" min="0" max="100" step="1" value="40"> <output id="ev-p-o">40%</output></label></div>
+  <div class="lab-row"><label>Reroute cost <input type="range" id="ev-r" min="1" max="60" step="1" value="12"> <output id="ev-r-o">$12k</output></label><label>Loss if closed <input type="range" id="ev-l" min="1" max="150" step="1" value="50"> <output id="ev-l-o">$50k</output></label></div>
+  <div class="ev-bars" aria-hidden="true">
+    <div class="ev-bar"><span>Keep route (expected)</span><span><i id="ev-b-keep"></i></span><b id="ev-v-keep"></b></div>
+    <div class="ev-bar"><span>Reroute (certain)</span><span><i id="ev-b-re"></i></span><b id="ev-v-re"></b></div>
+  </div>
+  <p class="lab-out" id="ev-out" aria-live="polite"></p>
+</div>
+
+<h3 id="strategies">Four reasoning strategies compared</h3>
+<div class="table"><table><thead><tr><th>Strategy</th><th>How it decides</th><th>Needs</th><th>Breaks when</th><th>Storm example</th></tr></thead><tbody>
+<tr><td><strong>Deductive reasoning</strong></td><td>Derives conclusions that must be true from rules and known facts</td><td>Certain, complete facts</td><td>A fact is unknown or only likely</td><td>"Port closed → reroute" never fires: closure isn't known</td></tr>
+<tr><td><strong>Rule-based threshold matching</strong></td><td>If-then rules with fixed cutoffs</td><td>Stable conditions and well-chosen thresholds</td><td>The costs change, so the right cutoff moves</td><td>"Reroute above 50%" keeps the route at 40%: wrong</td></tr>
+<tr><td><strong><a href="#search">Heuristic search and pruning</a></strong></td><td>Uses a rule of thumb to score options and drop weak ones fast (best-first, beam, A*)</td><td>A big space of options and a decent scoring guess</td><td>The guess is wrong, or the question is one uncertain bet, not a search</td><td>Little to search: two options, one uncertain outcome</td></tr>
+<tr><td><strong>Probabilistic (decision-theoretic) reasoning</strong></td><td>Weights each outcome's cost by its probability and picks the best expected value</td><td>Probabilities and costs, even rough ones</td><td>The probabilities are badly calibrated, or risk matters more than the average</td><td>$20k expected vs $12k certain → reroute ✓</td></tr>
+</tbody></table></div>
+<p>They work together. A planner may use heuristic search to shortlist routes, rules to rule out illegal ones, deduction where facts are certain, and expected value to choose between the routes that are left.</p>
+
+<h3 id="ev-agent">Building it into an agent</h3>
+<ul class="plain">
+<li><strong>Let tools supply the numbers.</strong> In a <a href="#react">ReAct</a> loop the model calls a weather tool for the closure probability and a pricing tool for the costs, rather than guessing them.</li>
+<li><strong>Do the arithmetic in code.</strong> A small <code>expected_cost(options)</code> tool is exact and testable; a model doing sums in its head is neither.</li>
+<li><strong>Use calibrated probabilities.</strong> A "40%" that is really 15% gives a confidently wrong answer. See <a href="confidence-scoring.html">confidence scoring</a> for calibration.</li>
+<li><strong>Escalate near the break-even point.</strong> If p sits close to 24%, or the inputs are stale, the choice is a coin flip on bad data: buy information or ask a person.</li>
+<li><strong>Log the inputs.</strong> Record the probability, costs and resulting values with the decision, so a reviewer can see why the agent rerouted.</li>
+</ul>
+<div class="note"><p><strong>Exam pattern:</strong> uncertain outcome, a probability, costs for each choice, incomplete data → probabilistic reasoning with expected value. Certain facts plus rules → deductive. Fixed cutoffs on a reading → rule-based. Huge option space that needs cutting fast → heuristic search.</p></div></section>
+
 <section id="choose"><h2>Which one to choose</h2>
 <ol class="plain">
 <li><strong>Can the model answer from what it already has, with some reasoning?</strong> Use chain-of-thought, or a reasoning model. Add self-consistency if accuracy matters more than cost.</li>
@@ -295,6 +398,7 @@ Answer: Hold: quantity billed exceeds quantity received by 5.</code></pre>
 <li><strong>Are the steps known up front, and the task long or costly?</strong> Use plan-and-execute, and add re-planning for when a step fails.</li>
 <li><strong>Does an early choice decide everything, and can you score partial answers?</strong> Use tree of thoughts, if the budget allows.</li>
 <li><strong>Can the output be checked?</strong> Wrap whichever pattern you chose in a reflection loop.</li>
+<li><strong>Does a decision hinge on an uncertain outcome with known costs?</strong> Compute <a href="#uncertainty">expected value</a> in a tool, whichever pattern carries the loop.</li>
 </ol>
 <div class="table"><table><thead><tr><th>Task</th><th>Pick</th><th>Why</th></tr></thead><tbody>
 <tr><td>Work out a refund amount from a pasted invoice</td><td>Chain-of-thought</td><td>All facts are in the prompt; it's arithmetic</td></tr>
@@ -303,7 +407,7 @@ Answer: Hold: quantity billed exceeds quantity received by 5.</code></pre>
 <tr><td>Build a delivery schedule under tight constraints</td><td>Tree of thoughts</td><td>Early choices constrain everything; partial schedules can be scored</td></tr>
 <tr><td>Generate code that must pass tests</td><td>ReAct plus reflection</td><td>Tests give a real check to learn from</td></tr>
 </tbody></table></div>
-<div class="note"><p><strong>Exam patterns:</strong> wrong 25% of the time on one subtle step with no retraining allowed → self-consistency plus self-verification. Known procedure → HTN or plan-and-execute. Needs live data → ReAct. Many candidate paths with a scorer → tree of thoughts. Retry after failure with a learned note → Reflexion.</p></div></section>
+<div class="note"><p><strong>Exam patterns:</strong> wrong 25% of the time on one subtle step with no retraining allowed → self-consistency plus self-verification. Known procedure → HTN or plan-and-execute. Needs live data → ReAct. Many candidate paths with a scorer → tree of thoughts. Retry after failure with a learned note → Reflexion. Uncertain outcome with a probability and costs → <a href="#storm">expected value</a>.</p></div></section>
 
 <section id="interview"><h2>Saying it in an interview</h2>
 <div class="note"><p>"I pick the cheapest pattern that solves the task. If the facts are in the prompt, chain-of-thought or a reasoning model in one call. If it needs tools and the path is unclear, a ReAct loop with a step cap. If the steps are known and the job is long, plan-and-execute: a strong model plans, cheap steps run in parallel, a person can approve the plan, and failures trigger re-planning. Tree of thoughts only when early choices decide everything and I can score partial solutions, because it multiplies cost. And whenever the output can be checked, I add a reflection loop with a real check and a retry cap."</p></div></section>
@@ -318,7 +422,7 @@ Answer: Hold: quantity billed exceeds quantity received by 5.</code></pre>
 </tbody></table></div>
 <p class="muted" style="font-size:13.5px;color:var(--muted)">Products change quickly; names here are examples, not endorsements. Check current docs before choosing.</p></section>
 
-<section id="related"><h2>Related</h2><ul class="related"><li><a href="agent-memory.html">Agent memory</a></li><li><a href="routing.html">Routing</a></li><li><a href="confidence-scoring.html">Confidence scoring</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#react">Glossary: ReAct</a></li></ul></section></article>
+<section id="check-yourself" hidden></section><section id="related"><h2>Related</h2><ul class="related"><li><a href="agent-memory.html">Agent memory</a></li><li><a href="routing.html">Routing</a></li><li><a href="confidence-scoring.html">Confidence scoring</a></li><li><a href="evals.html">Evals</a></li><li><a href="glossary.html#react">Glossary: ReAct</a></li></ul></section></article>
 </div>
 </main>
 <footer class="site"><div class="wrap">Part of the Agentic AI notebook. Figures marked illustrative show the shape of a system, not measured numbers. Check vendor docs before relying on a specific product limit.</div></footer>
@@ -335,6 +439,124 @@ Answer: Hold: quantity billed exceeds quantity received by 5.</code></pre>
 import { mountReasoning } from '../assets/gpu3d.js';
 mountReasoning(document.getElementById('reason3d'));
 </script>
+<script>
+(function () {
+  var p = document.getElementById('ev-p'), r = document.getElementById('ev-r'), l = document.getElementById('ev-l');
+  var out = document.getElementById('ev-out');
+  function k(x) { return '$' + (Math.round(x * 10) / 10) + 'k'; }
+  function draw() {
+    var pv = +p.value / 100, rv = +r.value, lv = +l.value;
+    var keep = pv * lv, be = rv / lv, evpi = Math.min(keep, rv) - pv * Math.min(rv, lv);
+    document.getElementById('ev-p-o').textContent = p.value + '%';
+    document.getElementById('ev-r-o').textContent = '$' + rv + 'k';
+    document.getElementById('ev-l-o').textContent = '$' + lv + 'k';
+    var max = Math.max(keep, rv, 1);
+    document.getElementById('ev-b-keep').style.width = (keep / max * 100) + '%';
+    document.getElementById('ev-b-re').style.width = (rv / max * 100) + '%';
+    document.getElementById('ev-v-keep').textContent = k(keep);
+    document.getElementById('ev-v-re').textContent = k(rv);
+    var pick = keep > rv ? '<b>Reroute</b>: saves ' + k(keep - rv) + ' on average.' : keep < rv ? '<b>Keep the route</b>: saves ' + k(rv - keep) + ' on average.' : '<b>A tie</b>: either choice costs the same on average.';
+    var rule = pv > 0.5 ? 'reroute' : 'keep the route';
+    var agree = (pv > 0.5) === (keep > rv) || keep === rv;
+    out.innerHTML = pick + ' Break-even at ' + (be >= 1 ? 'over 100%, so never reroute' : Math.round(be * 100) + '% closure') + '. A fixed "reroute above 50%" rule would ' + rule + (agree ? ', which happens to agree here.' : ', <b>which is wrong here</b>.') + ' Perfect information is worth up to ' + k(evpi) + '.';
+  }
+  [p, r, l].forEach(function (el) { el.addEventListener('input', draw); });
+  draw();
+})();
+</script>
+<script>
+(() => {
+  const root = document.getElementById('hslab');
+  if (!root) return;
+  const NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('hs-svg'), out = document.getElementById('hs-out');
+  const el = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; return n; };
+  const st = { s: 'greedy', q: 'good' };
+  const GOAL = '102';            // the one ending that works: second, first, third
+  const NAMES = { greedy: 'Greedy', beam: 'Beam, width 2', best: 'Best-first', bfs: 'Breadth-first' };
+  // scores for partial thoughts; endings are checked for real (1 = answer, 0 = dead end)
+  const SC = {
+    good: { '0': .5, '1': .9, '2': .2, '00': .3, '01': .2, '02': .1, '10': .85, '11': .4, '12': .3, '20': .2, '21': .1, '22': .1 },
+    bad:  { '0': .8, '1': .6, '2': .3, '00': .7, '01': .65, '02': .2, '10': .75, '11': .4, '12': .3, '20': .2, '21': .1, '22': .1 }
+  };
+  const kids = p => [p + '0', p + '1', p + '2'];
+  const score = (p, q) => p.length === 3 ? (p === GOAL ? 1 : 0) : SC[q][p];
+
+  function run(s, q) {
+    const scored = [], expanded = new Set(['']);
+    let found = false;
+    const take = list => { for (const c of list) { scored.push(c); if (c === GOAL) { found = true; return true; } } return false; };
+    const best = list => list.slice().sort((a, b) => score(b, q) - score(a, q));
+    if (s === 'greedy') {
+      let cur = '';
+      while (cur.length < 3) { const ks = kids(cur); if (take(ks)) break; if (cur.length === 2) break; cur = best(ks)[0]; expanded.add(cur); }
+    } else if (s === 'beam') {
+      let level = [''];
+      for (let d = 0; d < 3 && !found; d++) {
+        const next = [];
+        for (const p of level) { const ks = kids(p); next.push(...ks); if (take(ks)) break; }
+        if (found || d === 2) break;
+        level = best(next).slice(0, 2); level.forEach(p => expanded.add(p));
+      }
+    } else if (s === 'best') {
+      let frontier = [''];
+      while (frontier.length && !found) {
+        frontier = best(frontier); const p = frontier.shift(); expanded.add(p);
+        const ks = kids(p); if (take(ks)) break;
+        if (ks[0].length < 3) frontier.push(...ks);
+      }
+    } else {
+      let level = [''];
+      for (let d = 0; d < 3 && !found; d++) {
+        const next = []; for (const p of level) { expanded.add(p); const ks = kids(p); next.push(...ks); if (take(ks)) break; }
+        level = next;
+      }
+    }
+    return { scored, expanded, found };
+  }
+
+  // layout: leaves 26px apart, parents centred over their children
+  const pos = {};
+  for (let i = 0; i < 27; i++) { const p = i.toString(3).padStart(3, '0'); pos[p] = [22 + i * 26, 150]; }
+  for (const len of [2, 1, 0]) {
+    const all = len === 0 ? [''] : Array.from({ length: 3 ** len }, (_, i) => i.toString(3).padStart(len, '0'));
+    all.forEach(p => { const xs = kids(p).map(c => pos[c][0]); pos[p] = [(xs[0] + xs[2]) / 2, 24 + len * 42]; });
+  }
+  const NODES = Object.keys(pos);
+
+  function render() {
+    const r = run(st.s, st.q), seen = new Set(r.scored);
+    svg.textContent = '';
+    const onPath = p => r.found && GOAL.startsWith(p);
+    NODES.forEach(p => { if (!p) return; const par = p.slice(0, -1);
+      svg.appendChild(el('line', { x1: pos[par][0], y1: pos[par][1], x2: pos[p][0], y2: pos[p][1], class: 'wire', style: onPath(p) ? 'stroke:var(--c-ok);stroke-width:2.5' : seen.has(p) ? '' : 'opacity:.35' }));
+    });
+    NODES.forEach(p => {
+      const [x, y] = pos[p], leaf = p.length === 3;
+      let cls = 'k-user', op = seen.has(p) || !p ? 1 : .35;
+      if (!p || r.expanded.has(p)) cls = 'k-model';
+      else if (seen.has(p)) cls = leaf ? (p === GOAL ? 'k-ingest' : 'k-dlq') : 'k-kb';
+      svg.appendChild(el('circle', { cx: x, cy: y, r: leaf ? 7 : 10, class: cls, style: 'opacity:' + op }));
+      if (p && !leaf && seen.has(p)) svg.appendChild(el('text', { x, y: y + 24, class: 'sm', 'text-anchor': 'middle' }, score(p, st.q).toFixed(2).replace(/^0/, '')));
+    });
+    svg.appendChild(el('text', { x: pos[GOAL][0], y: 176, class: r.found ? 'okt' : 'sm', 'text-anchor': 'middle' }, 'answer'));
+    svg.appendChild(el('text', { x: 10, y: 196, class: 'sm' }, 'Purple: expanded. Blue: scored, not expanded. Red: checked, dead end. Green: the answer. Faded: never looked at.'));
+    const n = r.scored.length, g = run(st.s, 'good').scored.length;
+    let why;
+    if (st.s === 'bfs') why = 'It ignores the scores and checks every thought level by level. It always finds the answer, at the highest cost. With 5 options per step and 6 steps that would be 19,530 nodes.';
+    else if (st.q === 'good') why = st.s === 'greedy' ? 'A good scorer points the right way at every step, so one path is enough. This is the cheapest search.'
+      : st.s === 'beam' ? 'It also works, but keeps a second branch it turned out not to need. With a good scorer, width only adds cost.'
+      : 'With a good scorer the best node is always the right one, so it costs the same as greedy.';
+    else why = st.s === 'greedy' ? 'The scorer rated the wrong first step highest. Greedy never goes back, so it is stuck in a dead branch. ReAct fails the same way.'
+      : st.s === 'beam' ? 'The right first step was only second best, and a width of 2 kept it alive. A width of 1 is greedy and would have failed.'
+      : 'It followed the high scores into dead ends, then backtracked to the next-best thought anywhere in the tree. It found the answer, at ' + (n / g).toFixed(0) + '× the cost with a good scorer.';
+    out.textContent = NAMES[st.s] + ': ' + n + ' thoughts scored (one model call each), ' + (r.found ? 'answer found. ' : 'no answer. ') + why;
+  }
+  root.querySelectorAll('[data-hs]').forEach(b => b.addEventListener('click', () => { st.s = b.dataset.hs; root.querySelectorAll('[data-hs]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  root.querySelectorAll('[data-hq]').forEach(b => b.addEventListener('click', () => { st.q = b.dataset.hq; root.querySelectorAll('[data-hq]').forEach(o => o.setAttribute('aria-pressed', o === b)); render(); }));
+  render();
+})();
+</script>
 <script src="progress.js"></script>
+<script src="check-yourself.js"></script>
 </body>
 </html>

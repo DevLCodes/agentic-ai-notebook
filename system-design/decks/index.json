@@ -15,6 +15,7 @@
   "knowledge-freshness",
   "backfills",
   "multi-agent",
+  "reasoning-patterns",
   "llm-serving",
   "batching",
   "quantization",
